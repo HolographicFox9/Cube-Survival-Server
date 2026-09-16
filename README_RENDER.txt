@@ -1,4 +1,4 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 355 / GAME 382
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 386 / GAME 413
 
 WHAT THIS PACKAGE DOES
 - Runs the full Colyseus Cube Survival multiplayer world.
@@ -240,3 +240,373 @@ SERVER 354 / GAME 381:
 SERVER 355 / GAME 382:
 - Fixed Rabbit awake/sleep mapping.
 - Swapped the Rabbit awake and sleep art assignments for Baby, Adult, Boss, Super Boss, and Big Momma.
+
+
+SERVER 356 / GAME 383:
+- Increased front-facing animal hitbox coverage.
+- Head collision now extends farther into the face and slightly past the eyes.
+- Reduced the amount the player can clip into an animal's head before collision stops movement.
+- Applied to both uploaded-SVG animals and the regular non-uploaded animals.
+
+
+SERVER 357 / GAME 384:
+- Reworked animal hitboxes to use a proportional fit model.
+- Hitbox length, body width, and head coverage now scale by both stage and species.
+- Larger stages get proportionately larger physical coverage instead of a one-size-fits-all front extension.
+- Spawn footprint now uses the same proportional fit model so placement matches collision better.
+
+
+SERVER 358 / GAME 385:
+- Pulled Adult animal head/nose collision back so players can reach the visible nose.
+- Added a real animal weight stat based on stage, species, and visible size.
+- Big Momma/Super Boss/Boss animals resist player pushing strongly.
+- Babies and lighter species such as Rabbit/Cat are easier to push.
+- Player-to-animal collision movement now uses smoothed, bounded push velocity.
+- Animal-to-animal separation distributes movement by inverse weight so heavier animals move less.
+
+
+SERVER 359 / GAME 386:
+- When a hostile cube rider or hostile pet owner dies from morning/daylight, its linked animal is no longer deleted.
+- The former mount/guard is detached from the hostile cube and converted into normal wildlife.
+- Morning-released animals lose forced hostility, aggro, combat state, and tame-failure aggression.
+- Combat-caused hostile-cube deaths keep the existing retaliation behavior in offline play.
+
+
+SERVER 360 / GAME 387:
+- Added killer-follow death camera.
+- On death, the camera follows the creature/player/enemy that killed you.
+- If the watched killer is later killed, the camera transfers to that killer's killer.
+- The chain can continue repeatedly until the player respawns/restarts.
+- Multiplayer server broadcasts spectateKill transitions so dead clients can transfer camera targets.
+
+
+SERVER 361 / GAME 388:
+- Dead remote players are hidden instead of leaving a visible character sitting in the world.
+- Remote multiplayer players now use the full rounded-cube character rendering with complete eyes and eye highlights.
+- Remote players use synchronized moving/dead/max-health/tool/riding state for rendering.
+- Remote pets and wildlife feed network movement speed into the animal visual animation system so movement/head/tail animation is no longer stiff online.
+- Player arms now move up/down separately while walking, including remote multiplayer players.
+- Two-hand weapon users get alternating shoulder movement while hands remain attached to the weapon.
+
+
+SERVER 362 / GAME 389:
+- Pet leveling XP is now shown in a clearer foreground XP bar.
+- XP displays Level plus current XP / XP needed.
+- XP bars render after trees/resources/creatures/effects so world objects cannot cover them.
+- Removed the tiny duplicated Lv text from the normal pet world label.
+- Big Momma pets do not show an XP bar because they do not level further.
+
+
+SERVER 363 / GAME 390:
+- Moved the owned-pet XP bar higher above the pet.
+- XP text/bar no longer crowds the pet name and health-bar area.
+
+
+SERVER 364 / GAME 391:
+- Card Upgrade now opens a dedicated page for each pet species.
+- Species cards can permanently upgrade Health, Defense, Attack, Weight, Regen, and Speed.
+- Each stat has 10 levels with increasing card costs.
+- Health raises maximum HP; Defense reduces damage taken; Attack raises pet melee damage.
+- Weight makes pets harder to push; Regen increases passive recovery; Speed increases pet movement.
+- Existing Starting Stage card upgrades remain available on each pet's page.
+- Upgrades persist and are applied in both offline and multiplayer gameplay.
+
+
+SERVER 365 / GAME 392:
+- Renamed Owl to Horned Owl.
+- Added the complete Horned Owl SVG set for Baby, Adult, Boss, Super Boss, and Big Momma.
+- Filename rule is used exactly: files containing 'sleep' are sleeping variants; files without 'sleep' are awake variants.
+- Horned Owl is included in uploaded-SVG sizing and proportional collision.
+
+
+SERVER 366 / GAME 393:
+- Increased Horned Owl visual size substantially.
+- Fixed sleeping Horned Owl appearing larger than awake.
+- Horned Owl now uses width-normalized rendering because awake and sleep SVG source heights differ heavily.
+- Awake and sleeping Horned Owls keep the same overall width at each stage.
+- Updated proportional Horned Owl collision/footprint to match the new larger visible size.
+
+
+SERVER 367 / GAME 394:
+- Fixed a major permanent-freeze failure mode: the next animation frame is scheduled before update/draw work, so a single runtime error cannot stop the game loop forever.
+- Added frame-level recovery that clears disposable malformed effects instead of killing the game loop.
+- Replaced offline all-vs-all animal collision separation with a nearby spatial-grid check.
+- Added hard limits for particles, floaters, ability effects, projectiles, and pet blasts.
+- Removes invalid NaN-position runtime objects before collision/drawing.
+- Reduced unnecessary DOM HUD work from every frame to about 12 times per second.
+- Reduced maximum simulation catch-up per frame after tab/device stalls.
+
+
+SERVER 368 / GAME 395:
+- Animals and pets now physically block each other using their real multi-circle body hitboxes.
+- Creature collision uses weight: lighter animals move more, heavier animals resist displacement.
+- Spatial buckets preserve the freeze/performance improvements while doing exact body collision.
+- Post-collision creatures are resolved against world solids so separation does not shove them through trees/rocks.
+- Death screen background is transparent so the world remains visible.
+- The world keeps simulating after player death, so the killer-follow camera remains live behind Try Again/Home.
+
+
+SERVER 369 / GAME 396:
+- Replaced only the Horned Owl Big Momma sleeping SVG with the corrected uploaded file.
+- Awake Big Momma and all other Horned Owl stage/pose skins are unchanged.
+
+
+SERVER 370 / GAME 397:
+- Renamed Snake to Viper in the game UI.
+- Changed the snake/viper render to head + tail only (no separate torso body block).
+- Added movement-only slither motion to the viper tail.
+- Added matching movement-only head motion so the head moves with the slither.
+- Other species are unchanged.
+
+
+SERVER 371 / GAME 398:
+- Added complete uploaded Viper skin set: Baby, Adult, Boss, Super Boss, and Big Momma.
+- Files containing 'sleep' are used for sleeping poses; non-sleep files are awake poses.
+- Awake Viper uses a continuous segmented SVG render with one broad traveling S-curve.
+- Slither motion eases in/out from actual movement speed instead of snapping on/off.
+- Reduced slither frequency and head amplitude so movement reads as a snake glide, not a worm wiggle.
+- Sleeping Viper uses the uploaded curled sleep art and stays visually still.
+- Updated Viper proportional dimensions and authoritative multiplayer hitboxes to match the uploaded art.
+
+
+SERVER 372 / GAME 399:
+- Greatly increased awake Viper slither amplitude so the S-curve is clearly visible.
+- Kept the wave broad and smooth instead of adding more short worm-like bends.
+- Split the front ~22% of the Viper artwork into a separate visual head section.
+- Viper head now has its own independent side wobble, rotation, and slight bob while moving.
+- Head wobble follows the neck smoothly but is not locked to the body's exact wave.
+- Sleeping Vipers remain still.
+
+
+SERVER 373 / GAME 400:
+- Reduced Viper slither width so faster movement does not make the snake bend excessively wide.
+- Viper movement speed now primarily controls slither frequency/travel speed.
+- Slither keeps a controlled maximum amplitude at normal and high speeds.
+- Reduced secondary body harmonic for a cleaner snake-like S-curve.
+- Separate Viper head now visibly turns left/right with a stronger steering rotation.
+- Head turn angle stays controlled; speed changes how fast it turns, not how far.
+
+
+SERVER 374 / GAME 401:
+- Moved the Viper head split farther forward in the source artwork.
+- Body/tail layer now stops before the head so it no longer contains a piece of the head.
+- Reduced source overlap/bleed at the head boundary for a cleaner separate-head animation.
+
+
+SERVER 375 / GAME 402:
+- Corrected the Viper head split direction.
+- Moved the split BACK toward the tail so the head layer owns more of the front section.
+- The body/tail layer no longer keeps the stray piece of head artwork.
+- Increased head segment coverage and slightly adjusted the head join/pivot for a cleaner transition.
+
+
+SERVER 376 / GAME 403:
+- Viper head now locks directly to the current neck-wave position every frame.
+- Removed most independent positional head wobble that made the head visually lag behind fast body movement.
+- Head keeps its independent left/right steering rotation.
+- Added neck-slope following so the head angle tracks the current slither direction.
+- Increased body/head overlap at the split to prevent visible gaps during faster slither.
+
+
+SERVER 377 / GAME 404:
+- Added the uploaded separated Baby Deer artwork as three independent rendered parts.
+- Tail, middle/body, and head/front remain separate source pieces.
+- Normal pose reassembles them using exact measured offsets from the supplied assembled Deer baby.svg.
+- Tail stays in place; body shifts left 15 source units; head/front shifts left 42 source units.
+- Pixel reconstruction test matched the assembled reference essentially exactly.
+- Only awake Baby Deer uses this test renderer; sleeping Baby Deer remains on the existing renderer until sleeping art is supplied.
+
+
+SERVER 378 / GAME 405:
+- Added the uploaded separated Baby Deer sleep artwork as three independent rendered parts.
+- Sleeping Baby Deer is reassembled from tail, middle/body, and head/front pieces.
+- Reconstruction uses the same connection logic as the awake baby deer.
+- Measured sleep-piece reconstruction:
+  tail stays in place; body shifts left 15 source units; head shifts left 42 source units.
+- Awake Baby Deer three-part reconstruction remains enabled.
+
+
+SERVER 379 / GAME 406:
+- Added reassembled Deer skins for all remaining Deer stages beyond Baby.
+- Adult, Boss, Super Boss, and Big Momma Deer now use uploaded split-part SVG art.
+- Each Deer stage is rendered by reconnecting the separated parts back into a single body in-game.
+- 3-part Deer skins use the same reconnection logic as Baby Deer:
+  tail stays, middle/body shifts left 15 source units, head/front shifts left 42 source units.
+- One uploaded Deer awake stage was already body-connected and only needed the front/head shifted left 42.
+- Baby Deer awake/sleep three-part reconstruction remains enabled.
+
+
+SERVER 380 / GAME 407:
+- Fixed Deer layering so antlers/horns no longer act like the front overlap piece.
+- Deer front section is now split into two draw layers:
+  upper antlers/horns first, then torso/body, then the lower tan head/front on top.
+- This makes the actual head connect onto the torso while the antlers stay behind it.
+
+
+SERVER 381 / GAME 408:
+- Switched Deer assembly workflow to use user-supplied finished full-body SVG references as the exact normal pose.
+- Adult awake/sleep, Boss awake, Super Boss awake/sleep, and Big Momma awake/sleep now render from their finished reference SVGs.
+- This guarantees the tan head, antlers, torso and tail match the supplied assembled artwork exactly.
+- Split-part Deer sources remain embedded for future independent-part animation work.
+- Boss sleep keeps the previous split-part reconstruction because no new finished Boss-sleep reference was supplied in this upload set.
+- Baby awake/sleep remain on the existing successful three-part reconstruction workflow.
+
+
+SERVER 382 / GAME 409:
+- Added the uploaded Dog split-part SVG set and mapped it by stage/state:
+  baby awake/sleep, adult awake/sleep, boss awake/sleep, superboss awake/sleep, bigmomma awake.
+- Switched Dog rendering to use the already-approved in-game Dog artwork as the visible full-body reference.
+- Awake and sleeping Dog forms now use the same physical size scale, so sleep art will not render bigger or smaller.
+- The uploaded Dog split parts stay embedded for future independent-part assembly/animation work.
+- Bigmomma sleep split source was not included in this upload set, so that stage keeps using the existing in-game full-body reference.
+
+
+SERVER 383 / GAME 410:
+- Added the uploaded Cat split-part SVG set and mapped it by stage/state.
+- Added the uploaded Bearded Dragon split-part SVG set and mapped it by stage/state.
+- Cat now uses the already-used in-game Cat artwork as the visible full-body reference result.
+- Bearded Dragon now uses the already-used in-game Dragon artwork as the visible full-body reference result.
+- Awake and sleep Cat/Dragon forms are kept on the same physical stage scale.
+- The uploaded split-part sets stay embedded for future independent-part assembly work.
+- No fifth Bearded Dragon split pair was included in this upload set, so Big Momma Dragon keeps using the existing in-game full-body art.
+
+
+SERVER 384 / GAME 411:
+- Added the uploaded Wolf split-part SVG set and mapped it by stage/state.
+- Added the uploaded Fox split-part SVG set and mapped it by stage/state.
+- Wolf now uses the already-used in-game Wolf artwork as the visible full-body reference result.
+- Fox now uses the already-used in-game Fox artwork as the visible full-body reference result.
+- Awake and sleep Wolf/Fox forms are kept on the same physical stage scale.
+- The uploaded split-part sets stay embedded for future independent-part assembly work.
+
+
+SERVER 386 / GAME 413:
+- BUGFIX: rebuilt from stable Game 411 after Game 412 accidentally removed a large
+  section of uploaded-animal/world rendering code during a function replacement.
+- Verified UPLOADED_ANIMAL_SKIN_SOURCES, UPLOADED_ANIMAL_SKINS,
+  drawUploadedViperSkin, and drawUploadedAnimalSkin are all still present.
+- Re-applied cute head/tail motion with brace-safe function replacement only.
+- Dog, Cat, Bearded Dragon, Fox, and Wolf get gentle head wobble + tail motion.
+- Fixed inherited multiplayer death-camera lookup: net.remotePlayers -> net.remoteVisuals.
+
+
+SERVER 387 / GAME 415:
+- Adult animal hitboxes tightened across all species.
+- Deer collision remains slimmer and better matched to the visible body.
+- Baby deer awake/sleep now animate head and tail separately.
+- Older deer stages have stronger visible head/tail movement.
+
+
+SERVER 388 / GAME 416:
+- Adult deer head split moved farther back so the antlers stay attached to the moving head.
+- Adult deer antlers now rotate with the head instead of staying stuck on the body.
+
+
+SERVER 389 / GAME 417:
+- Any animal with horns or antlers now keeps those parts attached to the moving head.
+- Deer non-baby stages split farther back so antlers move with the head.
+- Horned owl head split also pulls the horn tufts into the moving head piece.
+
+
+SERVER 390 / GAME 418:
+- Deer non-baby stages now cut the moving head farther back so antlers/horns travel with the head.
+- Deer tail, head, and antler motion stay linked through the same segmented deer rendering path.
+- The lighter tan antlers are no longer left behind on the torso layer.
+
+
+SERVER 391 / GAME 419:
+- Deer now uses the separated source pieces as the main renderer for every non-baby stage.
+- Already-assembled deer art is now reference only, not the primary visible renderer.
+- Tail, head, and antlers/horns animate from the separated-piece deer path.
+
+
+SERVER 392 / GAME 420:
+- Deer separated-part head alignment pulled closer to the torso to better match the provided reference.
+- Head pivot moved closer to the neck, reducing the detached look while keeping head/antler motion.
+
+
+SERVER 393 / GAME 421:
+- Rechecked all supplied assembled Deer references against the separated source pieces.
+- Corrected deer stage mapping: previous split buckets were assigned to the wrong stages.
+- Adult, Boss, Super Boss, and Big Momma now use their correct separated source artwork.
+- Base tail/body/head positions are aligned from the supplied finished references.
+- Finished references remain reference-only; visible deer are still built from separated pieces.
+- Head + antlers and tail remain independently animated.
+- Boss sleep has no supplied finished reference, so it inherits Boss awake connection geometry adapted to its sleep source.
+
+
+SERVER 394 / GAME 422:
+- Fixed random-looking world/map clones caused by canvas transforms surviving a recovered frame error.
+- Every draw now starts at the identity transform.
+- Frame-error recovery resets the drawing context before continuing.
+- Added finite camera-position guards so invalid entity positions cannot corrupt the world view.
+
+
+SERVER 395 / GAME 423:
+- Fixed Game 422 canvas reset bug that restored identity transform instead of DPR scaling.
+- Full-screen world rendering now clears/redraws correctly while keeping the anti-clone recovery logic.
+
+
+SERVER 396 / GAME 424:
+- Removed ctx.reset() from frame-error recovery so a caught error cannot blank the canvas.
+- Added a last-good-frame physical-pixel backup and restore path.
+- Separated deer draw failures are isolated and fall back visually for that frame instead of aborting the whole scene.
+
+
+SERVER 397 / GAME 425:
+- Added the uploaded separated Viper parts for every stage.
+- Reconnected the split Viper body/head art and made it the main renderer.
+- Kept the older whole-body Viper skins only as a fallback/reference path.
+
+
+SERVER 398 / GAME 426:
+- Wildlife can proactively fight nearby wildlife and hostile cubes.
+- Added bite grace range so physical collision cannot stall animal-vs-animal combat.
+- Multiplayer animal/enemy target refs now support wildlife-vs-wildlife and wildlife-vs-hostile-cube damage.
+- Death overlay now simply says You died.
+- Separated Viper tail wiggles opposite the head/neck direction.
+
+
+SERVER 399 / GAME 427:
+- Right-clicking a wild animal orders every owned pet to focus that animal.
+- Automatic defend/retaliation fights now break off when pets or the threat get too far from the owner.
+- Pets return to follow after dropping an auto-defense target.
+- Multiplayer has server-authoritative manual pet focus targets.
+
+
+SERVER 400 / GAME 428:
+- Stability/performance audit pass.
+- Last-good-frame backup throttled from every frame to ~6 fps.
+- Wildlife fight targeting uses a short-lived spatial grid instead of full-world scans.
+- Home preview only simulates animals near the camera.
+- Viper segmented draw slices reduced while preserving smooth motion.
+- Collision setup avoids repeated filter/concat allocations.
+
+
+SERVER 401 / GAME 429:
+- Multiplayer wildlife opponent search now uses the server spatial grid instead of scanning the full world.
+- Disconnect cleanup removes pet focus/death timer and owner-threat entries to prevent stale map growth.
+
+
+SERVER 403 / GAME 431:
+- Day duration increased from 72s to 120s.
+- Hostile cubes now spawn from random whole-map locations rather than around players.
+- Follow/Defend/Set pets no longer proactively attack random wildlife or hostile cubes.
+- Combat-mode pets still hunt automatically. Manual right-click focus and retaliation remain explicit exceptions.
+
+
+SERVER 404 / GAME 432:
+- Pet XP rewards now scale by defeated animal species and stage; Mentor Cape boosts kill XP.
+- Pet roaming/follow distance now scales strongly with pet speed; Rabbits get an extra range bonus.
+- Added run-only gold gear shop with Hats, Capes, and Armor.
+- Shop gear resets on respawn/new run.
+- Added species-specific taming percentages and locked taming while an attempt is resolving.
+- Added run perks for gathering, regen, damage, tame chance, card drops, pet XP, and defense.
+
+
+SERVER 405 / GAME 433:
+- Hotbar now grows dynamically as usable items are acquired instead of always showing seven slots.
+- Hotbar supports keys 1-9 and 0.
+- Inventory now shows resources plus purchased run-shop gear only.
+- Tools/buildables/saddle/berries live on the hotbar rather than duplicating into Inventory.
+- Purchased hats/capes/armor can be equipped directly from Inventory.
