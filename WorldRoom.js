@@ -907,8 +907,8 @@ export class WorldRoom extends Room {
 
     // Keep combat/physics at 20 TPS, but send state patches at 10 Hz. The client
     // interpolates moving entities, cutting multiplayer bandwidth substantially.
-    if (typeof this.setPatchRate === "function") this.setPatchRate(50);
-    else this.patchRate = 50;
+    if (typeof this.setPatchRate === "function") this.setPatchRate(100);
+    else this.patchRate = 100;
     this.setSimulationInterval((delta)=>this.update(delta/1000),1000/20);
 
     this.onMessage("input",(client,input={})=>this.handleInput(client,input));

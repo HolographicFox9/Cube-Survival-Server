@@ -633,3 +633,13 @@ SERVER 408 / GAME 436:
 - Animation movement ratio is more heavily filtered to prevent network jitter twitching.
 - Recovery frame buffer is half-resolution and captured once per second to reduce random canvas-copy stalls.
 - Full multiplayer world-copy sync reduced from 15 Hz to 10 Hz; render interpolation remains frame-rate smooth.
+
+
+SERVER 409 / GAME 437:
+- Stability-first multiplayer pass.
+- Network patch rate returned to 10 Hz to reduce browser patch-processing/GC spikes; interpolation remains frame-rate smooth.
+- Disabled recovery canvas copying/restoring while multiplayer is active.
+- Offscreen wildlife and hostile cubes no longer receive expensive per-frame interpolation/animation work.
+- Fixed remaining absolute-time changing-frequency body/head bob terms for non-Viper animals.
+- Multiplayer non-Viper animation intensity reduced slightly for calmer motion.
+- Dynamic world visual copy reduced to 8 Hz.
