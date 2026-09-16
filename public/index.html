@@ -6539,12 +6539,15 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   v.stage = s.stage || "baby";
   const sx = Number(s.x) || 0, sy = Number(s.y) || 0, sa = Number(s.angle) || 0;
   if (owned) {
-    // Server patches arrive at 10 Hz. Estimate motion between patches and render a
-    // few milliseconds ahead so following does not look one patch behind.
+    // Estimate velocity from the real time between state patches instead of
+    // assuming a fixed network rate. This keeps pet motion smooth through jitter.
+    const patchNow = performance.now();
     const oldX = Number.isFinite(v._netX) ? v._netX : sx;
     const oldY = Number.isFinite(v._netY) ? v._netY : sy;
-    v._netVX = (sx - oldX) * 10;
-    v._netVY = (sy - oldY) * 10;
+    const patchDt = Math.max(0.025, Math.min(0.25, (patchNow - (v._netPatchAt || patchNow - 50)) / 1000));
+    v._netPatchAt = patchNow;
+    v._netVX = (sx - oldX) / patchDt;
+    v._netVY = (sy - oldY) / patchDt;
     const netMoveSpeed = Math.hypot(v._netVX, v._netVY);
     if (netMoveSpeed > 0.6) {
       v._visualMoveSpeed = netMoveSpeed;
@@ -6557,14 +6560,16 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   } else {
     // Wildlife patches arrive less often online to save bandwidth. Keep each
     // server position as an interpolation target so movement still looks smooth.
+    const patchNow = performance.now();
     const oldNetX = Number.isFinite(v._netX) ? v._netX : sx;
     const oldNetY = Number.isFinite(v._netY) ? v._netY : sy;
     const mdx = sx - oldNetX, mdy = sy - oldNetY;
     const moveLen = Math.hypot(mdx, mdy);
+    const patchDt = Math.max(0.025, Math.min(0.25, (patchNow - (v._netPatchAt || patchNow - 50)) / 1000));
+    v._netPatchAt = patchNow;
     if (moveLen > 0.001) {
-      // Wildlife updates less often, so estimate visual speed from the patch delta.
-      v._visualMoveSpeed = Math.min(420, moveLen * 8);
-      v._visualMoveAt = performance.now();
+      v._visualMoveSpeed = Math.min(420, moveLen / patchDt);
+      v._visualMoveAt = patchNow;
     }
 
     v._netX = sx; v._netY = sy; v._netAngle = sa;
@@ -6597,6 +6602,12 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   v.tameFailedAggro = !!s.tameFailedAggro; v.desperateAggro = !!s.desperateAggro;
   v.releasedWild = !!s.releasedWild; v.level = Number(s.level) || 1; v.exp = Number(s.exp) || 0;
   v.petName = s.petName || (PET_TYPES[v.type] && PET_TYPES[v.type].name) || "Pet";
+
+  // Multiplayer pets use the exact same local renderer/design tables as offline
+  // pets. Keep all skin-driving state on the visual object so remote pets retain
+  // their species, stage, coat, spots, sleep pose, head/tail motion and split art.
+  v.skinType = v.type;
+  v.skinStage = v.stage;
   v.dead = !!s.dead; v.owned = owned;
   if (owned) {
     v.ownerId = s.ownerId || "";
@@ -6638,7 +6649,7 @@ function updateNetworkPetInterpolation(dt) {
       continue;
     }
 
-    const predict = p.ownerId === net.sessionId ? 0.055 : 0.035;
+    const predict = p.ownerId === net.sessionId ? 0.060 : 0.050;
     const tx = p._netX + (Number(p._netVX)||0) * predict;
     const ty = p._netY + (Number(p._netVY)||0) * predict;
     const dx = tx - p.x, dy = ty - p.y;
@@ -6649,7 +6660,7 @@ function updateNetworkPetInterpolation(dt) {
     }
 
     // Own pets get a slightly faster visual catch-up than remote pets.
-    const speed = p.ownerId === net.sessionId ? 22 : 14;
+    const speed = p.ownerId === net.sessionId ? 24 : 18;
     const follow = 1 - Math.exp(-speed * dt);
     p.x += dx * follow;
     p.y += dy * follow;
@@ -6706,8 +6717,23 @@ function applyNetworkWildlifeMovementCarry() {
 }
 
 function updateNetEnemyVisual(v, s, id) {
+  const fresh = !v;
   if (!v) v = {};
-  v.netId = id; v._netKind = "enemy"; v.x = Number(s.x) || 0; v.y = Number(s.y) || 0; v.angle = Number(s.angle) || 0;
+  v.netId = id; v._netKind = "enemy";
+  const sx = Number(s.x) || 0, sy = Number(s.y) || 0, sa = Number(s.angle) || 0;
+  const now = performance.now();
+  const oldX = Number.isFinite(v._netX) ? v._netX : sx;
+  const oldY = Number.isFinite(v._netY) ? v._netY : sy;
+  const patchDt = Math.max(0.025, Math.min(0.25, (now - (v._netPatchAt || now - 50)) / 1000));
+  v._netPatchAt = now;
+  v._netVX = (sx - oldX) / patchDt;
+  v._netVY = (sy - oldY) / patchDt;
+  v._netX = sx; v._netY = sy; v._netAngle = sa;
+
+  if (fresh || !Number.isFinite(v.x) || !Number.isFinite(v.y) || Math.hypot(sx-v.x,sy-v.y)>320) {
+    v.x=sx; v.y=sy; v.angle=sa;
+  }
+
   v.r = Number(s.r) || 17; v.speed = Number(s.speed) || 60; v.weapon = s.weapon || "Fist";
   v.dmg = Number(s.dmg) || 6; v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
   v.strong = !!s.strong; v.armed = !!s.armed; v.ranged = !!s.ranged; v.hue = s.hue || "#e0563f";
@@ -6717,6 +6743,29 @@ function updateNetEnemyVisual(v, s, id) {
   v.dead = !!s.dead;
   return v;
 }
+
+function updateNetworkEnemyInterpolation(dt) {
+  if (!net.room) return;
+  for (const en of net.enemyVisuals.values()) {
+    if (!en || en.dead || !Number.isFinite(en._netX) || !Number.isFinite(en._netY)) continue;
+    const predict = 0.045;
+    const tx = en._netX + (Number(en._netVX)||0) * predict;
+    const ty = en._netY + (Number(en._netVY)||0) * predict;
+    const dx = tx-en.x, dy=ty-en.y;
+    const d = Math.hypot(dx,dy);
+    if (d > 300) {
+      en.x=en._netX; en.y=en._netY; en.angle=en._netAngle||0;
+      continue;
+    }
+    const follow = 1-Math.exp(-17*dt);
+    en.x += dx*follow;
+    en.y += dy*follow;
+    let da=(en._netAngle||0)-(en.angle||0);
+    da=Math.atan2(Math.sin(da),Math.cos(da));
+    en.angle=(en.angle||0)+da*follow;
+  }
+}
+
 function syncNetworkFullWorld(force = false) {
   if (!net.room || !net.room.state) return false;
   const state = net.room.state;
@@ -7187,12 +7236,29 @@ function updateRemotePlayers(dt) {
       };
       net.remoteVisuals.set(id, v);
     }
-    const tx = Number(p.x) || 0, ty = Number(p.y) || 0;
+    const sx = Number(p.x) || 0, sy = Number(p.y) || 0;
+    const now = performance.now();
+    const changed = !Number.isFinite(v._netX) || !Number.isFinite(v._netY) ||
+      Math.abs(sx-v._netX) > 0.001 || Math.abs(sy-v._netY) > 0.001;
+    if (changed) {
+      const oldX = Number.isFinite(v._netX) ? v._netX : sx;
+      const oldY = Number.isFinite(v._netY) ? v._netY : sy;
+      const patchDt = Math.max(0.025, Math.min(0.25, (now-(v._netPatchAt||now-50))/1000));
+      v._netPatchAt=now;
+      v._netVX=(sx-oldX)/patchDt;
+      v._netVY=(sy-oldY)/patchDt;
+      v._netX=sx; v._netY=sy;
+    }
+    v._netAngle=Number(p.angle)||0;
+
+    const predict = 0.045;
+    const tx=(v._netX ?? sx)+(Number(v._netVX)||0)*predict;
+    const ty=(v._netY ?? sy)+(Number(v._netVY)||0)*predict;
     const d = Math.hypot(tx - v.x, ty - v.y);
-    const follow = 1 - Math.pow(0.001, dt);
-    if (d > 300) { v.x = tx; v.y = ty; }
+    const follow = 1 - Math.exp(-18 * dt);
+    if (d > 300) { v.x = sx; v.y = sy; }
     else { v.x += (tx - v.x) * follow; v.y += (ty - v.y) * follow; }
-    let da = (Number(p.angle) || 0) - v.angle;
+    let da = (v._netAngle || 0) - v.angle;
     da = Math.atan2(Math.sin(da), Math.cos(da));
     v.angle += da * follow;
     v.username = p.username || "Cube";
@@ -16155,13 +16221,14 @@ function frame(now) {
 
       if (net.room) {
         net.fullSyncAccum += dt;
-        if (net.fullSyncAccum >= 1 / 10) {
-          net.fullSyncAccum %= 1 / 10;
+        if (net.fullSyncAccum >= 1 / 15) {
+          net.fullSyncAccum %= 1 / 15;
           syncNetworkFullWorld();
         }
 
         updateNetworkAnimalInterpolation(dt);
         updateNetworkPetInterpolation(dt);
+        updateNetworkEnemyInterpolation(dt);
         updateNetworkProjectileMotion(dt);
         updatePlayer(dt);
         applyNetworkWildlifeMovementCarry();

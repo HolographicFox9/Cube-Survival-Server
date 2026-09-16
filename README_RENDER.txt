@@ -610,3 +610,11 @@ SERVER 405 / GAME 433:
 - Inventory now shows resources plus purchased run-shop gear only.
 - Tools/buildables/saddle/berries live on the hotbar rather than duplicating into Inventory.
 - Purchased hats/capes/armor can be equipped directly from Inventory.
+
+
+SERVER 406 / GAME 434:
+- Multiplayer patch rate increased from 10 Hz to 20 Hz to match server simulation.
+- Pet/wildlife interpolation now estimates velocity from real patch timing instead of assuming 10 Hz.
+- Remote pets use the same custom type/stage skin renderer and synced coat/spots/sleep/animation data as local pets.
+- Remote players and hostile cubes now use prediction/interpolation instead of visible state stepping.
+- Client dynamic world reads increased to 15 Hz while rendering remains frame-rate smooth.
