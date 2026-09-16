@@ -618,3 +618,10 @@ SERVER 406 / GAME 434:
 - Remote pets use the same custom type/stage skin renderer and synced coat/spots/sleep/animation data as local pets.
 - Remote players and hostile cubes now use prediction/interpolation instead of visible state stepping.
 - Client dynamic world reads increased to 15 Hz while rendering remains frame-rate smooth.
+
+
+SERVER 407 / GAME 435:
+- Multiplayer pets now render from smoothed velocity every frame instead of chasing each network patch.
+- Wildlife uses velocity-driven interpolation with gentle server correction.
+- Pet/wildlife animation phase is continuous client-side; server tailPhase no longer causes phase jumps.
+- Animation move speed is filtered so network jitter no longer makes heads/tails twitch or snap.

@@ -6549,10 +6549,9 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
     v._netVX = (sx - oldX) / patchDt;
     v._netVY = (sy - oldY) / patchDt;
     const netMoveSpeed = Math.hypot(v._netVX, v._netVY);
-    if (netMoveSpeed > 0.6) {
-      v._visualMoveSpeed = netMoveSpeed;
-      v._visualMoveAt = performance.now();
-    }
+    const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
+    v._visualMoveSpeed = prevVisualSpeed + (netMoveSpeed - prevVisualSpeed) * 0.28;
+    if (v._visualMoveSpeed > 0.35) v._visualMoveAt = patchNow;
     v._netX = sx; v._netY = sy; v._netAngle = sa;
     if (fresh || !Number.isFinite(v.x) || !Number.isFinite(v.y) || Math.hypot(sx - v.x, sy - v.y) > 360) {
       v.x = sx; v.y = sy; v.angle = sa;
@@ -6568,8 +6567,12 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
     const patchDt = Math.max(0.025, Math.min(0.25, (patchNow - (v._netPatchAt || patchNow - 50)) / 1000));
     v._netPatchAt = patchNow;
     if (moveLen > 0.001) {
-      v._visualMoveSpeed = Math.min(420, moveLen / patchDt);
+      const measuredSpeed = Math.min(420, moveLen / patchDt);
+      const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
+      v._visualMoveSpeed = prevVisualSpeed + (measuredSpeed - prevVisualSpeed) * 0.24;
       v._visualMoveAt = patchNow;
+    } else {
+      v._visualMoveSpeed = (Number(v._visualMoveSpeed) || 0) * 0.88;
     }
 
     v._netX = sx; v._netY = sy; v._netAngle = sa;
@@ -6593,7 +6596,9 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   v.spotCol = s.spotCol || shadeColor(v.coat, -30);
   if (v._spotsJson !== s.spotsJson) { v._spotsJson = s.spotsJson; v.spots = parseNetSpots(s); }
   v.speed = Number(s.speed) || animalSpeed(v.type, v.stage, owned);
-  v.sleeping = !!s.sleeping; v.tailPhase = Number(s.tailPhase) || 0;
+  v.sleeping = !!s.sleeping;
+  if (fresh || !Number.isFinite(v.tailPhase)) v.tailPhase = Number(s.tailPhase) || 0;
+  v._serverTailPhase = Number(s.tailPhase) || 0;
   v.attackAnim = Number(s.attackAnim) || 0; v.flash = Number(s.flash) || 0;
   v.atkCd = Number(s.atkCd) || 0; v.abilityCd = Number(s.abilityCd) || 0;
   v.combat = Number(s.combat) || 0; v.recentHit = Number(s.recentHit) || 0;
@@ -6623,18 +6628,42 @@ function updateNetworkAnimalInterpolation(dt) {
   if (!net.room) return;
   for (const a of net.animalVisuals.values()) {
     if (!a || !Number.isFinite(a._netX) || !Number.isFinite(a._netY)) continue;
+
+    const targetVX = Number(a._netVX) || 0;
+    const targetVY = Number(a._netVY) || 0;
+    const velFollow = 1 - Math.exp(-9 * dt);
+    a._renderVX = (Number(a._renderVX) || 0) + (targetVX - (Number(a._renderVX) || 0)) * velFollow;
+    a._renderVY = (Number(a._renderVY) || 0) + (targetVY - (Number(a._renderVY) || 0)) * velFollow;
+
+    // Move continuously every render frame instead of waiting on state patches.
+    a.x += a._renderVX * dt;
+    a.y += a._renderVY * dt;
+
+    // Gently pull back toward authoritative server position so prediction never drifts.
     const dx = a._netX - a.x, dy = a._netY - a.y;
     const d = Math.hypot(dx, dy);
     if (d > 320) {
-      a.x = a._netX; a.y = a._netY; a.angle = a._netAngle || 0;
-      continue;
+      a.x = a._netX; a.y = a._netY;
+      a._renderVX = targetVX; a._renderVY = targetVY;
+    } else {
+      const correction = 1 - Math.exp(-7.5 * dt);
+      a.x += dx * correction;
+      a.y += dy * correction;
     }
-    const follow = 1 - Math.exp(-13 * dt);
-    a.x += dx * follow;
-    a.y += dy * follow;
+
     let da = (a._netAngle || 0) - (a.angle || 0);
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    a.angle = (a.angle || 0) + da * follow;
+    const angleFollow = 1 - Math.exp(-11 * dt);
+    a.angle = (a.angle || 0) + da * angleFollow;
+
+    // Keep animation phase continuous locally. This is what removes the visible
+    // head/tail "phase jumping" from server snapshots.
+    const moveRatio = Math.max(0, Math.min(1.5, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
+    a.tailPhase = (Number(a.tailPhase) || 0) + dt * (1.35 + moveRatio * 4.4);
+    const renderSpeed = Math.hypot(a._renderVX, a._renderVY);
+    const oldVisual = Number(a._visualMoveSpeed) || 0;
+    a._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-8 * dt));
+    if (a._visualMoveSpeed > 0.3) a._visualMoveAt = performance.now();
   }
 }
 
@@ -6646,28 +6675,54 @@ function updateNetworkPetInterpolation(dt) {
     // A ridden pet needs to stay exactly under its rider.
     if (p.ownerId === net.sessionId && player.riding === p) {
       p.x = player.x; p.y = player.y; p.angle = player.angle;
+      p._renderVX = 0; p._renderVY = 0;
       continue;
     }
 
-    const predict = p.ownerId === net.sessionId ? 0.060 : 0.050;
-    const tx = p._netX + (Number(p._netVX)||0) * predict;
-    const ty = p._netY + (Number(p._netVY)||0) * predict;
-    const dx = tx - p.x, dy = ty - p.y;
+    const targetVX = Number(p._netVX) || 0;
+    const targetVY = Number(p._netVY) || 0;
+    const ownPet = p.ownerId === net.sessionId;
+
+    // Smooth velocity itself, not only position. This is the important part for
+    // following pets because the visual keeps moving between network patches.
+    const velFollow = 1 - Math.exp(-(ownPet ? 11 : 9) * dt);
+    p._renderVX = (Number(p._renderVX) || 0) + (targetVX - (Number(p._renderVX) || 0)) * velFollow;
+    p._renderVY = (Number(p._renderVY) || 0) + (targetVY - (Number(p._renderVY) || 0)) * velFollow;
+
+    p.x += p._renderVX * dt;
+    p.y += p._renderVY * dt;
+
+    const predict = ownPet ? 0.035 : 0.030;
+    const authX = p._netX + targetVX * predict;
+    const authY = p._netY + targetVY * predict;
+    const dx = authX - p.x, dy = authY - p.y;
     const d = Math.hypot(dx, dy);
+
     if (d > 300) {
-      p.x = p._netX; p.y = p._netY; p.angle = p._netAngle;
+      p.x = p._netX; p.y = p._netY;
+      p._renderVX = targetVX; p._renderVY = targetVY;
+      p.angle = p._netAngle || 0;
       continue;
     }
 
-    // Own pets get a slightly faster visual catch-up than remote pets.
-    const speed = p.ownerId === net.sessionId ? 24 : 18;
-    const follow = 1 - Math.exp(-speed * dt);
-    p.x += dx * follow;
-    p.y += dy * follow;
+    // Own pets correct a little quicker, but still gradually enough to avoid
+    // rubber-band stepping while they follow the player.
+    const correction = 1 - Math.exp(-(ownPet ? 8.5 : 6.5) * dt);
+    p.x += dx * correction;
+    p.y += dy * correction;
 
     let da = (p._netAngle || 0) - (p.angle || 0);
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    p.angle = (p.angle || 0) + da * follow;
+    const angleFollow = 1 - Math.exp(-12 * dt);
+    p.angle = (p.angle || 0) + da * angleFollow;
+
+    // Local continuous pet animation instead of server snapshot phase.
+    const renderSpeed = Math.hypot(p._renderVX, p._renderVY);
+    const moveRatio = Math.max(0, Math.min(1.5, renderSpeed / Math.max(1, p.speed || 1)));
+    p.tailPhase = (Number(p.tailPhase) || 0) + dt * (1.4 + moveRatio * 4.7);
+    const oldVisual = Number(p._visualMoveSpeed) || 0;
+    p._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-9 * dt));
+    if (p._visualMoveSpeed > 0.3) p._visualMoveAt = performance.now();
   }
 }
 function updateNetworkProjectileMotion(dt) {
