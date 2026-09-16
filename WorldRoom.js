@@ -21,7 +21,7 @@ const CHAT_COOLDOWN_MS = 650;
 const CHAT_BLOCKED_WORDS = [
   "fuck","fucker","fucking","shit","bullshit","bitch","bitches","asshole","ass",
   "dick","cock","pussy","cunt","motherfucker","nigger","nigga","faggot",
-  "retard","whore","slut",
+  "retard","whore","slut","bum",
   // Requested phonetic / workaround spellings.
   "ahh","fuh","fah","greened","dih","puh"
 ];
@@ -1229,9 +1229,10 @@ export class WorldRoom extends Room {
   sendReward(ownerId,reward,source={}){
     const p=this.state.players.get(ownerId);
     if(p&&reward&&reward.kind==="resource"&&reward.resource==="gold"&&!source?.kill){
-      p.gold=Math.max(0,(p.gold||0)+(Math.max(0,Number(reward.amount)||0)));
+      p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+Math.max(0,Number(reward.amount)||0)));
     }
-    const c=this.clientById(ownerId);if(c)c.send("worldReward",{...reward,...source});
+    const c=this.clientById(ownerId);
+    if(c)c.send("worldReward",{...reward,...source,balance:(reward?.kind==="resource"&&reward?.resource==="gold"&&p)?p.gold:undefined});
   }
   broadcastFx(data){
     if(!data)return;
@@ -1339,7 +1340,7 @@ export class WorldRoom extends Room {
   }
 
   handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;const toolName=this.validTool(String(data.tool||"Fist")),t=TOOL[toolName];if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(id,rand(12,22));}}
-  handleGoldHit(client,data){const id=String(data.id||""),g=this.state.gold.get(id);if(!g||(!g.infinite&&g.goldLeft<=0)||!this.playerCanReach(client,g.x,g.y,Math.min(150,g.r)))return;const tool=this.validTool(String(data.tool||"Fist"));let take=0,tiny=false;if(tool==="Fist"){const key=`${client.sessionId}:${id}`;let c=(this.goldHandCredits.get(key)||0)+.12;if(c>=1){take=1;c-=1;}else tiny=true;this.goldHandCredits.set(key,c);}else take=g.pure?3:g.size==="huge"?randi(2,4):1;if(!g.infinite)take=Math.min(take,Math.max(0,g.goldLeft));if(take>0){if(!g.infinite)g.goldLeft=Math.max(0,g.goldLeft-take);take=Math.max(1,Math.round(take*this.runPerks(client.sessionId).gatherMul));const p=this.state.players.get(client.sessionId);if(p)p.gold=Math.max(0,(p.gold||0)+take);client.send("resourceReward",{id,kind:"gold",amount:take,pure:!!g.pure});}else client.send("resourceReward",{id,kind:"gold",amount:0,tiny});}
+  handleGoldHit(client,data){const id=String(data.id||""),g=this.state.gold.get(id);if(!g||(!g.infinite&&g.goldLeft<=0)||!this.playerCanReach(client,g.x,g.y,Math.min(150,g.r)))return;const tool=this.validTool(String(data.tool||"Fist"));let take=0,tiny=false;if(tool==="Fist"){const key=`${client.sessionId}:${id}`;let c=(this.goldHandCredits.get(key)||0)+.12;if(c>=1){take=1;c-=1;}else tiny=true;this.goldHandCredits.set(key,c);}else take=g.pure?3:g.size==="huge"?randi(2,4):1;if(!g.infinite)take=Math.min(take,Math.max(0,g.goldLeft));if(take>0){if(!g.infinite)g.goldLeft=Math.max(0,g.goldLeft-take);take=Math.max(1,Math.round(take*this.runPerks(client.sessionId).gatherMul));const p=this.state.players.get(client.sessionId);if(p)p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+take));client.send("resourceReward",{id,kind:"gold",amount:take,pure:!!g.pure,balance:p?p.gold:undefined});}else client.send("resourceReward",{id,kind:"gold",amount:0,tiny});}
 
   hitWild(id,a,dmg,attackerId,crit=false){
     if(!a||a.hp<=0)return;
@@ -1358,7 +1359,7 @@ export class WorldRoom extends Room {
     this.broadcastFx({kind:"hit",x:en.x,y:en.y,text:(crit?"CRIT ":"")+Math.round(dmg),color:crit?"#ffe08a":"#f2836a"});
     if(en.hp<=0){this.broadcastSpectateKill("enemy",id,"player",attackerId);this.state.enemies.delete(id);this.enemyAggro.delete(id);this.detachEnemyGuard(id,attackerId,false);this.rewardKill(attackerId,"enemy",en.x,en.y);}
   }
-  rewardKill(ownerId,kind,x,y,species=""){const owner=this.state.players.get(ownerId);if(owner)owner.kills=Math.max(0,(owner.kills||0)+1);const drop=weighted([{v:"wood",w:3},{v:"stone",w:2},{v:"gold",w:1}]),amount=drop==="gold"?1:2;if(owner&&drop==="gold")owner.gold=Math.max(0,(owner.gold||0)+amount);this.sendReward(ownerId,{kind:"resource",resource:drop,amount},{x,y,kill:true});if(kind==="enemy"&&Math.random()<Math.min(.45,.1*this.runPerks(ownerId).cardMul)){const sp=weighted([{v:"dog",w:2},{v:"cat",w:2},{v:"rabbit",w:2},{v:"fox",w:2},{v:"dragon",w:1},{v:"wolf",w:1},{v:"bear",w:1}]);this.sendReward(ownerId,{kind:"cards",species:sp,amount:1},{x,y});}if(kind==="animal"&&species&&Math.random()<Math.min(.35,.08*this.runPerks(ownerId).cardMul)){this.sendReward(ownerId,{kind:"cards",species,amount:1},{x,y});}}
+  rewardKill(ownerId,kind,x,y,species=""){const owner=this.state.players.get(ownerId);if(owner)owner.kills=Math.max(0,(owner.kills||0)+1);const drop=weighted([{v:"wood",w:3},{v:"stone",w:2},{v:"gold",w:1}]),amount=drop==="gold"?1:2;if(owner&&drop==="gold")owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+amount));this.sendReward(ownerId,{kind:"resource",resource:drop,amount},{x,y,kill:true});if(kind==="enemy"&&Math.random()<Math.min(.45,.1*this.runPerks(ownerId).cardMul)){const sp=weighted([{v:"dog",w:2},{v:"cat",w:2},{v:"rabbit",w:2},{v:"fox",w:2},{v:"dragon",w:1},{v:"wolf",w:1},{v:"bear",w:1}]);this.sendReward(ownerId,{kind:"cards",species:sp,amount:1},{x,y});}if(kind==="animal"&&species&&Math.random()<Math.min(.35,.08*this.runPerks(ownerId).cardMul)){this.sendReward(ownerId,{kind:"cards",species,amount:1},{x,y});}}
 
   handleAttack(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const now=this.state.worldTime,next=this.playerAttackCd.get(client.sessionId)||0;if(now<next)return;const tool=this.validTool(String(data.tool||p.tool||"Fist")),t=TOOL[tool],runDmg=this.runPerks(client.sessionId).damageMul;this.playerAttackCd.set(client.sessionId,now+(t.cadence||.3));const angle=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=angle;
     // PvP is at most 11 targets, so keep it direct.
@@ -1528,6 +1529,8 @@ export class WorldRoom extends Room {
   }
 
   animalBiteVictim(a,preferredRef){
+    // preferredRef may be player, pet, animal, or enemy. Wildlife-vs-wildlife
+    // bites intentionally remain supported here.
     const preferred=this.targetObject(preferredRef);
 
     if(preferredRef?.kind==="player"&&preferred&&animalAttackContact(a,preferredRef,preferred)){
@@ -1948,6 +1951,7 @@ export class WorldRoom extends Room {
     }
     if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(obj.hp<=0){obj.dead=true;this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
     if(ref.kind==="animal"){
+      // Multiplayer animal bites route here through performAnimalBite().
       if(obj.dead||obj.hp<=0)return false;
       const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0));
       if(amount<=0)return false;
@@ -2127,16 +2131,29 @@ export class WorldRoom extends Room {
         const ownerMoving=!!owner.moving;
 
         if(ownerMoving){
-          // Moving owners get tight, immediate following instead of delayed catch-up.
+          // Continuous stable formation instead of hard stop/start follow distance.
           p.wanderT=Math.min(p.wanderT,.18);
+          if(!Number.isFinite(p.followSlotSide)){
+            let seed=7;for(const ch of String(id))seed=((seed*31)+ch.charCodeAt(0))|0;
+            p.followSlotSide=((Math.abs(seed)%5)-2)*.52;
+            p.followSlotDepth=.78+(Math.abs(seed>>3)%4)*.14;
+          }
           const speedT=clamp(((p.speed||60)-45)/145,0,1);
-          let stop=52+speedT*70;if(p.type==="rabbit")stop+=24;stop=Math.max(stop,p.r*.68+PLAYER_R+12);
-          if(d>stop){
-            const a=angTo(p.x,p.y,owner.x,owner.y);
-            smoothTurn(p,a,dt,8.2);
-            const catchup=d>320?1.78:d>190?1.52:d>105?1.30:1.10;
-            p.x+=Math.cos(p.angle)*p.speed*catchup*dt;
-            p.y+=Math.sin(p.angle)*p.speed*catchup*dt;
+          let trail=48+speedT*70;if(p.type==="rabbit")trail+=22;
+          trail=Math.max(trail,p.r*.75+PLAYER_R+14);
+
+          const side=trail*p.followSlotSide,back=trail*p.followSlotDepth;
+          const ca=Math.cos(owner.angle||0),sa=Math.sin(owner.angle||0);
+          const tx=owner.x-ca*back-sa*side;
+          const ty=owner.y-sa*back+ca*side;
+          const dd=dist(p.x,p.y,tx,ty);
+
+          if(dd>4){
+            const a=angTo(p.x,p.y,tx,ty);
+            smoothTurn(p,a,dt,8.6);
+            const speedMul=clamp(.30+dd/Math.max(55,trail*.72),.30,1.72);
+            p.x+=Math.cos(p.angle)*p.speed*speedMul*dt;
+            p.y+=Math.sin(p.angle)*p.speed*speedMul*dt;
           }
         }else{
           // While the owner stands still, pets wander naturally nearby.

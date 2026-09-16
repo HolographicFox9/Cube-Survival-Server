@@ -643,3 +643,33 @@ SERVER 409 / GAME 437:
 - Fixed remaining absolute-time changing-frequency body/head bob terms for non-Viper animals.
 - Multiplayer non-Viper animation intensity reduced slightly for calmer motion.
 - Dynamic world visual copy reduced to 8 Hz.
+
+
+SERVER 410 / GAME 438:
+- Refined Viper split-body alignment from the latest user references.
+- Tightened awake/sleep Viper neck overlap and head anchor placement by stage.
+- Nudged deer separated-piece body/head offsets closer to the provided deer references.
+- Slightly moved deer head rotation pivot closer to the neck join for cleaner connection while animating.
+
+
+SERVER 411 / GAME 439:
+- Pets now follow a stable formation position behind/around their owner instead of stop/sprint/stop thresholds.
+- Follow speed scales continuously with distance error for smoother multiplayer motion.
+- Faster pets retain wider follow spacing; Rabbits retain extra range.
+- Offline follow uses the same formation logic.
+- Added 'bum' to client and server chat block lists.
+
+
+SERVER 412 / GAME 440:
+- Keyboard gameplay shortcuts only work during an active run.
+- Text-entry fields suppress gameplay shortcuts so chat/pet rename typing cannot trigger commands.
+- Verified offline wildlife can still bite/damage other wildlife through wildAttackConnects + damageTargetFromWild.
+- Verified multiplayer wildlife can still bite/damage kind=animal targets through animalBiteVictim + performAnimalBite + damageTarget.
+
+
+SERVER 413 / GAME 441:
+- Pet XP bars appear only after XP gain, hold briefly, then fade away.
+- Local player health bar appears only while damaged and fades after full healing.
+- Remote player health bars only render below full health.
+- Multiplayer player names are larger, bolder, and outlined for visibility.
+- Gold rewards include exact server-authoritative balance to prevent multiplayer gold desync/stuck-at-3 behavior.

@@ -5742,6 +5742,7 @@ function expToNext(stage, level) {
 function givePetExp(p, amount) {
   if (!p || p.dead || p.stage === "bigmomma") return;
   amount = Math.max(0, Number(amount) || 0) * runPetXpMul();
+  if (amount > 0) p._xpBarShownAt = performance.now();
   p.exp = (p.exp || 0) + amount;
   const need = expToNext(p.stage, p.level || 1);
   if (p.exp < need) return;
@@ -5877,7 +5878,7 @@ let lastChatSentAt = 0;
 const CHAT_BLOCKED_WORDS = [
   "fuck","fucker","fucking","shit","bullshit","bitch","bitches","asshole","ass",
   "dick","cock","pussy","cunt","motherfucker","nigger","nigga","faggot",
-  "retard","whore","slut",
+  "retard","whore","slut","bum",
   // Requested phonetic / workaround spellings.
   "ahh","fuh","fah","greened","dih","puh"
 ];
@@ -6621,7 +6622,17 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   v.wanderT = Number(s.wanderT) || 0; v.wanderA = Number(s.wanderA) || 0;
   v.fleeUntil = Number(s.fleeUntil) || 0; v.enraged = !!s.enraged;
   v.tameFailedAggro = !!s.tameFailedAggro; v.desperateAggro = !!s.desperateAggro;
-  v.releasedWild = !!s.releasedWild; v.level = Number(s.level) || 1; v.exp = Number(s.exp) || 0;
+  v.releasedWild = !!s.releasedWild;
+  const nextLevel = Number(s.level) || 1;
+  const nextExp = Number(s.exp) || 0;
+  if (!fresh && owned) {
+    const oldLevel = Number(v.level) || 1;
+    const oldExp = Number(v.exp) || 0;
+    if (nextLevel > oldLevel || (nextLevel === oldLevel && nextExp > oldExp + 0.001)) {
+      v._xpBarShownAt = performance.now();
+    }
+  }
+  v.level = nextLevel; v.exp = nextExp;
   v.petName = s.petName || (PET_TYPES[v.type] && PET_TYPES[v.type].name) || "Pet";
 
   // Multiplayer pets use the exact same local renderer/design tables as offline
@@ -6885,7 +6896,13 @@ function syncNetworkFullWorld(force = false) {
     const newHp = Math.max(0, Number(own.health));
     const maxHp = Math.max(1, Number(own.maxHealth) || 100);
     if (Number.isFinite(newHp)) {
-      if (newHp < player.health - 0.01 && !player.dead) { player.hurtFlash = 0.22; game.shake = 8; sfx.hurt(); }
+      const oldHp = Number(player.health) || maxHp;
+      if (newHp < oldHp - 0.01 && !player.dead) {
+        player.hurtFlash = 0.22; game.shake = 8; sfx.hurt();
+        player._healthBarShownAt = performance.now();
+      }
+      if (newHp < maxHp - 0.01) player._healthBarShownAt = performance.now();
+      else if (oldHp < maxHp - 0.01 && newHp >= maxHp - 0.01) player._healthBarHealedAt = performance.now();
       player.health = newHp; player.maxHealth = maxHp;
     }
     const serverGold = Number(own.gold);
@@ -6983,7 +7000,11 @@ function applyWorldReward(data={}) {
   const reward = { kind:data.kind, resource:data.resource, species:data.species, amount:Math.max(0,Number(data.amount)||0) };
   if (!reward.amount) return;
   if (reward.kind === "resource" && ["wood","stone","gold","berries"].includes(reward.resource)) {
-    player[reward.resource] = (player[reward.resource]||0) + reward.amount;
+    if (reward.resource === "gold" && Number.isFinite(Number(data.balance))) {
+      player.gold = Math.max(0, Number(data.balance));
+    } else {
+      player[reward.resource] = (player[reward.resource]||0) + reward.amount;
+    }
     if (data.x != null) floatText(Number(data.x), Number(data.y)||player.y, `+${reward.amount} ${reward.resource}`, "#efe6d2");
   } else if (reward.kind === "cards" && PET_TYPES[reward.species]) {
     if (!meta.speciesCards) meta.speciesCards = {};
@@ -7036,7 +7057,11 @@ function applyNetworkHarvestReward(data = {}) {
 
   if (kind === "wood" || kind === "stone" || kind === "berries" || kind === "gold") {
     if (amount > 0) {
-      player[kind] = (player[kind] || 0) + amount;
+      if (kind === "gold" && Number.isFinite(Number(data.balance))) {
+        player.gold = Math.max(0, Number(data.balance));
+      } else {
+        player[kind] = (player[kind] || 0) + amount;
+      }
       const col = kind === "wood" ? "#c99a5b" : kind === "stone" ? "#a9b3bd" : kind === "berries" ? "#f283a6" : "#f2c94c";
       const label = kind === "gold" && data.pure ? "+" + amount + " PURE GOLD" : "+" + amount + (kind === "gold" ? " gold" : kind === "berries" ? " berries" : "");
       floatText(tx, ty - 24, label, col);
@@ -7419,21 +7444,24 @@ function drawRemotePlayer(v) {
 
   ctx.save();
   ctx.textAlign = "center";
-  ctx.font = "700 11px -apple-system, sans-serif";
-  const nameY = v.y - (v.ridingPetId ? 42 : 31);
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillText(v.username || "Cube", v.x + 1, nameY + 1);
-  ctx.fillStyle = "#f5ecd5";
+  ctx.font = "900 15px -apple-system, sans-serif";
+  const nameY = v.y - (v.ridingPetId ? 46 : 35);
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "rgba(0,0,0,0.82)";
+  ctx.strokeText(v.username || "Cube", v.x, nameY);
+  ctx.fillStyle = "#fff7df";
   ctx.fillText(v.username || "Cube", v.x, nameY);
 
   const maxHp = Math.max(1, Number(v.maxHealth) || 100);
   const hp = clamp((Number(v.health) || 0) / maxHp, 0, 1);
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  roundRect(v.x - 22, v.y - 25, 44, 5, 2);
-  ctx.fill();
-  ctx.fillStyle = "#f2836a";
-  roundRect(v.x - 21, v.y - 24, 42 * hp, 3, 1);
-  ctx.fill();
+  if (hp < 0.999) {
+    ctx.fillStyle = "rgba(0,0,0,0.58)";
+    roundRect(v.x - 25, v.y - 27, 50, 6, 2);
+    ctx.fill();
+    ctx.fillStyle = "#f2836a";
+    roundRect(v.x - 24, v.y - 26, 48 * hp, 4, 1);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -7447,6 +7475,16 @@ const mouse = { sx: W / 2, sy: H / 2, down: false, rdown: false };
 let mobileMode = false;
 let joyActive = false, joyDX = 0, joyDY = 0;
 
+function gameplayKeyboardActive() {
+  return !!(game.started && !game.over);
+}
+function textEntryFocused() {
+  const active = document.activeElement;
+  if (!active) return false;
+  const tag = String(active.tagName || "").toLowerCase();
+  return tag === "input" || tag === "textarea" || !!active.isContentEditable;
+}
+
 window.addEventListener("keydown", e => {
   const ci = document.getElementById("chatInput");
   if (ci && document.activeElement === ci) {
@@ -7455,11 +7493,17 @@ window.addEventListener("keydown", e => {
     else if (e.key === "Escape") { e.preventDefault(); setChatOpen(false); }
     return;
   }
-  if (e.key === "Enter" && game.started && !game.over) {
+
+  // No gameplay shortcuts on the home screen, death screen, or before a run.
+  // Text fields (for example pet rename) also consume their own keystrokes.
+  if (!gameplayKeyboardActive() || textEntryFocused()) return;
+
+  if (e.key === "Enter") {
     e.preventDefault();
     setChatOpen(true);
     return;
   }
+
   if (["1","2","3","4","5","6","7","8","9","0"].includes(e.key)) handleHotkey(e.key);
   if (e.key.toLowerCase() === "c") toggleCraft();
   if (e.key.toLowerCase() === "e") toggleInv();
@@ -7467,6 +7511,8 @@ window.addEventListener("keydown", e => {
   if (e.key.toLowerCase() === "g") commandPets();
   if (e.key.toLowerCase() === "b") selectBerry();
   if (e.key.toLowerCase() === "p") toggleRunShop();
+
+  // Movement / attack / ride keys are also recorded only during active gameplay.
   keys.add(e.key.toLowerCase());
 });
 window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
@@ -8424,23 +8470,23 @@ const DEER_REFERENCE_ALIGNED_SPLIT_SPECS = {
   adult: {
     awake: {
       sourceStage: "bigmomma", srcW: 168.66663, srcH: 66.80245,
-      parts: [[0.0,22.0,0.0],[29.0,93.0,-18.0],[97.0,168.66663,-78.0]]
+      parts: [[0.0,22.0,0.0],[29.0,93.0,-20.0],[97.0,168.66663,-81.0]]
     },
     sleep: {
       sourceStage: "bigmomma", srcW: 163.93717, srcH: 66.80245,
-      parts: [[0.0,19.0,0.0],[28.0,91.0,-18.0],[92.0,163.93717,-75.0]]
+      parts: [[0.0,19.0,0.0],[28.0,91.0,-20.0],[92.0,163.93717,-78.0]]
     }
   },
   boss: {
     awake: {
       sourceStage: "superboss", srcW: 201.66662, srcH: 66.80245,
-      parts: [[0.0,22.0,6.0],[32.0,96.0,0.0],[105.0,201.66662,-105.0]]
+      parts: [[0.0,22.0,6.0],[32.0,96.0,-2.0],[105.0,201.66662,-108.0]]
     },
     // No finished Boss-sleep reference was included. Use the same neck/body
     // connection logic as Boss awake, adjusted to the actual sleep source bounds.
     sleep: {
       sourceStage: "superboss", srcW: 190.59495, srcH: 66.80245,
-      parts: [[0.0,19.0,6.0],[27.0,91.0,0.0],[94.0,190.59495,-94.0]]
+      parts: [[0.0,19.0,6.0],[27.0,91.0,-2.0],[94.0,190.59495,-97.0]]
     }
   },
   superboss: {
@@ -8449,22 +8495,22 @@ const DEER_REFERENCE_ALIGNED_SPLIT_SPECS = {
       // Re-aligned to the user-provided Super Boss deer awake reference.
       // Tail keeps its earlier placement; middle body was too far right.
       // Use the actual separated-piece bounds from the uploaded source bucket.
-      parts: [[0.0,23.0,23.0],[27.0,91.0,8.0],[91.0,204.66661,-91.0]]
+      parts: [[0.0,23.0,23.0],[27.0,91.0,6.0],[91.0,204.66661,-94.0]]
     },
     sleep: {
       sourceStage: "boss", srcW: 207.66662, srcH: 77.03989,
       // Re-aligned to the user-provided Super Boss deer sleep reference.
-      parts: [[0.0,20.0,22.0],[28.0,92.0,7.0],[93.0,207.66662,-92.0]]
+      parts: [[0.0,20.0,22.0],[28.0,92.0,5.0],[93.0,207.66662,-95.0]]
     }
   },
   bigmomma: {
     awake: {
       sourceStage: "adult", srcW: 204.86661, srcH: 76.46779,
-      parts: [[0.0,22.0,22.0],[27.0,90.0,23.0],[91.0,204.86661,-92.0]]
+      parts: [[0.0,22.0,22.0],[27.0,90.0,21.0],[91.0,204.86661,-95.0]]
     },
     sleep: {
       sourceStage: "adult", srcW: 206.06412, srcH: 76.46779,
-      parts: [[0.0,19.0,22.0],[28.0,91.0,22.0],[92.0,206.06412,-93.0]]
+      parts: [[0.0,19.0,22.0],[28.0,91.0,20.0],[92.0,206.06412,-96.0]]
     }
   }
 };
@@ -8599,7 +8645,7 @@ function drawReassembledDeerPartsSkin(a, stage, sleeping) {
   // 3) full head segment on top, including the tan antlers/horns
   if (tailPart) drawPartRotated(tailPart, 0.95, tailAngle, 0, tailLift);
   for (const part of bodyParts) drawPartStatic(part);
-  drawPartRotated(headPart, 0.14, headAngle, headPush, headBob);
+  drawPartRotated(headPart, 0.12, headAngle, headPush, headBob);
 
   ctx.imageSmoothingEnabled = oldSmooth;
   try { ctx.imageSmoothingQuality = oldQuality; } catch (_) {}
@@ -8834,24 +8880,24 @@ const VIPER_SEPARATED_SKIN_SOURCES = {
 // The older in-game Viper skins are now only fallback/reference material.
 const VIPER_SEPARATED_SKIN_LAYOUT = {
   baby: {
-    awake: { body: [0.0, 0.091, 0.715, 0.86], head: [0.756, 0.0, 1.0, 1.0] },
-    sleep: { body: [0.0, 0.0, 0.555, 1.0], head: [0.574, 0.027, 1.0, 0.753] }
+    awake: { body: [0.0, 0.078, 0.710, 0.905], head: [0.742, 0.0, 1.0, 1.0], overlap: 0.245, headOffsetY: -0.010, headPivotFracX: 0.13, headAnchorX: 0.13 },
+    sleep: { body: [0.0, 0.0, 0.555, 1.0], head: [0.574, 0.027, 1.0, 0.753], overlap: 0.185, sleepHeadOffsetY: 0.010, sleepHeadRot: -0.045 }
   },
   adult: {
-    awake: { body: [0.0, 0.091, 0.714, 0.86], head: [0.78, 0.0, 1.0, 1.0] },
-    sleep: { body: [0.0, 0.0, 0.527, 1.0], head: [0.616, 0.026, 1.0, 0.711] }
+    awake: { body: [0.0, 0.078, 0.706, 0.905], head: [0.768, 0.0, 1.0, 1.0], overlap: 0.235, headOffsetY: -0.008, headPivotFracX: 0.13, headAnchorX: 0.13 },
+    sleep: { body: [0.0, 0.0, 0.527, 1.0], head: [0.616, 0.026, 1.0, 0.711], overlap: 0.182, sleepHeadOffsetY: 0.008, sleepHeadRot: -0.045 }
   },
   boss: {
-    awake: { body: [0.0, 0.091, 0.718, 0.86], head: [0.755, 0.0, 1.0, 1.0] },
-    sleep: { body: [0.0, 0.049, 0.507, 1.0], head: [0.628, 0.0, 1.0, 0.72] }
+    awake: { body: [0.0, 0.080, 0.711, 0.902], head: [0.742, 0.0, 1.0, 1.0], overlap: 0.236, headOffsetY: -0.006, headPivotFracX: 0.13, headAnchorX: 0.13 },
+    sleep: { body: [0.0, 0.049, 0.507, 1.0], head: [0.628, 0.0, 1.0, 0.72], overlap: 0.180, sleepHeadOffsetY: 0.006, sleepHeadRot: -0.040 }
   },
   superboss: {
-    awake: { body: [0.0, 0.091, 0.749, 0.86], head: [0.759, 0.0, 1.0, 1.0] },
-    sleep: { body: [0.0, 0.196, 0.503, 1.0], head: [0.643, 0.0, 1.0, 0.7] }
+    awake: { body: [0.0, 0.080, 0.742, 0.902], head: [0.748, 0.0, 1.0, 1.0], overlap: 0.230, headOffsetY: -0.006, headPivotFracX: 0.135, headAnchorX: 0.13 },
+    sleep: { body: [0.0, 0.196, 0.503, 1.0], head: [0.643, 0.0, 1.0, 0.7], overlap: 0.176, sleepHeadOffsetY: 0.006, sleepHeadRot: -0.040 }
   },
   bigmomma: {
-    awake: { body: [0.0, 0.091, 0.755, 0.86], head: [0.755, 0.0, 1.0, 1.0] },
-    sleep: { body: [0.0, 0.059, 0.514, 1.0], head: [0.661, 0.0, 1.0, 0.729] }
+    awake: { body: [0.0, 0.080, 0.748, 0.902], head: [0.748, 0.0, 1.0, 1.0], overlap: 0.228, headOffsetY: -0.004, headPivotFracX: 0.135, headAnchorX: 0.13 },
+    sleep: { body: [0.0, 0.059, 0.514, 1.0], head: [0.661, 0.0, 1.0, 0.729], overlap: 0.176, sleepHeadOffsetY: 0.006, sleepHeadRot: -0.040 }
   },
 };
 const UPLOADED_ANIMAL_SKINS = {};
@@ -8951,7 +8997,8 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
   const headTopBase = -totalH * 0.5 + totalH * head[1];
   const headCenterYBase = headTopBase + headH * 0.5;
 
-  const overlap = Math.min(bodyW, headW) * (a.sleeping ? 0.15 : 0.19);
+  const overlapRatio = Number(a.sleeping ? layout.overlap ?? 0.15 : layout.overlap ?? 0.19);
+  const overlap = Math.min(bodyW, headW) * Math.max(0.05, Math.min(0.45, overlapRatio));
   const mergedW = bodyW + headW - overlap;
   const left = -mergedW * 0.5;
 
@@ -8980,12 +9027,15 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
   if (a.sleeping) {
     ctx.drawImage(img, bodySrcX, bodySrcY, bodySrcW, bodySrcH, left, bodyTopBase, bodyW, bodyH);
 
-    const headX = left + bodyW - overlap;
-    const headY = headTopBase + totalH * 0.02;
+    const headX = left + bodyW - overlap + totalW * Number(layout.sleepHeadOffsetX || 0);
+    const headY = headTopBase + totalH * (0.02 + Number(layout.sleepHeadOffsetY || 0));
+    const sleepAnchorX = Number(layout.sleepHeadAnchorX || layout.headAnchorX || 0.14);
+    const sleepAnchorY = Number(layout.sleepHeadAnchorY || 0.54);
+    const sleepRot = Number(layout.sleepHeadRot || -0.06);
     ctx.save();
-    ctx.translate(headX + headW * 0.14, headY + headH * 0.54);
-    ctx.rotate(-0.06);
-    ctx.drawImage(img, headSrcX, headSrcY, headSrcW, headSrcH, -headW * 0.14, -headH * 0.54, headW, headH);
+    ctx.translate(headX + headW * sleepAnchorX, headY + headH * sleepAnchorY);
+    ctx.rotate(sleepRot);
+    ctx.drawImage(img, headSrcX, headSrcY, headSrcW, headSrcH, -headW * sleepAnchorX, -headH * sleepAnchorY, headW, headH);
     ctx.restore();
 
     ctx.imageSmoothingEnabled = oldSmooth;
@@ -9053,8 +9103,12 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
   const headRot = wobble * 0.205 * motion;
   const headBob = Math.sin(phase * 0.52 + 1.4) * bodyH * 0.018 * motion;
 
-  const headPivotX = left + bodyW - overlap * 0.42;
-  const headPivotY = headCenterYBase + neckY + headSide + headBob;
+  const headRestX = left + bodyW - overlap + totalW * Number(layout.headOffsetX || 0);
+  const headRestY = headTopBase + totalH * Number(layout.headOffsetY || 0);
+  const headPivotFracX = Number(layout.headPivotFracX || 0.14);
+  const headPivotFracY = Number(layout.headPivotFracY || 0.50);
+  const headPivotX = headRestX + headW * headPivotFracX;
+  const headPivotY = headRestY + headH * headPivotFracY + neckY + headSide + headBob;
 
   const neckAheadT = 0.985;
   const neckAheadY = (
@@ -9070,7 +9124,7 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
     img,
     headSrcX, headSrcY,
     headSrcW, headSrcH,
-    -headW * 0.14, -headH * 0.5,
+    -headW * Number(layout.headAnchorX || headPivotFracX), -headH * Number(layout.headAnchorY || headPivotFracY),
     headW, headH
   );
   ctx.restore();
@@ -11303,6 +11357,7 @@ function wildCombatTarget(a) {
 }
 
 function wildAttackConnects(attacker, target) {
+  // Works for player, hostile-cube, pet, AND wild-animal targets.
   if (!attacker || !target || !combatTargetAlive(target)) return false;
   if (animalHeadTouchesTarget(attacker, target)) return true;
 
@@ -12483,6 +12538,7 @@ function updateAnimals(dt) {
       }
 
       if (wildAttackConnects(a, foe) && a.atkCd <= 0) {
+        // Keep wildlife-vs-wildlife bites real: this damage path accepts animals.
         const stageDmg = typeDmg(a.type, a.stage);
         const dmg = rand(stageDmg * 0.8, stageDmg * 1.15);
         damageTargetFromWild(a, foe, dmg);
@@ -12708,52 +12764,75 @@ function updateAnimals(dt) {
         p.followReturning = false;
       }
     } else if (p.follow) {
-      const d = dist(p.x, p.y, player.x, player.y);
-      // Slower pets stay closer and begin returning much sooner than fast pets.
-      // Bears and Bearded Dragons intentionally have especially tight follow radiuses.
-      const followRange = petFollowRangeFor(p);
-      const followStart = followRange.start;
-      const followStop = followRange.stop;
       const ownerMoving = keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d") ||
         keys.has("arrowup") || keys.has("arrowdown") || keys.has("arrowleft") || keys.has("arrowright") ||
         (mobileMode && typeof joyActive !== "undefined" && joyActive);
-      // Moving owners make pets return almost immediately; standing owners still get relaxed wandering.
-      if (!p.followReturning && d > (ownerMoving ? followStop + 18 : followStart)) p.followReturning = true;
-      if (p.followReturning && d < followStop) {
-        p.followReturning = false;
+      const followRange = petFollowRangeFor(p);
+
+      if (ownerMoving) {
+        // Continuous formation following removes the old stop/sprint/stop cycle.
+        if (!Number.isFinite(p._followSlotSide)) {
+          const key = String(p.id || p.netId || p.type || "pet");
+          let seed = 7;
+          for (const ch of key) seed = ((seed * 31) + ch.charCodeAt(0)) | 0;
+          p._followSlotSide = ((Math.abs(seed) % 5) - 2) * 0.52;
+          p._followSlotDepth = 0.78 + (Math.abs(seed >> 3) % 4) * 0.14;
+        }
+
+        const speedT = clamp((Math.max(35, Number(p.speed) || 60) - 45) / 145, 0, 1);
+        let trail = 48 + speedT * 70;
+        if (p.type === "rabbit") trail += 22;
+        trail = Math.max(trail, p.r * 0.75 + PLAYER_R + 14);
+
+        const side = trail * p._followSlotSide;
+        const back = trail * p._followSlotDepth;
+        const ca = Math.cos(player.angle || 0), sa = Math.sin(player.angle || 0);
+        const tx = player.x - ca * back - sa * side;
+        const ty = player.y - sa * back + ca * side;
+        const dd = dist(p.x, p.y, tx, ty);
+
+        if (dd > 4) {
+          const a = angTo(p.x, p.y, tx, ty);
+          smoothTurn(p, a, dt, 8.6);
+          const speedMul = clamp(0.30 + dd / Math.max(55, trail * 0.72), 0.30, 1.72);
+          moveFacing(p, p.speed * speedMul, dt);
+        }
+
+        p.followReturning = dd > 16;
         p.idleWanderT = 0;
         p.idleTX = null; p.idleTY = null;
-      }
-
-      if (p.followReturning) {
-        const a = angTo(p.x, p.y, player.x, player.y);
-        smoothTurn(p, a, dt, 7.4);
-        const sprint = d > 360 ? 1.72 : d > 210 ? 1.45 : d > 115 ? 1.22 : 1.05;
-        moveFacing(p, p.speed * sprint, dt);
       } else {
-        // Wider relaxed wandering around the player.
+        const d = dist(p.x, p.y, player.x, player.y);
         p.idleWanderT = (p.idleWanderT || 0) - dt;
         const wanderMax = followRange.wanderMax;
         const wanderMin = clamp(wanderMax * 0.38, 48, 78);
-        const targetBad = p.idleTX == null || p.idleTY == null ||
-          dist(player.x, player.y, p.idleTX, p.idleTY) > wanderMax + 18;
-        if (p.idleWanderT <= 0 || targetBad) {
-          const ang = rand(0, TAU);
-          const rad = rand(wanderMin, wanderMax);
-          p.idleTX = player.x + Math.cos(ang) * rad;
-          p.idleTY = player.y + Math.sin(ang) * rad;
-          p.idleWanderT = rand(2.4, 5.0);
-        }
 
-        const dd = dist(p.x, p.y, p.idleTX, p.idleTY);
-        if (dd < 18) {
-          p.idleWanderT = rand(0.35, 0.8); // tiny natural pause before choosing somewhere else
+        if (d > wanderMax + 42) {
+          const a = angTo(p.x, p.y, player.x, player.y);
+          smoothTurn(p, a, dt, 5.3);
+          moveFacing(p, p.speed * clamp(0.45 + (d - wanderMax) / 160, 0.45, 1.12), dt);
           p.idleTX = null; p.idleTY = null;
         } else {
-          const a = angTo(p.x, p.y, p.idleTX, p.idleTY);
-          smoothTurn(p, a, dt, 3.9);
-          const cruise = dd > 100 ? 0.62 : 0.42;
-          moveFacing(p, p.speed * cruise, dt);
+          const targetBad = p.idleTX == null || p.idleTY == null ||
+            dist(player.x, player.y, p.idleTX, p.idleTY) > wanderMax + 18;
+          if (p.idleWanderT <= 0 || targetBad) {
+            const ang = rand(0, TAU);
+            const rad = rand(wanderMin, wanderMax);
+            p.idleTX = player.x + Math.cos(ang) * rad;
+            p.idleTY = player.y + Math.sin(ang) * rad;
+            p.idleWanderT = rand(2.4, 5.0);
+          }
+
+          const dd = dist(p.x, p.y, p.idleTX, p.idleTY);
+          if (dd < 18) {
+            p.idleWanderT = rand(0.35, 0.8);
+            p.idleTX = null; p.idleTY = null;
+          } else {
+            const a = angTo(p.x, p.y, p.idleTX, p.idleTY);
+            smoothTurn(p, a, dt, 3.9);
+            const cruise = clamp(0.26 + dd / 250, 0.30, 0.68);
+            moveFacing(p, p.speed * cruise, dt);
+          }
         }
       }
     }
@@ -15798,6 +15877,13 @@ function drawTopHealthBar(x, y, w, h, ratio, fill, label = "") {
 function drawPetXpBar(p, y) {
   if (!p || p.dead || p.stage === "bigmomma") return;
 
+  const shownAt = Number(p._xpBarShownAt) || 0;
+  const age = performance.now() - shownAt;
+  const holdMs = 1150;
+  const fadeMs = 1450;
+  if (!shownAt || age >= holdMs + fadeMs) return;
+  const alpha = age <= holdMs ? 1 : clamp(1 - (age - holdMs) / fadeMs, 0, 1);
+
   const level = Math.max(1, Number(p.level) || 1);
   const need = Math.max(1, expToNext(p.stage, level));
   const exp = Math.max(0, Number(p.exp) || 0);
@@ -15809,6 +15895,7 @@ function drawPetXpBar(p, y) {
   const x = p.x - w / 2;
 
   ctx.save();
+  ctx.globalAlpha = alpha;
 
   // Dark outline/backplate keeps XP readable over bright trees, pets and effects.
   ctx.fillStyle = "rgba(10,14,22,0.88)";
@@ -15977,10 +16064,25 @@ function drawTopHealthOverlays(viewResources = resources, viewGold = goldChunks,
     const xpY = p.y - p.r - 64;
     drawPetXpBar(p, xpY);
   }
-  // Player HP above the character instead of in the old top-left area.
+  // Player HP only appears while damaged. After healing back to full it
+  // softly ghosts away instead of permanently occupying the screen.
   if (!player.dead && inView(player.x, player.y, 90)) {
-    const ratio = player.health / player.maxHealth;
-    drawTopHealthBar(player.x, player.y - (player.riding ? 58 : 46), 54, 8, ratio, "#f2836a", "HP");
+    const ratio = clamp(player.health / Math.max(1, player.maxHealth), 0, 1);
+    let alpha = 0;
+    if (ratio < 0.999) {
+      alpha = 1;
+      player._healthBarShownAt = performance.now();
+    } else {
+      const healedAt = Number(player._healthBarHealedAt) || 0;
+      const age = healedAt ? performance.now() - healedAt : 99999;
+      if (age < 1000) alpha = 1 - age / 1000;
+    }
+    if (alpha > 0.01) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      drawTopHealthBar(player.x, player.y - (player.riding ? 58 : 46), 54, 8, ratio, "#f2836a", "HP");
+      ctx.restore();
+    }
   }
 }
 
