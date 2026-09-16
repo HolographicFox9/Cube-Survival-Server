@@ -3860,12 +3860,16 @@ const lastGoodFrameCanvas = document.createElement("canvas");
 const lastGoodFrameCtx = lastGoodFrameCanvas.getContext("2d");
 let hasLastGoodFrame = false;
 let lastGoodFrameCaptureAt = 0;
-const LAST_GOOD_FRAME_CAPTURE_MS = 160; // ~6 fps backup is enough for recovery, far cheaper than copying every frame.
+const LAST_GOOD_FRAME_CAPTURE_MS = 1000; // recovery snapshot only once per second; avoids periodic GPU/CPU copy stalls.
 
 function resizeLastGoodFrameBuffer() {
-  if (lastGoodFrameCanvas.width !== canvas.width || lastGoodFrameCanvas.height !== canvas.height) {
-    lastGoodFrameCanvas.width = canvas.width;
-    lastGoodFrameCanvas.height = canvas.height;
+  // Recovery does not need full render resolution. A half-size backup cuts
+  // canvas-copy bandwidth/memory to about 1/4 and avoids random copy stalls.
+  const bw = Math.max(1, Math.floor(canvas.width * 0.5));
+  const bh = Math.max(1, Math.floor(canvas.height * 0.5));
+  if (lastGoodFrameCanvas.width !== bw || lastGoodFrameCanvas.height !== bh) {
+    lastGoodFrameCanvas.width = bw;
+    lastGoodFrameCanvas.height = bh;
     hasLastGoodFrame = false;
   }
 }
@@ -3879,7 +3883,11 @@ function captureLastGoodFrame(force = false) {
   lastGoodFrameCtx.globalAlpha = 1;
   lastGoodFrameCtx.globalCompositeOperation = "source-over";
   lastGoodFrameCtx.clearRect(0, 0, lastGoodFrameCanvas.width, lastGoodFrameCanvas.height);
-  lastGoodFrameCtx.drawImage(canvas, 0, 0);
+  lastGoodFrameCtx.drawImage(
+    canvas,
+    0, 0, canvas.width, canvas.height,
+    0, 0, lastGoodFrameCanvas.width, lastGoodFrameCanvas.height
+  );
   hasLastGoodFrame = true;
 }
 
@@ -3889,7 +3897,11 @@ function restoreLastGoodFrame() {
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(lastGoodFrameCanvas, 0, 0);
+  ctx.drawImage(
+    lastGoodFrameCanvas,
+    0, 0, lastGoodFrameCanvas.width, lastGoodFrameCanvas.height,
+    0, 0, canvas.width, canvas.height
+  );
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   return true;
 }
@@ -6658,11 +6670,17 @@ function updateNetworkAnimalInterpolation(dt) {
 
     // Keep animation phase continuous locally. This is what removes the visible
     // head/tail "phase jumping" from server snapshots.
-    const moveRatio = Math.max(0, Math.min(1.5, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
-    a.tailPhase = (Number(a.tailPhase) || 0) + dt * (1.35 + moveRatio * 4.4);
+    const measuredRatio = Math.max(0, Math.min(1.5, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
+    const oldAnimRatio = Number(a._netAnimMoveRatio) || 0;
+    const animFollow = 1 - Math.exp(-4.2 * dt);
+    a._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
+    a._netAnimPhase = (Number(a._netAnimPhase) || Number(a.tailPhase) || 0) +
+      dt * (1.45 + a._netAnimMoveRatio * 5.2);
+    a.tailPhase = a._netAnimPhase;
+
     const renderSpeed = Math.hypot(a._renderVX, a._renderVY);
     const oldVisual = Number(a._visualMoveSpeed) || 0;
-    a._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-8 * dt));
+    a._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-4.5 * dt));
     if (a._visualMoveSpeed > 0.3) a._visualMoveAt = performance.now();
   }
 }
@@ -6718,10 +6736,16 @@ function updateNetworkPetInterpolation(dt) {
 
     // Local continuous pet animation instead of server snapshot phase.
     const renderSpeed = Math.hypot(p._renderVX, p._renderVY);
-    const moveRatio = Math.max(0, Math.min(1.5, renderSpeed / Math.max(1, p.speed || 1)));
-    p.tailPhase = (Number(p.tailPhase) || 0) + dt * (1.4 + moveRatio * 4.7);
+    const measuredRatio = Math.max(0, Math.min(1.5, renderSpeed / Math.max(1, p.speed || 1)));
+    const oldAnimRatio = Number(p._netAnimMoveRatio) || 0;
+    const animFollow = 1 - Math.exp(-4.4 * dt);
+    p._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
+    p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) +
+      dt * (1.5 + p._netAnimMoveRatio * 5.4);
+    p.tailPhase = p._netAnimPhase;
+
     const oldVisual = Number(p._visualMoveSpeed) || 0;
-    p._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-9 * dt));
+    p._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-4.8 * dt));
     if (p._visualMoveSpeed > 0.3) p._visualMoveAt = performance.now();
   }
 }
@@ -8040,7 +8064,10 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
   const recentlyMoved = (nowMs - (a._visualMoveAt || 0)) < 170;
   const actualMoveSpeed = (!a.sleeping && recentlyMoved) ? Math.max(0, Number(a._visualMoveSpeed) || 0) : 0;
   const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed(type, stageKey, !!a.owned) || 1);
-  const rawMoveRatio = Math.max(0, Math.min(1.8, actualMoveSpeed / normalMoveSpeed));
+  const measuredMoveRatio = Math.max(0, Math.min(1.8, actualMoveSpeed / normalMoveSpeed));
+  const rawMoveRatio = (net.room && Number.isFinite(a._netAnimMoveRatio))
+    ? Math.max(0, Math.min(1.8, a._netAnimMoveRatio))
+    : measuredMoveRatio;
 
   const targetCuteMotion = a.sleeping ? 0.08 : Math.max(0.28, Math.min(1.05, rawMoveRatio + 0.08));
   const prevCuteMotion = Number(a._cuteMotion) || 0;
@@ -8061,18 +8088,24 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
   const sleepTailShift = a.sleeping ? r * (type === "cat" ? 0.14 : type === "fox" ? 0.12 : 0.10) : 0;
 
   const tailFrequency = (a.sleeping ? 1.2 : 1.9) + rawMoveRatio * 6.2;
-  const tailSwing = Math.sin(motionTime * tailFrequency + (a.tailPhase || 0));
-  const tailLift = Math.cos(motionTime * (tailFrequency * 0.72) + (a.tailPhase || 0) * 0.4);
+  const stablePhase = (net.room && Number.isFinite(a._netAnimPhase))
+    ? a._netAnimPhase
+    : motionTime * tailFrequency + (a.tailPhase || 0);
+  const tailSwing = Math.sin(stablePhase);
+  const tailLift = Math.cos(stablePhase * 0.72 + 0.35);
   const tailAngle = (tunedMeta.tailRotBase ?? -0.04) + sleepTailTuck +
     tailSwing * (tunedMeta.tailRotAmp ?? 0.24) * (a.sleeping ? 0.14 : (0.24 + moveRatio * 0.58));
   const tailDy = a.sleeping ? 0 : tailLift * r * (0.006 + moveRatio * 0.011);
 
   const headFrequency = (a.sleeping ? 1.0 : 1.55) + rawMoveRatio * 3.0;
-  const headTurn = Math.sin(motionTime * headFrequency + (a.x || 0) * 0.009 + (a.tailPhase || 0) * 0.30) *
+  const headPhase = (net.room && Number.isFinite(a._netAnimPhase))
+    ? a._netAnimPhase * 0.72 + 0.8
+    : motionTime * headFrequency + (a.x || 0) * 0.009 + (a.tailPhase || 0) * 0.30;
+  const headTurn = Math.sin(headPhase) *
     (tunedMeta.headRotAmp ?? 0.09) * (a.sleeping ? 0.12 : (0.26 + moveRatio * 0.56));
-  const headNod = Math.cos(motionTime * (headFrequency * 0.82) + (a.y || 0) * 0.008) *
+  const headNod = Math.cos(headPhase * 0.82 + 0.45) *
     r * (a.sleeping ? 0.005 : (0.010 + moveRatio * 0.016));
-  const headLift = Math.sin(motionTime * (headFrequency * 0.92) + 0.8) *
+  const headLift = Math.sin(headPhase * 0.92 + 0.8) *
     r * (a.sleeping ? 0.004 : (0.006 + moveRatio * 0.011));
   const headAngle = headTurn + bite * (tunedMeta.headRotAmp ?? 0.07) * 0.95;
   const headTx = bite * (tunedMeta.headPush ?? 0.18) * r;
@@ -8490,18 +8523,24 @@ function drawReassembledDeerPartsSkin(a, stage, sleeping) {
   const recentlyMoved = (nowMs - (a._visualMoveAt || 0)) < 180;
   const actualMoveSpeed = (!a.sleeping && recentlyMoved) ? Math.max(0, Number(a._visualMoveSpeed) || 0) : 0;
   const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed("deer", stage, !!a.owned) || 1);
-  const moveRatio = Math.max(0, Math.min(1.25, actualMoveSpeed / normalMoveSpeed));
+  const measuredMoveRatio = Math.max(0, Math.min(1.25, actualMoveSpeed / normalMoveSpeed));
+  const moveRatio = (net.room && Number.isFinite(a._netAnimMoveRatio))
+    ? Math.max(0, Math.min(1.25, a._netAnimMoveRatio))
+    : measuredMoveRatio;
   const deerMotionT = nowMs * 0.001;
+  const deerPhase = (net.room && Number.isFinite(a._netAnimPhase))
+    ? a._netAnimPhase
+    : deerMotionT * (2.4 + moveRatio * 6.2) + (a.tailPhase || 0);
 
-  const bodyBob = Math.sin(deerMotionT * (1.9 + moveRatio * 2.4) + (a.tailPhase || 0) * 0.4) *
+  const bodyBob = Math.sin(deerPhase * 0.42 + 0.25) *
     r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.006));
-  const tailAngle = Math.sin(deerMotionT * (2.4 + moveRatio * 6.2) + (a.tailPhase || 0)) *
+  const tailAngle = Math.sin(deerPhase) *
     (a.sleeping ? 0.045 : (0.10 + moveRatio * 0.20));
-  const tailLift = Math.cos(deerMotionT * (1.8 + moveRatio * 3.1) + (a.tailPhase || 0) * 0.5) *
+  const tailLift = Math.cos(deerPhase * 0.72 + 0.4) *
     r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.008));
-  const headAngle = Math.sin(deerMotionT * (1.9 + moveRatio * 3.5) + 0.8 + (a.tailPhase || 0) * 0.25) *
+  const headAngle = Math.sin(deerPhase * 0.58 + 0.8) *
     (a.sleeping ? 0.03 : (0.07 + moveRatio * 0.13));
-  const headBob = Math.cos(deerMotionT * (2.15 + moveRatio * 3.0) + 0.35) *
+  const headBob = Math.cos(deerPhase * 0.49 + 0.35) *
     r * (a.sleeping ? 0.003 : (0.008 + moveRatio * 0.012));
   // The separated pieces are now reference-aligned at their zero-motion pose,
   // so do not apply a permanent horizontal correction to the head.
@@ -9301,16 +9340,20 @@ function drawUploadedAnimalSkin(a) {
     ? Math.max(0, Number(a._visualMoveSpeed) || 0)
     : 0;
   const normalSpeed = Math.max(1, Number(a.speed) || animalSpeed(a.type, a.stage, !!a.owned) || 1);
-  const speedRatio = Math.max(0, Math.min(1.9, actualMoveSpeed / normalSpeed));
+  const measuredSpeedRatio = Math.max(0, Math.min(1.9, actualMoveSpeed / normalSpeed));
+  const speedRatio = (net.room && Number.isFinite(a._netAnimMoveRatio))
+    ? Math.max(0, Math.min(1.9, a._netAnimMoveRatio))
+    : measuredSpeedRatio;
 
-  // Tail frequency is deliberately tied more strongly to speed than the head.
-  // At a walk it sways gently; while sprinting/chasing it moves much faster.
   const tailFrequency = 2.2 + speedRatio * 8.6;
   const headFrequency = 1.7 + speedRatio * 4.1;
   const motionTime = nowMs * 0.001;
+  const genericPhase = (net.room && Number.isFinite(a._netAnimPhase))
+    ? a._netAnimPhase
+    : motionTime * tailFrequency + (a.tailPhase || 0);
 
   const tailAngle = a.sleeping ? 0 :
-    Math.sin(motionTime * tailFrequency + (a.tailPhase || 0)) *
+    Math.sin(genericPhase) *
     (0.025 + speedRatio * 0.095);
 
   // Source costumes face horizontally. Build the animal as true visual layers:
@@ -9330,7 +9373,9 @@ function drawUploadedAnimalSkin(a) {
 
   // HEAD MOTION: intentionally more visible than before.
   const strongerHeadAngle = a.sleeping ? 0 :
-    Math.sin(motionTime * headFrequency + (a.x || 0) * 0.007) *
+    Math.sin((net.room && Number.isFinite(a._netAnimPhase))
+      ? a._netAnimPhase * 0.66 + 0.7
+      : motionTime * headFrequency + (a.x || 0) * 0.007) *
     (0.030 + speedRatio * 0.090);
 
   const strongerHeadBob = a.sleeping ? 0 :
@@ -16276,8 +16321,8 @@ function frame(now) {
 
       if (net.room) {
         net.fullSyncAccum += dt;
-        if (net.fullSyncAccum >= 1 / 15) {
-          net.fullSyncAccum %= 1 / 15;
+        if (net.fullSyncAccum >= 1 / 10) {
+          net.fullSyncAccum %= 1 / 10;
           syncNetworkFullWorld();
         }
 

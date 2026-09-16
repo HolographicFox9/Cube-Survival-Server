@@ -625,3 +625,11 @@ SERVER 407 / GAME 435:
 - Wildlife uses velocity-driven interpolation with gentle server correction.
 - Pet/wildlife animation phase is continuous client-side; server tailPhase no longer causes phase jumps.
 - Animation move speed is filtered so network jitter no longer makes heads/tails twitch or snap.
+
+
+SERVER 408 / GAME 436:
+- Fixed multiplayer non-Viper animation phase jumps caused by absoluteTime * changingFrequency.
+- Dog/Cat/Dragon/Fox/Wolf/Deer/generic animal head-tail animation now uses continuous accumulated phase online.
+- Animation movement ratio is more heavily filtered to prevent network jitter twitching.
+- Recovery frame buffer is half-resolution and captured once per second to reduce random canvas-copy stalls.
+- Full multiplayer world-copy sync reduced from 15 Hz to 10 Hz; render interpolation remains frame-rate smooth.
