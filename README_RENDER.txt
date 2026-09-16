@@ -1,4 +1,4 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 332
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 333
 
 WHAT THIS PACKAGE DOES
 - Runs the full Colyseus Cube Survival multiplayer world.
@@ -55,3 +55,16 @@ server-world save can be added later if you want it.
 RENDER / WEBSOCKET NOTE
 Public Render WebSockets should use WSS. The included game handles this
 automatically when it is opened from the Render-hosted page.
+
+
+SERVER 333 MULTIPLAYER STABILITY:
+- 10 Hz network patches with 20 TPS combat/physics
+- far-away idle wildlife sleeps server-side to reduce bandwidth
+- starter pet self-repair if initial spawn is missed
+- safe player spawn clearance from wildlife, bosses, enemies, pets, players and walls
+
+BUILD 335 / GAME 362 CHANGES
+- Bow fires from normal left-click/attack input and online arrows animate between network patches.
+- Some hostile cubes spawn with guard pets; those cubes are weaker and their pets defend them.
+- Night enemies are distributed across the world as well as near players.
+- Hit notifications and combat FX are batched to reduce multiplayer lag in group fights.

@@ -230,6 +230,49 @@
   .btn.secondary{background:linear-gradient(180deg,#6a8a72,#4a6a52);color:#efe6d2;box-shadow:0 4px 0 #2a3a2a;}
   .btn.danger{background:linear-gradient(180deg,#e07a6a,#c94b4b);box-shadow:0 4px 0 #8a2a2a;}
 
+
+  /* Death screen follows the player's selected Home theme. */
+  #overlay{
+    background:
+      radial-gradient(circle at 50% 38%,color-mix(in srgb,var(--ht-primary) 22%,transparent),transparent 46%),
+      linear-gradient(180deg,color-mix(in srgb,var(--ht-bg) 82%,black 18%),color-mix(in srgb,var(--ht-panel2) 72%,black 28%));
+  }
+  #overlay .card{
+    background:
+      radial-gradient(circle at 84% 12%,color-mix(in srgb,var(--ht-accent) 14%,transparent),transparent 34%),
+      linear-gradient(180deg,var(--ht-panel),var(--ht-panel2));
+    border-color:color-mix(in srgb,var(--ht-primary) 42%,transparent);
+    color:var(--ht-text);
+    box-shadow:0 24px 70px color-mix(in srgb,var(--ht-bg) 74%,black 26%);
+  }
+  #overlay .card h1{color:var(--ht-accent);text-shadow:0 0 18px color-mix(in srgb,var(--ht-primary) 34%,transparent);}
+  #overlay .card .lead{color:var(--ht-muted);}
+  #overlay .stat-grid div{
+    color:var(--ht-text);
+    background:color-mix(in srgb,var(--ht-bg) 48%,transparent);
+    border:1px solid color-mix(in srgb,var(--ht-primary) 28%,transparent);
+    border-radius:12px;
+    padding:10px 13px;
+    min-width:78px;
+  }
+  #overlay .stat-grid span{color:var(--ht-muted);opacity:.82;}
+  #overlay #finalServs{color:var(--ht-accent)!important;}
+  #overlay #restartBtn{
+    color:var(--ht-text);
+    background:linear-gradient(180deg,var(--ht-primary),var(--ht-primary2));
+    box-shadow:0 4px 0 color-mix(in srgb,var(--ht-primary2) 72%,black 28%);
+  }
+  #overlay #homeBtn{
+    color:var(--ht-text);
+    background:linear-gradient(180deg,var(--ht-secondary),var(--ht-secondary2));
+    box-shadow:0 4px 0 color-mix(in srgb,var(--ht-secondary2) 72%,black 28%);
+  }
+  body.home-ui-glitch #overlay .card{
+    background:linear-gradient(180deg,rgba(7,9,12,.98),rgba(2,3,4,.99));
+    border-color:var(--ht-primary);
+    box-shadow:-4px 0 0 rgba(242,56,166,.18),4px 0 0 rgba(0,234,242,.18),0 24px 70px rgba(0,0,0,.72);
+  }
+
   /* Home screen — inspired by the feel of survival-game lobby menus */
   #home{position:fixed;left:0;right:0;top:0;bottom:0;display:flex;align-items:flex-start;justify-content:center;
     background:linear-gradient(180deg,rgba(9,18,11,0.10),rgba(7,12,8,0.24));
@@ -5371,6 +5414,7 @@ const net = {
   sessionId: null,
   connecting: false,
   sendAccum: 0,
+  fullSyncAccum: 0,
   remoteVisuals: new Map(),
   resourceVisuals: new Map(),
   goldVisuals: new Map(),
@@ -5506,26 +5550,27 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
       v.x = sx; v.y = sy; v.angle = sa;
     }
   } else {
-    // Remember each real server movement step for player-side physical collision.
-    // This makes animal->player pushing feel immediate instead of waiting for a
-    // round trip before the local cube starts moving.
-    const oldX = Number.isFinite(v.x) ? v.x : sx;
-    const oldY = Number.isFinite(v.y) ? v.y : sy;
-    const mdx = sx - oldX, mdy = sy - oldY;
+    // Wildlife patches arrive less often online to save bandwidth. Keep each
+    // server position as an interpolation target so movement still looks smooth.
+    const oldNetX = Number.isFinite(v._netX) ? v._netX : sx;
+    const oldNetY = Number.isFinite(v._netY) ? v._netY : sy;
+    const mdx = sx - oldNetX, mdy = sy - oldNetY;
     const moveLen = Math.hypot(mdx, mdy);
 
-    if (!fresh && moveLen > 0.001) {
-      if (moveLen < 120) {
+    v._netX = sx; v._netY = sy; v._netAngle = sa;
+    if (fresh || !Number.isFinite(v.x) || !Number.isFinite(v.y) || Math.hypot(sx - v.x, sy - v.y) > 360) {
+      v.x = sx; v.y = sy; v.angle = sa;
+      v._carryPending = false;
+    } else if (moveLen > 0.001) {
+      if (moveLen < 150) {
+        // Preserve the real server movement delta used by physical animal carry.
         v._moveDx = mdx;
         v._moveDy = mdy;
         v._carryPending = true;
       } else {
-        // Teleports/spawns are not physical walking movement.
         v._carryPending = false;
       }
     }
-
-    v.x = sx; v.y = sy; v.angle = sa;
   }
   v.r = Number(s.r) || animalRadius(v.type, v.stage);
   v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
@@ -5551,6 +5596,25 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
     v.targetY = Number(s.targetY) >= 0 ? Number(s.targetY) : null;
   }
   return v;
+}
+
+function updateNetworkAnimalInterpolation(dt) {
+  if (!net.room) return;
+  for (const a of net.animalVisuals.values()) {
+    if (!a || !Number.isFinite(a._netX) || !Number.isFinite(a._netY)) continue;
+    const dx = a._netX - a.x, dy = a._netY - a.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 320) {
+      a.x = a._netX; a.y = a._netY; a.angle = a._netAngle || 0;
+      continue;
+    }
+    const follow = 1 - Math.exp(-13 * dt);
+    a.x += dx * follow;
+    a.y += dy * follow;
+    let da = (a._netAngle || 0) - (a.angle || 0);
+    da = Math.atan2(Math.sin(da), Math.cos(da));
+    a.angle = (a.angle || 0) + da * follow;
+  }
 }
 
 function updateNetworkPetInterpolation(dt) {
@@ -5582,6 +5646,16 @@ function updateNetworkPetInterpolation(dt) {
     p.angle = (p.angle || 0) + da * follow;
   }
 }
+function updateNetworkProjectileMotion(dt) {
+  if (!net.room) return;
+  for (const p of net.projectileVisuals.values()) {
+    if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+    p.x += (Number(p.vx) || 0) * dt;
+    p.y += (Number(p.vy) || 0) * dt;
+    p.life = Math.max(0, (Number(p.life) || 0) - dt);
+  }
+}
+
 function applyNetworkWildlifeMovementCarry() {
   if (!net.room || player.dead) return;
 
@@ -5711,7 +5785,10 @@ function syncNetworkFullWorld(force = false) {
   const projSeen = new Set(), normal=[], blasts=[];
   eachNetworkCollection("projectiles",(s,id)=>{
     projSeen.add(id);let v=net.projectileVisuals.get(id)||{netId:id};
-    v.x=Number(s.x)||0;v.y=Number(s.y)||0;v.vx=Number(s.vx)||0;v.vy=Number(s.vy)||0;v.life=Number(s.life)||0;v.r=Number(s.r)||5;
+    const sx=Number(s.x)||0, sy=Number(s.y)||0;
+    const serverMoved=!Number.isFinite(v._serverX)||!Number.isFinite(v._serverY)||Math.abs(sx-v._serverX)>.001||Math.abs(sy-v._serverY)>.001;
+    if(serverMoved){v.x=sx;v.y=sy;v._serverX=sx;v._serverY=sy;}
+    v.vx=Number(s.vx)||0;v.vy=Number(s.vy)||0;v.life=Number(s.life)||0;v.r=Number(s.r)||5;
     v.hostile=!!s.hostile;v.kind=s.kind||"arrow";v.color=s.color||"#7ec0ee";v.dmg=Number(s.dmg)||0;v.ownerId=s.ownerId||"";v.petBlast=!!s.petBlast;v.knock=Number(s.knock)||0;
     net.projectileVisuals.set(id,v); (v.petBlast?blasts:normal).push(v);
   });
@@ -5812,6 +5889,21 @@ function applyNetworkHarvestReward(data = {}) {
   }
 }
 
+function ensureNetworkStarterPet() {
+  if (!net.room || !game.startPet || !PET_TYPES[game.startPet]) return;
+  // First resync what the server already has. If the initial join patch arrived
+  // late, this is enough. Otherwise ask the server for an idempotent repair.
+  syncNetworkFullWorld(true);
+  const hasStarter = player.pets.some(p => p && !p.dead && p.ownerId === net.sessionId && p.type === game.startPet);
+  if (hasStarter) return;
+  try {
+    net.room.send("ensureStarterPet", {
+      type: game.startPet,
+      stage: starterStageFor(game.startPet)
+    });
+  } catch (_) {}
+}
+
 async function connectMultiplayer() {
   if (!net.enabled) return false;
   if (net.room) return true;
@@ -5834,6 +5926,7 @@ async function connectMultiplayer() {
     net.room = room;
     net.sessionId = room.sessionId;
     net.sendAccum = 0;
+    net.fullSyncAccum = 0;
     net.remoteVisuals.clear();
     net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
@@ -5843,6 +5936,10 @@ async function connectMultiplayer() {
     room.onMessage("chestReward", applyChestNetworkReward);
     room.onMessage("tameResult", applyTameNetworkResult);
     room.onMessage("worldFx", applyWorldFx);
+    room.onMessage("worldFxBatch", (items = []) => {
+      if (!Array.isArray(items)) return;
+      for (const fx of items) applyWorldFx(fx || {});
+    });
     room.onMessage("abilityEvent", applyAbilityEvent);
     room.onMessage("phaseEvent", applyPhaseNetworkEvent);
     room.onMessage("playerHit", (data = {}) => {
@@ -5890,10 +5987,15 @@ async function connectMultiplayer() {
     });
     room.onMessage("petGrew", d => banner(`${PET_TYPES[d.type]?.name||"Pet"} became ${stageDisplayName(d.stage)}!`));
     room.onMessage("petReleased", d => banner(`${d.name||"Pet"} was released`));
+    room.onMessage("starterPetEnsured", () => {
+      setTimeout(() => syncNetworkFullWorld(true), 60);
+    });
     const syncedResources = syncNetworkWorldResources();
     if (!syncedResources) setTimeout(() => syncNetworkWorldResources(), 120);
     syncNetworkFullWorld(true);
     setTimeout(() => syncNetworkFullWorld(true), 100);
+    setTimeout(ensureNetworkStarterPet, 240);
+    setTimeout(ensureNetworkStarterPet, 900);
     setNetStatus("Online • shared world • PvP", "good");
 
     room.onError((code, message) => {
@@ -5928,7 +6030,7 @@ function disconnectMultiplayer() {
   net.remoteVisuals.clear();
   net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
   net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
-  net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false;
+  net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.fullSyncAccum = 0;
   if (room) {
     try { room.leave(true); } catch (e) {}
   }
@@ -6722,7 +6824,7 @@ const player = {
 };
 
 let game = {
-  time: 0, kills: 0, wave: 0, waveTimer: 0, over: false,
+  time: 0, survivalTime: 0, kills: 0, wave: 0, waveTimer: 0, over: false,
   camX: 0, camY: 0, shake: 0,
   phaseIdx: 0, phaseTimer: 0, dayCount: 1,
   started: false,
@@ -8939,6 +9041,23 @@ function updateCombatHunt(p, dt) {
   moveFacing(p, p.speed * 0.85, dt);
 }
 
+function playerIsActivelyEscapingAnimal(a) {
+  if (!a) return false;
+  let mx = 0, my = 0;
+  if (keys.has("w") || keys.has("arrowup")) my -= 1;
+  if (keys.has("s") || keys.has("arrowdown")) my += 1;
+  if (keys.has("a") || keys.has("arrowleft")) mx -= 1;
+  if (keys.has("d") || keys.has("arrowright")) mx += 1;
+  if (mobileMode && joyActive) { mx += joyDX; my += joyDY; }
+  const ml = Math.hypot(mx, my);
+  if (ml < 0.12) return false;
+  mx /= ml; my /= ml;
+  let ax = player.x - a.x, ay = player.y - a.y;
+  const al = Math.hypot(ax, ay) || 1;
+  ax /= al; ay /= al;
+  return mx * ax + my * ay > 0.18;
+}
+
 function carryPlayerWithOfflineWildMovement(a, oldX, oldY) {
   if (!a || player.dead) return;
   const dx = a.x - oldX, dy = a.y - oldY;
@@ -8946,6 +9065,10 @@ function carryPlayerWithOfflineWildMovement(a, oldX, oldY) {
 
   const hit = deepestAnimalPhysicalOverlap(a, player.x, player.y, PLAYER_R * 0.82);
   if (!hit) return;
+
+  // Movement collision still carries a stationary player, but never traps a
+  // player who is deliberately running away from the animal.
+  if (playerIsActivelyEscapingAnimal(a)) return;
 
   player.x = clamp(player.x + dx, PLAYER_R, WORLD_W - PLAYER_R);
   player.y = clamp(player.y + dy, PLAYER_R, WORLD_H - PLAYER_R);
@@ -9543,7 +9666,10 @@ function updatePlayer(dt) {
 
   resolveSolidCollisions();
 
-  if (mouse.down) meleeAttack();
+  if (mouse.down) {
+    if (player.tool === "Bow" && !player.heldSpecial) fireBow();
+    else meleeAttack();
+  }
   if (keys.has("f")) fireBow();
 
   // ride toggle (R)
@@ -12361,11 +12487,11 @@ let restartAllowedAt = 0;
 function endGame() {
   game.over = true;
   // servs earned
-  const earned = Math.floor(game.time * 0.4 + game.kills * 2 + game.wave * 3);
+  const earned = Math.floor(game.survivalTime * 0.4 + game.kills * 2 + game.wave * 3);
   game.earnedServs = earned;
   meta.servs += earned;
   saveMeta();
-  el("finalTime").childNodes[0].nodeValue = fmtTime(game.time);
+  el("finalTime").childNodes[0].nodeValue = fmtTime(game.survivalTime);
   el("finalKills").childNodes[0].nodeValue = String(game.kills);
   el("finalWave").childNodes[0].nodeValue = String(game.wave);
   el("finalServs").textContent = earned;
@@ -12417,7 +12543,8 @@ function resetGame() {
     });
   }
 
-  game.time = 0; game.kills = 0; game.wave = 0; game.waveTimer = 4;
+  game.time = 0; game.survivalTime = 0; game.kills = 0; game.wave = 0; game.waveTimer = 4;
+  el("finalTime").childNodes[0].nodeValue = "0:00";
   game.over = false; game.camX = 0; game.camY = 0; game.shake = 0;
   game.phaseIdx = 0; game.phaseTimer = TIME_PHASES[0].duration; game.dayCount = 1;
   game.earnedServs = 0;
@@ -12462,9 +12589,16 @@ function frame(now) {
   dt = Math.min(dt, 1 / 20);
 
   if (game.started && !game.over) {
+    if (!player.dead) game.survivalTime += dt;
     if (net.room) {
-      syncNetworkFullWorld();
+      net.fullSyncAccum += dt;
+      if (net.fullSyncAccum >= 1 / 20) {
+        net.fullSyncAccum %= 1 / 20;
+        syncNetworkFullWorld();
+      }
+      updateNetworkAnimalInterpolation(dt);
       updateNetworkPetInterpolation(dt);
+      updateNetworkProjectileMotion(dt);
       updatePlayer(dt);
       applyNetworkWildlifeMovementCarry();
       updateResources(dt);
@@ -13106,6 +13240,8 @@ el("homeBtn").addEventListener("click", () => {
   disconnectMultiplayer();
   game.started = false;
   game.over = false;
+  game.survivalTime = 0;
+  el("finalTime").childNodes[0].nodeValue = "0:00";
   mouse.down = false;
   mouse.rdown = false;
   keys.clear();
