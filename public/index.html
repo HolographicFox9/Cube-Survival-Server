@@ -7993,8 +7993,38 @@ function applyWorldFx(data={}) {
 function applyAbilityEvent(data={}) {
   const elem=data.elem||""; const x=Number(data.x)||0,y=Number(data.y)||0,r=Number(data.r)||20;
   const map={Stone:"stone",Sound:"sound",Fire:"fire",Lightning:"lightning",Ice:"ice",Water:"water",Plant:"plant",Wind:"wind",Poison:"poison",Light:"light",Earth:"earth",Combat:"cast"};
-  const type=map[elem]||"cast"; abilityFx.push({type,x,y,life:0.7,maxLife:0.7,r:r+32,baseR:r+32,color:ELEM_GLOW[elem]||"#ffffff",phase:0,tick:0});
-  spark(x,y,ELEM_GLOW[elem]||"#ffffff",10,100); if(data.ownerId===net.sessionId)sfx.ability();
+  const type=map[elem]||"cast";
+  const zoneElems=new Set(["Sound","Fire","Ice","Wind","Poison","Light","Earth"]);
+  const life=zoneElems.has(elem)?1.15:0.7;
+  abilityFx.push({type,x,y,life,maxLife:life,r:r+32,baseR:r+32,color:ELEM_GLOW[elem]||"#ffffff",phase:0,tick:0});
+  spark(x,y,ELEM_GLOW[elem]||"#ffffff",12,115);
+
+  // Make the actual networked pet visibly cast/lunge too, not just the ground FX.
+  const petId=String(data.petId||"");
+  const pet=net.petVisuals.get(petId) || net.remotePetVisuals.get(petId);
+  if(pet){
+    pet.attackAnim=Math.max(Number(pet.attackAnim)||0, elem==="Combat"?0.34:0.24);
+    pet.flash=Math.max(Number(pet.flash)||0,0.18);
+    pet._abilityFlashUntil=performance.now()+520;
+  }
+  if(data.ownerId===net.sessionId)sfx.ability();
+}
+
+function applyPlayerActionEvent(data={}) {
+  const playerId=String(data.playerId||"");
+  if(!playerId || playerId===net.sessionId) return;
+  const v=net.remoteVisuals.get(playerId);
+  if(!v) return;
+  const action=String(data.action||"attack");
+  const tool=String(data.tool||v.tool||"Fist");
+  v.swingWeapon=tool;
+  v.attackTimer=action==="shoot"?0.20:0.26;
+  v.punchSide=(v.punchSide||1)*-1;
+  if(Number.isFinite(Number(data.angle))){
+    v._netAngle=Number(data.angle);
+    v.angle=Number(data.angle);
+  }
+  if(typeof data.heldSpecial==="string") v.heldSpecial=data.heldSpecial;
 }
 function applyPhaseNetworkEvent(data={}) {
   const phase=TIME_PHASES[Number(data.phase)||0]; if(!phase)return;
@@ -8099,6 +8129,7 @@ async function connectMultiplayer() {
       }
     });
     room.onMessage("abilityEvent", applyAbilityEvent);
+    room.onMessage("playerAction", applyPlayerActionEvent);
     room.onMessage("phaseEvent", applyPhaseNetworkEvent);
     room.onMessage("playerHit", (data = {}) => {
       // Apply the server-authoritative health immediately so bites feel instant,
@@ -8319,6 +8350,9 @@ function updateRemotePlayers(dt) {
         moving: !!p.moving,
         ridingPetId: String(p.ridingPetId || ""),
         walkPhase: Math.random() * TAU,
+        attackTimer: 0,
+        swingWeapon: p.tool || "Fist",
+        punchSide: 1,
       };
       net.remoteVisuals.set(id, v);
     }
@@ -8356,6 +8390,7 @@ function updateRemotePlayers(dt) {
     v.dead = !!p.dead;
     v.moving = !!p.moving;
     v.ridingPetId = String(p.ridingPetId || "");
+    v.attackTimer = Math.max(0, (Number(v.attackTimer) || 0) - dt);
     if (v.moving) v.walkPhase = (v.walkPhase || 0) + dt * 12.0;
   });
   for (const id of Array.from(net.remoteVisuals.keys())) {
@@ -8381,17 +8416,19 @@ function drawRemotePlayer(v) {
   const body = v.color || "#3fa7ff";
   const arm = shadeColor(body, -30);
   const holding = v.heldSpecial || v.tool || "Fist";
+  const remoteSwingMax = 0.26;
+  const remoteSwing = v.attackTimer > 0 ? Math.sin((1 - clamp(v.attackTimer / remoteSwingMax, 0, 1)) * Math.PI) : 0;
 
-  // Use the same held-item geometry as the local player.
+  // Use the same held-item geometry and attack motion as the local player.
   if (holding === "Berry") {
-    drawHeldBerry(arm, 0);
+    drawHeldBerry(arm, remoteSwing);
   } else if (holding === "Wall") {
     drawHeldWall(arm);
   } else if (holding === "Fist") {
-    drawArm(1, 0, arm, null, false, -armWalk);
-    drawArm(-1, 0, arm, null, false, armWalk);
+    drawArm(1, v.punchSide === 1 ? remoteSwing : 0, arm, null, false, -armWalk);
+    drawArm(-1, v.punchSide === -1 ? remoteSwing : 0, arm, null, false, armWalk);
   } else {
-    drawTwoHandWeapon(holding, arm, 0, armWalk);
+    drawTwoHandWeapon(v.swingWeapon || holding, arm, remoteSwing, armWalk);
   }
 
   // Full rounded cube body.
