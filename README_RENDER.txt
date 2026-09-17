@@ -685,19 +685,21 @@ SERVER 414 / GAME 442:
 - Small hotbar transition polish.
 
 
-SERVER 415 / GAME 443:
-- Mobile joystick now tracks its own touch identifier for reliable multitouch.
-- Added analog deadzone and frame-rate-independent joystick smoothing.
-- Mobile movement preserves joystick magnitude instead of forcing every movement to full speed.
-- Mobile player faces joystick movement direction for sensible melee/ranged attacks without a mouse.
-- Touch-cancel/window-blur cleanup prevents stuck movement or attack input.
-- Mobile controls use safe-area insets, larger touch targets, and touch-action:none.
-- Mobile/coarse-pointer rendering caps DPR at 1.25 for smoother GPU performance.
+SERVER 415 / GAME 443 MOBILE PASS:
+- Mobile controls now use pointer capture for reliable multitouch joystick + buttons.
+- Added pointercancel/visibility/blur cleanup to prevent stuck movement or attack.
+- Joystick has a small deadzone to remove finger tremor and keeps full-speed range.
+- Mobile movement now sets player facing, so melee/tools aim with the joystick direction.
+- Mobile controls auto-enable on coarse/touch devices unless the player saved a preference.
+- Safe-area and landscape layouts added for notches/home indicators.
+- Mobile render DPR capped lower and canvas resize work is throttled.
+- Expensive HUD blur disabled during mobile gameplay; HUD/full-world client refresh reduced slightly.
+- Simulation speed and multiplayer input send rate remain unchanged.
 
 
-SERVER 416 / GAME 444:
-- Multiplayer wild animals no longer use forward velocity prediction.
-- Wildlife now buffers and interpolates between actual server snapshots.
-- Large network deltas stretch interpolation time instead of causing catch-up zooms.
-- Wildlife render positions are visually kept outside static hitboxes during interpolation.
-- Client world-state reads now match the server's 10 Hz patch rate.
+SERVER 416 / GAME 444 TAIL SMOOTHING:
+- Multiplayer animals and pets now use a separate locally continuous tail phase.
+- Tail animation speed follows a slower filtered rate with an acceleration limit, removing high-speed twitch from network velocity corrections.
+- Deer and generic animal tail renderers use the dedicated multiplayer tail phase.
+- Snake/Viper wave motion no longer stacks absolute-time motion on top of multiplayer tail phase.
+- Head/body animation remains responsive and separate from tail smoothing.

@@ -388,6 +388,10 @@
   .home-logo-text{min-width:0;}
   .home-logo-text .kicker{font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:#d4c093;opacity:0.82;}
   .home-logo-text .title{font-size:26px;font-weight:900;color:var(--amber-bright);line-height:1.05;text-shadow:0 3px 10px rgba(0,0,0,0.45);}
+  .home-title-row{display:flex;align-items:center;gap:10px;min-width:0;}
+  .mobile-title-btn{padding:6px 10px;border-radius:999px;border:1px solid rgba(240,230,200,.18);background:rgba(255,255,255,.055);color:#eee4c9;font:800 11px inherit;letter-spacing:.04em;cursor:pointer;white-space:nowrap;box-shadow:inset 0 1px 0 rgba(255,255,255,.04);}
+  .mobile-title-btn:hover{border-color:rgba(244,198,95,.55);background:rgba(244,198,95,.10);}
+  .mobile-title-btn.on{border-color:#f4c65f;background:rgba(244,198,95,.20);color:#ffe49a;box-shadow:0 0 0 2px rgba(244,198,95,.10) inset;}
   .home-logo-text .tag{font-size:12px;opacity:0.74;margin-top:2px;}
   .home-section-head{padding-top:4px;border-top:1px solid rgba(244,198,95,0.12);}
   .home-hero{display:grid;grid-template-columns:minmax(320px,1.2fr) minmax(280px,0.95fr);gap:26px;align-items:start;}
@@ -488,6 +492,8 @@
     #home{padding:12px;}
     #home .home-topbar{padding:10px 12px;}
     .home-logo-text .title{font-size:22px;}
+    .home-title-row{gap:7px;}
+    .mobile-title-btn{padding:5px 8px;font-size:10px;}
     #home .home-card{padding:8px 0 0;}
     .home-main-panel,.home-side-panel,.home-panel{padding:8px 0;}
     .home-profile-panel{grid-template-columns:1fr;justify-items:start;}
@@ -527,20 +533,40 @@
   .inv-slot .qty{position:absolute;bottom:3px;right:5px;font-weight:600;font-size:11px;}
 
   /* Mobile controls */
-  #mobileControls{display:none;position:fixed;inset:0;pointer-events:none;z-index:15;}
+  #mobileControls{display:none;position:fixed;inset:0;pointer-events:none;z-index:15;touch-action:none;user-select:none;-webkit-user-select:none;}
   #mobileControls.on{display:block;}
-  .joy-base{position:absolute;bottom:calc(78px + env(safe-area-inset-bottom));left:calc(24px + env(safe-area-inset-left));width:118px;height:118px;border-radius:50%;
-    background:rgba(0,0,0,0.28);border:2px solid rgba(255,255,255,0.18);pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;}
-  .joy-knob{position:absolute;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.38);
+  .joy-base{position:absolute;
+    bottom:max(82px,calc(env(safe-area-inset-bottom) + 70px));
+    left:max(24px,calc(env(safe-area-inset-left) + 18px));
+    width:118px;height:118px;border-radius:50%;
+    background:rgba(0,0,0,0.28);border:2px solid rgba(255,255,255,0.18);
+    box-shadow:0 8px 22px rgba(0,0,0,.18),inset 0 0 0 1px rgba(255,255,255,.04);
+    pointer-events:auto;touch-action:none;overscroll-behavior:none;}
+  .joy-knob{position:absolute;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.38);
+    border:1px solid rgba(255,255,255,.24);box-shadow:0 4px 12px rgba(0,0,0,.18);
     top:50%;left:50%;transform:translate(-50%,-50%);will-change:transform;pointer-events:none;}
-  .m-btn{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,0.38);
-    border:2px solid rgba(240,230,200,0.28);pointer-events:auto;display:flex;align-items:center;
-    justify-content:center;font-size:12px;color:var(--parchment);font-weight:700;touch-action:none;
-    user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
-  .m-btn:active{transform:scale(.94);background:rgba(55,67,48,.62);}
-  #mAttack{bottom:calc(96px + env(safe-area-inset-bottom));right:calc(28px + env(safe-area-inset-right));}
-  #mShoot{bottom:calc(96px + env(safe-area-inset-bottom));right:calc(112px + env(safe-area-inset-right));}
-  #mCraft{bottom:calc(180px + env(safe-area-inset-bottom));right:calc(30px + env(safe-area-inset-right));width:54px;height:54px;font-size:11px;}
+  .m-btn{position:absolute;width:68px;height:68px;border-radius:50%;background:rgba(0,0,0,0.40);
+    border:2px solid rgba(240,230,200,0.29);pointer-events:auto;display:flex;align-items:center;
+    justify-content:center;font-size:12px;color:var(--parchment);font-weight:800;
+    touch-action:none;user-select:none;-webkit-user-select:none;overscroll-behavior:none;
+    box-shadow:0 8px 20px rgba(0,0,0,.20);transition:transform .06s ease,background .06s ease;}
+  .m-btn.pressed{transform:scale(.92);background:rgba(244,198,95,.25);border-color:rgba(244,198,95,.62);}
+  #mAttack{bottom:max(96px,calc(env(safe-area-inset-bottom) + 84px));right:max(28px,calc(env(safe-area-inset-right) + 22px));}
+  #mShoot{bottom:max(96px,calc(env(safe-area-inset-bottom) + 84px));right:max(112px,calc(env(safe-area-inset-right) + 106px));}
+  #mCraft{bottom:max(178px,calc(env(safe-area-inset-bottom) + 166px));right:max(31px,calc(env(safe-area-inset-right) + 25px));width:54px;height:54px;font-size:11px;}
+
+  body.mobile-performance .hud-panel{backdrop-filter:none;-webkit-backdrop-filter:none;}
+  body.mobile-performance #game{cursor:default;}
+  @media (max-width:700px){
+    #hotbar{max-width:calc(100vw - 20px);overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+    #hotbar::-webkit-scrollbar{display:none;}
+    #minimap{transform:scale(.90);transform-origin:top right;}
+  }
+  @media (orientation:landscape) and (max-height:520px){
+    .joy-base{bottom:max(20px,calc(env(safe-area-inset-bottom) + 12px));left:max(18px,calc(env(safe-area-inset-left) + 12px));}
+    #mAttack,#mShoot{bottom:max(24px,calc(env(safe-area-inset-bottom) + 16px));}
+    #mCraft{bottom:max(102px,calc(env(safe-area-inset-bottom) + 94px));}
+  }
 
   #intro{display:none;}
 
@@ -3688,7 +3714,11 @@
         <div class="home-logo-badge">🐾</div>
         <div class="home-logo-text">
           <div class="kicker">Live World</div>
-          <div class="title">Cube Survival</div>
+          <div class="home-title-row">
+            <div class="title">Cube Survival</div>
+            <button type="button" id="mobileTitleBtn" class="mobile-title-btn" aria-pressed="false">Mobile</button>
+            <input type="checkbox" id="mobileMode" hidden>
+          </div>
           <div class="tag">Pick your setup and jump in.</div>
         </div>
       </div>
@@ -3732,9 +3762,6 @@
             <span id="netStatus">Offline</span>
           </div>
 
-          <div class="mobile-toggle">
-            <label><input type="checkbox" id="mobileMode"> Mobile controls</label>
-          </div>
         </div>
 
         <div class="home-side-panel home-shop-launcher">
@@ -3914,14 +3941,27 @@ function restoreLastGoodFrame() {
 
 const mmCanvas = document.getElementById("minimap");
 const mmCtx = mmCanvas.getContext("2d");
-let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+const MOBILE_DEVICE_HINT = !!(
+  (window.matchMedia && window.matchMedia("(pointer:coarse)").matches) ||
+  (navigator.maxTouchPoints || 0) > 0
+);
+let W = 0, H = 0;
+let DPR = Math.min(window.devicePixelRatio || 1, MOBILE_DEVICE_HINT ? 1.18 : 1.5);
 let vignetteGradient = null;
+let resizeRaf = 0;
 
-function resize() {
-  W = window.innerWidth; H = window.innerHeight;
-  const mobileRender = mobileMode || (window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
-  DPR = Math.min(window.devicePixelRatio || 1, mobileRender ? 1.25 : 1.5);
-  canvas.width = W * DPR; canvas.height = H * DPR;
+function resize(force = false) {
+  const nextW = Math.max(1, Math.round(window.innerWidth));
+  const nextH = Math.max(1, Math.round(window.innerHeight));
+  const nextDpr = Math.min(window.devicePixelRatio || 1, MOBILE_DEVICE_HINT ? 1.18 : 1.5);
+
+  // Mobile address bars can produce a stream of 1px-2px changes. Do not
+  // reallocate the entire backing canvas for tiny changes.
+  if (!force && Math.abs(nextW - W) < 3 && Math.abs(nextH - H) < 3 && Math.abs(nextDpr - DPR) < 0.01) return;
+
+  W = nextW; H = nextH; DPR = nextDpr;
+  canvas.width = Math.max(1, Math.round(W * DPR));
+  canvas.height = Math.max(1, Math.round(H * DPR));
   canvas.style.width = W + "px"; canvas.style.height = H + "px";
   resizeLastGoodFrameBuffer();
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
@@ -3929,8 +3969,16 @@ function resize() {
   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.32)");
 }
-window.addEventListener("resize", resize);
-resize();
+function scheduleResize() {
+  if (resizeRaf) return;
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0;
+    resize(false);
+  });
+}
+window.addEventListener("resize", scheduleResize, { passive:true });
+if (window.visualViewport) window.visualViewport.addEventListener("resize", scheduleResize, { passive:true });
+resize(true);
 
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
@@ -6577,49 +6625,31 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
       v.x = sx; v.y = sy; v.angle = sa;
     }
   } else {
-    // Wild multiplayer animals use buffered interpolation ONLY. Do not predict
-    // ahead of the server: prediction was causing late updates to create large
-    // catch-up jumps that could visually skip through hitboxes.
+    // Wildlife patches arrive less often online to save bandwidth. Keep each
+    // server position as an interpolation target so movement still looks smooth.
     const patchNow = performance.now();
     const oldNetX = Number.isFinite(v._netX) ? v._netX : sx;
     const oldNetY = Number.isFinite(v._netY) ? v._netY : sy;
-    const oldNetAngle = Number.isFinite(v._netAngle) ? v._netAngle : sa;
     const mdx = sx - oldNetX, mdy = sy - oldNetY;
     const moveLen = Math.hypot(mdx, mdy);
-    const patchDt = Math.max(0.06, Math.min(0.30, (patchNow - (v._netPatchAt || patchNow - 100)) / 1000));
+    const patchDt = Math.max(0.025, Math.min(0.25, (patchNow - (v._netPatchAt || patchNow - 50)) / 1000));
     v._netPatchAt = patchNow;
+    if (moveLen > 0.001) {
+      const measuredSpeed = Math.min(420, moveLen / patchDt);
+      const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
+      v._visualMoveSpeed = prevVisualSpeed + (measuredSpeed - prevVisualSpeed) * 0.24;
+      v._visualMoveAt = patchNow;
+    } else {
+      v._visualMoveSpeed = (Number(v._visualMoveSpeed) || 0) * 0.88;
+    }
 
+    v._netX = sx; v._netY = sy; v._netAngle = sa;
     if (fresh || !Number.isFinite(v.x) || !Number.isFinite(v.y) || Math.hypot(sx - v.x, sy - v.y) > 360) {
       v.x = sx; v.y = sy; v.angle = sa;
-      v._snapFromX = sx; v._snapFromY = sy;
-      v._snapToX = sx; v._snapToY = sy;
-      v._snapFromAngle = sa; v._snapToAngle = sa;
-      v._snapStart = patchNow; v._snapDuration = 100;
       v._carryPending = false;
-    } else if (Math.abs(mdx) > 0.001 || Math.abs(mdy) > 0.001 || Math.abs(sa - oldNetAngle) > 0.001) {
-      // Start the next segment from the CURRENT rendered point, not the previous
-      // network point. If a packet arrives late, this prevents a backwards snap.
-      v._snapFromX = v.x; v._snapFromY = v.y;
-      v._snapToX = sx; v._snapToY = sy;
-      v._snapFromAngle = Number.isFinite(v.angle) ? v.angle : oldNetAngle;
-      v._snapToAngle = sa;
-      v._snapStart = patchNow;
-
-      // Never animate faster than a believable short sprint. If one update spans
-      // more distance, stretch the interpolation time instead of zooming forward.
-      const normalSpeed = Math.max(35, Number(s.speed) || animalSpeed(v.type, v.stage, false) || 60);
-      const maxVisualSpeed = normalSpeed * 1.85 + 30;
-      const distanceMs = moveLen > 0.01 ? (moveLen / maxVisualSpeed) * 1000 : 0;
-      v._snapDuration = Math.max(90, Math.min(320, Math.max(patchDt * 1050, distanceMs)));
-
-      if (moveLen > 0.001) {
-        const measuredSpeed = Math.min(maxVisualSpeed, moveLen / patchDt);
-        const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
-        v._visualMoveSpeed = prevVisualSpeed + (measuredSpeed - prevVisualSpeed) * 0.20;
-        v._visualMoveAt = patchNow;
-      }
-
+    } else if (moveLen > 0.001) {
       if (moveLen < 150) {
+        // Preserve the real server movement delta used by physical animal carry.
         v._moveDx = mdx;
         v._moveDy = mdy;
         v._carryPending = true;
@@ -6627,8 +6657,6 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
         v._carryPending = false;
       }
     }
-
-    v._netX = sx; v._netY = sy; v._netAngle = sa;
   }
   v.r = Number(s.r) || animalRadius(v.type, v.stage);
   v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
@@ -6676,63 +6704,71 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
 
 function updateNetworkAnimalInterpolation(dt) {
   if (!net.room) return;
-  const now = performance.now();
-
   for (const a of net.animalVisuals.values()) {
     if (!a || !Number.isFinite(a._netX) || !Number.isFinite(a._netY)) continue;
 
-    // Off-screen animals do not need interpolation work.
+    // Far-off wildlife is not rendered, so don't spend 60fps CPU time
+    // interpolating and animating it. Snap it to authoritative state instead.
     if (!inView(a._netX, a._netY, 420)) {
-      a.x = a._netX;
-      a.y = a._netY;
-      a.angle = a._netAngle || a.angle || 0;
-      a._renderVX = 0;
-      a._renderVY = 0;
+      a.x = a._netX; a.y = a._netY; a.angle = a._netAngle || a.angle || 0;
+      a._renderVX = 0; a._renderVY = 0;
       continue;
     }
 
-    const fromX = Number.isFinite(a._snapFromX) ? a._snapFromX : a.x;
-    const fromY = Number.isFinite(a._snapFromY) ? a._snapFromY : a.y;
-    const toX = Number.isFinite(a._snapToX) ? a._snapToX : a._netX;
-    const toY = Number.isFinite(a._snapToY) ? a._snapToY : a._netY;
-    const startAt = Number(a._snapStart) || now;
-    const duration = Math.max(1, Number(a._snapDuration) || 120);
-    const t = clamp((now - startAt) / duration, 0, 1);
+    const targetVX = Number(a._netVX) || 0;
+    const targetVY = Number(a._netVY) || 0;
+    const velFollow = 1 - Math.exp(-9 * dt);
+    a._renderVX = (Number(a._renderVX) || 0) + (targetVX - (Number(a._renderVX) || 0)) * velFollow;
+    a._renderVY = (Number(a._renderVY) || 0) + (targetVY - (Number(a._renderVY) || 0)) * velFollow;
 
-    // Linear snapshot interpolation gives consistent speed and does not overshoot.
-    const prevX = a.x, prevY = a.y;
-    a.x = lerp(fromX, toX, t);
-    a.y = lerp(fromY, toY, t);
+    // Move continuously every render frame instead of waiting on state patches.
+    a.x += a._renderVX * dt;
+    a.y += a._renderVY * dt;
 
-    // Keep the rendered wildlife outside static collision geometry. This is only
-    // a visual guard; the server remains authoritative for actual collisions.
-    resolveAnimalWorld(a);
+    // Gently pull back toward authoritative server position so prediction never drifts.
+    const dx = a._netX - a.x, dy = a._netY - a.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 320) {
+      a.x = a._netX; a.y = a._netY;
+      a._renderVX = targetVX; a._renderVY = targetVY;
+    } else {
+      const correction = 1 - Math.exp(-7.5 * dt);
+      a.x += dx * correction;
+      a.y += dy * correction;
+    }
 
-    const frameDt = Math.max(1 / 240, dt);
-    const rvx = (a.x - prevX) / frameDt;
-    const rvy = (a.y - prevY) / frameDt;
-    const velocityBlend = 1 - Math.exp(-7 * dt);
-    a._renderVX = (Number(a._renderVX) || 0) + (rvx - (Number(a._renderVX) || 0)) * velocityBlend;
-    a._renderVY = (Number(a._renderVY) || 0) + (rvy - (Number(a._renderVY) || 0)) * velocityBlend;
-
-    let fromA = Number.isFinite(a._snapFromAngle) ? a._snapFromAngle : (a.angle || 0);
-    let toA = Number.isFinite(a._snapToAngle) ? a._snapToAngle : (a._netAngle || 0);
-    let da = toA - fromA;
+    let da = (a._netAngle || 0) - (a.angle || 0);
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    a.angle = fromA + da * t;
+    const angleFollow = 1 - Math.exp(-11 * dt);
+    a.angle = (a.angle || 0) + da * angleFollow;
 
+    // Keep animation phase continuous locally. This is what removes the visible
+    // head/tail "phase jumping" from server snapshots.
     const measuredRatio = Math.max(0, Math.min(1.5, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
     const oldAnimRatio = Number(a._netAnimMoveRatio) || 0;
     const animFollow = 1 - Math.exp(-4.2 * dt);
     a._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
     a._netAnimPhase = (Number(a._netAnimPhase) || Number(a.tailPhase) || 0) +
       dt * (1.45 + a._netAnimMoveRatio * 5.2);
-    a.tailPhase = a._netAnimPhase;
+
+    // Tail timing gets its own slower-smoothed rate. Network velocity can jump
+    // between patches; letting those jumps directly change tail frequency is
+    // what caused the high-speed twitch.
+    const tailTargetRate = 1.35 + a._netAnimMoveRatio * 5.0;
+    let tailRate = Number.isFinite(a._netTailRate) ? a._netTailRate : tailTargetRate;
+    const tailRateFollow = 1 - Math.exp(-2.35 * dt);
+    let tailRateStep = (tailTargetRate - tailRate) * tailRateFollow;
+    const maxTailRateStep = 4.2 * dt;
+    tailRateStep = clamp(tailRateStep, -maxTailRateStep, maxTailRateStep);
+    tailRate += tailRateStep;
+    a._netTailRate = tailRate;
+    a._netTailPhase = (Number.isFinite(a._netTailPhase) ? a._netTailPhase : (Number(a.tailPhase) || Number(a._netAnimPhase) || 0)) + dt * tailRate;
+    a.tailPhase = a._netTailPhase;
 
     const renderSpeed = Math.hypot(a._renderVX, a._renderVY);
     const oldVisual = Number(a._visualMoveSpeed) || 0;
     a._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-4.5 * dt));
-    if (a._visualMoveSpeed > 0.3) a._visualMoveAt = now;
+    if (a._visualMoveSpeed > 0.3) a._visualMoveAt = performance.now();
   }
 }
 
@@ -6793,7 +6829,17 @@ function updateNetworkPetInterpolation(dt) {
     p._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
     p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) +
       dt * (1.5 + p._netAnimMoveRatio * 5.4);
-    p.tailPhase = p._netAnimPhase;
+
+    const tailTargetRate = 1.4 + p._netAnimMoveRatio * 5.1;
+    let tailRate = Number.isFinite(p._netTailRate) ? p._netTailRate : tailTargetRate;
+    const tailRateFollow = 1 - Math.exp(-2.45 * dt);
+    let tailRateStep = (tailTargetRate - tailRate) * tailRateFollow;
+    const maxTailRateStep = 4.4 * dt;
+    tailRateStep = clamp(tailRateStep, -maxTailRateStep, maxTailRateStep);
+    tailRate += tailRateStep;
+    p._netTailRate = tailRate;
+    p._netTailPhase = (Number.isFinite(p._netTailPhase) ? p._netTailPhase : (Number(p.tailPhase) || Number(p._netAnimPhase) || 0)) + dt * tailRate;
+    p.tailPhase = p._netTailPhase;
 
     const oldVisual = Number(p._visualMoveSpeed) || 0;
     p._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-4.8 * dt));
@@ -7501,7 +7547,7 @@ function drawRemotePlayers() {
 const keys = new Set();
 const mouse = { sx: W / 2, sy: H / 2, down: false, rdown: false };
 let mobileMode = false;
-let joyActive = false, joyDX = 0, joyDY = 0, joyRawDX = 0, joyRawDY = 0, joyTouchId = null;
+let joyActive = false, joyDX = 0, joyDY = 0;
 
 function gameplayKeyboardActive() {
   return !!(game.started && !game.over);
@@ -7565,117 +7611,152 @@ window.addEventListener("mouseup", e => {
 });
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
-// mobile joy
+// mobile controls — pointer events keep separate fingers independent and
+// remain stable even if a finger slides outside the original button.
 const joyBase = document.getElementById("joyBase");
 const joyKnob = document.getElementById("joyKnob");
+const mobileAttackBtn = document.getElementById("mAttack");
+const mobileShootBtn = document.getElementById("mShoot");
+const mobileCraftBtn = document.getElementById("mCraft");
+let joyPointerId = null;
+let attackPointerId = null;
 
-function mobileTouchById(list, id) {
-  if (!list) return null;
-  for (let i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i];
-  return null;
-}
-function joySetRawFromTouch(t) {
-  if (!t) return;
+function updateJoyFromPointer(e) {
+  if (joyPointerId !== e.pointerId) return;
   const rect = joyBase.getBoundingClientRect();
   const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
-  let dx = t.clientX - cx, dy = t.clientY - cy;
+  let dx = e.clientX - cx, dy = e.clientY - cy;
   const max = Math.max(34, rect.width * 0.34);
   const len = Math.hypot(dx, dy) || 1;
   if (len > max) { dx = dx / len * max; dy = dy / len * max; }
 
-  // Small deadzone prevents tiny thumb movements from making the player jitter.
+  // Small center deadzone removes tiny finger tremors without making movement
+  // feel delayed. Remap the remaining range so full speed is still reachable.
   let nx = dx / max, ny = dy / max;
-  const mag = Math.hypot(nx, ny);
-  const dead = 0.10;
-  if (mag <= dead) {
+  const nl = Math.hypot(nx, ny);
+  const dead = 0.075;
+  if (nl <= dead) {
     nx = 0; ny = 0;
   } else {
-    const scaled = (mag - dead) / (1 - dead);
-    nx = nx / mag * scaled;
-    ny = ny / mag * scaled;
+    const mag = (nl - dead) / (1 - dead);
+    nx = nx / nl * Math.min(1, mag);
+    ny = ny / nl * Math.min(1, mag);
   }
-
-  joyRawDX = nx; joyRawDY = ny;
+  joyDX = nx; joyDY = ny;
   joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
 }
-function joyStart(e) {
-  if (!game.started || game.over) return;
-  e.preventDefault();
-  const t = (e.changedTouches && e.changedTouches[0]) || (e.targetTouches && e.targetTouches[0]);
-  if (!t) return;
-  joyTouchId = t.identifier;
-  joyActive = true;
-  joySetRawFromTouch(t);
-}
-function joyMove(e) {
-  if (!joyActive) return;
-  e.preventDefault();
-  const t = mobileTouchById(e.touches, joyTouchId) || mobileTouchById(e.targetTouches, joyTouchId);
-  if (t) joySetRawFromTouch(t);
-}
-function joyEnd(e) {
-  if (e && joyTouchId != null) {
-    const stillThere = mobileTouchById(e.touches, joyTouchId);
-    if (stillThere) return;
-  }
-  joyActive = false;
-  joyTouchId = null;
-  joyRawDX = 0; joyRawDY = 0;
+
+function endJoyPointer(e) {
+  if (joyPointerId !== e.pointerId) return;
+  try { joyBase.releasePointerCapture(e.pointerId); } catch (_) {}
+  joyPointerId = null;
+  joyActive = false; joyDX = 0; joyDY = 0;
   joyKnob.style.transform = "translate(-50%,-50%)";
 }
-function updateMobileInput(dt) {
-  // Frame-rate independent smoothing keeps analog motion stable even when touch
-  // events arrive irregularly on phones.
-  const targetX = joyActive ? joyRawDX : 0;
-  const targetY = joyActive ? joyRawDY : 0;
-  const follow = 1 - Math.exp(-18 * Math.max(0, dt));
-  joyDX += (targetX - joyDX) * follow;
-  joyDY += (targetY - joyDY) * follow;
-  if (!joyActive && Math.hypot(joyDX, joyDY) < 0.003) { joyDX = 0; joyDY = 0; }
-}
 
-joyBase.addEventListener("touchstart", joyStart, { passive: false });
-joyBase.addEventListener("touchmove", joyMove, { passive: false });
-joyBase.addEventListener("touchend", joyEnd, { passive: false });
-joyBase.addEventListener("touchcancel", joyEnd, { passive: false });
-
-const mobileAttackBtn = document.getElementById("mAttack");
-const mobileShootBtn = document.getElementById("mShoot");
-const mobileCraftBtn = document.getElementById("mCraft");
-
-function mobileAttackStart(e) {
-  if (!game.started || game.over) return;
+joyBase.addEventListener("pointerdown", e => {
+  if (!mobileMode || joyPointerId != null) return;
   e.preventDefault();
-  mouse.down = true;
-}
-function mobileAttackEnd(e) {
-  if (e) e.preventDefault();
-  mouse.down = false;
-}
-mobileAttackBtn.addEventListener("touchstart", mobileAttackStart, { passive: false });
-mobileAttackBtn.addEventListener("touchend", mobileAttackEnd, { passive: false });
-mobileAttackBtn.addEventListener("touchcancel", mobileAttackEnd, { passive: false });
-
-mobileShootBtn.addEventListener("touchstart", e => {
-  if (!game.started || game.over) return;
+  joyPointerId = e.pointerId;
+  joyActive = true;
+  try { joyBase.setPointerCapture(e.pointerId); } catch (_) {}
+  updateJoyFromPointer(e);
+}, { passive:false });
+joyBase.addEventListener("pointermove", e => {
+  if (joyPointerId !== e.pointerId) return;
   e.preventDefault();
-  fireBow();
-}, { passive: false });
-
-mobileCraftBtn.addEventListener("touchstart", e => {
-  if (!game.started || game.over) return;
-  e.preventDefault();
-  toggleCraft();
-}, { passive: false });
-
-// If the browser interrupts touches (app switch, notification shade, etc.), never
-// leave movement or attack stuck on.
-window.addEventListener("blur", () => {
-  mouse.down = false;
-  joyActive = false; joyTouchId = null;
-  joyRawDX = joyRawDY = joyDX = joyDY = 0;
-  if (joyKnob) joyKnob.style.transform = "translate(-50%,-50%)";
+  updateJoyFromPointer(e);
+}, { passive:false });
+joyBase.addEventListener("pointerup", endJoyPointer, { passive:false });
+joyBase.addEventListener("pointercancel", endJoyPointer, { passive:false });
+joyBase.addEventListener("lostpointercapture", e => {
+  if (joyPointerId === e.pointerId) {
+    joyPointerId = null; joyActive = false; joyDX = 0; joyDY = 0;
+    joyKnob.style.transform = "translate(-50%,-50%)";
+  }
 });
+
+mobileAttackBtn.addEventListener("pointerdown", e => {
+  if (!mobileMode || attackPointerId != null) return;
+  e.preventDefault();
+  attackPointerId = e.pointerId;
+  mouse.down = true;
+  mobileAttackBtn.classList.add("pressed");
+  try { mobileAttackBtn.setPointerCapture(e.pointerId); } catch (_) {}
+}, { passive:false });
+function endMobileAttack(e) {
+  if (attackPointerId !== e.pointerId) return;
+  try { mobileAttackBtn.releasePointerCapture(e.pointerId); } catch (_) {}
+  attackPointerId = null;
+  mouse.down = false;
+  mobileAttackBtn.classList.remove("pressed");
+}
+mobileAttackBtn.addEventListener("pointerup", endMobileAttack, { passive:false });
+mobileAttackBtn.addEventListener("pointercancel", endMobileAttack, { passive:false });
+mobileAttackBtn.addEventListener("lostpointercapture", e => {
+  if (attackPointerId === e.pointerId) {
+    attackPointerId = null; mouse.down = false;
+    mobileAttackBtn.classList.remove("pressed");
+  }
+});
+
+function mobileTapButton(btn, action) {
+  btn.addEventListener("pointerdown", e => {
+    if (!mobileMode) return;
+    e.preventDefault();
+    btn.classList.add("pressed");
+    try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+    action();
+  }, { passive:false });
+  const end = e => {
+    btn.classList.remove("pressed");
+    try { btn.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  btn.addEventListener("pointerup", end, { passive:false });
+  btn.addEventListener("pointercancel", end, { passive:false });
+  btn.addEventListener("lostpointercapture", () => btn.classList.remove("pressed"));
+}
+mobileTapButton(mobileShootBtn, fireBow);
+mobileTapButton(mobileCraftBtn, toggleCraft);
+
+// Prevent a stuck attack/joystick when the phone changes apps, locks, or rotates.
+function resetMobilePointers() {
+  joyPointerId = null; attackPointerId = null;
+  joyActive = false; joyDX = 0; joyDY = 0; mouse.down = false;
+  joyKnob.style.transform = "translate(-50%,-50%)";
+  mobileAttackBtn.classList.remove("pressed");
+  mobileShootBtn.classList.remove("pressed");
+  mobileCraftBtn.classList.remove("pressed");
+}
+window.addEventListener("blur", resetMobilePointers);
+document.addEventListener("visibilitychange", () => { if (document.hidden) resetMobilePointers(); });
+
+// Auto-enable mobile controls on touch/coarse-pointer devices unless the player
+// explicitly saved a choice before.
+const mobileModeCheckbox = document.getElementById("mobileMode");
+const mobileTitleBtn = document.getElementById("mobileTitleBtn");
+function syncMobileTitleButton(){
+  if (!mobileModeCheckbox || !mobileTitleBtn) return;
+  const on = !!mobileModeCheckbox.checked;
+  mobileTitleBtn.classList.toggle("on", on);
+  mobileTitleBtn.setAttribute("aria-pressed", on ? "true" : "false");
+  mobileTitleBtn.textContent = on ? "Mobile On" : "Mobile";
+}
+if (mobileModeCheckbox) {
+  let savedMobileChoice = "";
+  try { savedMobileChoice = localStorage.getItem("cubeMobileControls") || ""; } catch (_) {}
+  mobileModeCheckbox.checked = savedMobileChoice
+    ? savedMobileChoice === "on"
+    : MOBILE_DEVICE_HINT;
+  syncMobileTitleButton();
+}
+if (mobileTitleBtn && mobileModeCheckbox) {
+  mobileTitleBtn.addEventListener("click", () => {
+    mobileModeCheckbox.checked = !mobileModeCheckbox.checked;
+    syncMobileTitleButton();
+    try { localStorage.setItem("cubeMobileControls", mobileModeCheckbox.checked ? "on" : "off"); } catch (_) {}
+  });
+}
 
 // ---------- audio ----------
 let actx = null;
@@ -8262,8 +8343,8 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
   const sleepTailShift = a.sleeping ? r * (type === "cat" ? 0.14 : type === "fox" ? 0.12 : 0.10) : 0;
 
   const tailFrequency = (a.sleeping ? 1.2 : 1.9) + rawMoveRatio * 6.2;
-  const stablePhase = (net.room && Number.isFinite(a._netAnimPhase))
-    ? a._netAnimPhase
+  const stablePhase = (net.room && Number.isFinite(a._netTailPhase))
+    ? a._netTailPhase
     : motionTime * tailFrequency + (a.tailPhase || 0);
   const tailSwing = Math.sin(stablePhase);
   const tailLift = Math.cos(stablePhase * 0.72 + 0.35);
@@ -8705,12 +8786,15 @@ function drawReassembledDeerPartsSkin(a, stage, sleeping) {
   const deerPhase = (net.room && Number.isFinite(a._netAnimPhase))
     ? a._netAnimPhase
     : deerMotionT * (2.4 + moveRatio * 6.2) + (a.tailPhase || 0);
+  const deerTailPhase = (net.room && Number.isFinite(a._netTailPhase))
+    ? a._netTailPhase
+    : deerPhase;
 
   const bodyBob = Math.sin(deerPhase * 0.42 + 0.25) *
     r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.006));
-  const tailAngle = Math.sin(deerPhase) *
+  const tailAngle = Math.sin(deerTailPhase) *
     (a.sleeping ? 0.045 : (0.10 + moveRatio * 0.20));
-  const tailLift = Math.cos(deerPhase * 0.72 + 0.4) *
+  const tailLift = Math.cos(deerTailPhase * 0.72 + 0.4) *
     r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.008));
   const headAngle = Math.sin(deerPhase * 0.58 + 0.8) *
     (a.sleeping ? 0.03 : (0.07 + moveRatio * 0.13));
@@ -8888,7 +8972,10 @@ function drawSeparatedDeerBabySkin(a) {
   const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed("deer", "baby", !!a.owned) || 1);
   const moveRatio = Math.max(0, Math.min(1.25, actualMoveSpeed / normalMoveSpeed));
   const deerMotionT = nowMs * 0.001;
-  const deerTailAngle = Math.sin(deerMotionT * (2.4 + moveRatio * 6.0) + (a.tailPhase || 0)) *
+  const deerBabyTailPhase = (net.room && Number.isFinite(a._netTailPhase))
+    ? a._netTailPhase
+    : deerMotionT * (2.4 + moveRatio * 6.0) + (a.tailPhase || 0);
+  const deerTailAngle = Math.sin(deerBabyTailPhase) *
     (a.sleeping ? 0.035 : (0.08 + moveRatio * 0.18));
   const deerHeadAngle = Math.sin(deerMotionT * (1.9 + moveRatio * 3.4) + 0.8 + (a.tailPhase || 0) * 0.25) *
     (a.sleeping ? 0.025 : (0.055 + moveRatio * 0.10));
@@ -9534,8 +9621,8 @@ function drawUploadedAnimalSkin(a) {
   const tailFrequency = 2.2 + speedRatio * 8.6;
   const headFrequency = 1.7 + speedRatio * 4.1;
   const motionTime = nowMs * 0.001;
-  const genericPhase = (net.room && Number.isFinite(a._netAnimPhase))
-    ? a._netAnimPhase
+  const genericPhase = (net.room && Number.isFinite(a._netTailPhase))
+    ? a._netTailPhase
     : motionTime * tailFrequency + (a.tailPhase || 0);
 
   const tailAngle = a.sleeping ? 0 :
@@ -13429,10 +13516,7 @@ function updatePlayer(dt) {
   }
 
   const wx = mouse.sx + game.camX, wy = mouse.sy + game.camY;
-  if (mobileMode && Math.hypot(joyDX, joyDY) > 0.10) {
-    // Mobile has no mouse cursor; face the direction the player is actually moving.
-    player.angle = Math.atan2(joyDY, joyDX);
-  } else if (!mobileMode) {
+  if (!(mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10)) {
     player.angle = angTo(player.x, player.y, wx, wy);
   }
 
@@ -13444,11 +13528,13 @@ function updatePlayer(dt) {
   if (mobileMode && joyActive) { dx += joyDX; dy += joyDY; }
   if (dx || dy) {
     const len = Math.hypot(dx, dy) || 1;
-    const analog = mobileMode && joyActive && !keys.size ? Math.min(1, len) : 1;
+    if (mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10) {
+      player.angle = Math.atan2(dy, dx);
+    }
     let speed = 148;
     if (player.riding) speed = player.riding.speed || animalSpeed(player.riding.type, player.riding.stage, true);
-    player.x += (dx / len) * speed * analog * dt;
-    player.y += (dy / len) * speed * analog * dt;
+    player.x += (dx / len) * speed * dt;
+    player.y += (dy / len) * speed * dt;
   }
   player.x = clamp(player.x, PLAYER_R, WORLD_W - PLAYER_R);
   player.y = clamp(player.y, PLAYER_R, WORLD_H - PLAYER_R);
@@ -14887,14 +14973,17 @@ function drawAnimal(a) {
   const moveRatio = Math.max(0, Math.min(1.9, actualMoveSpeed / normalMoveSpeed));
   const slitherT = nowMs * 0.001;
   const snakeWaveSpeed = 4.0 + moveRatio * 8.8;
+  const snakeWavePhase = (net.room && Number.isFinite(a._netTailPhase))
+    ? a._netTailPhase * 1.18
+    : slitherT * snakeWaveSpeed + (a.tailPhase || 0);
   const snakeTailSwing = (a.type === "snake" && moveRatio > 0.03)
-    ? Math.sin(slitherT * snakeWaveSpeed + (a.tailPhase || 0)) * r * (0.10 + moveRatio * 0.28)
+    ? Math.sin(snakeWavePhase) * r * (0.10 + moveRatio * 0.28)
     : 0;
   const snakeMidSwing = (a.type === "snake" && moveRatio > 0.03)
-    ? Math.sin(slitherT * snakeWaveSpeed + (a.tailPhase || 0) + 0.85) * r * (0.08 + moveRatio * 0.22)
+    ? Math.sin(snakeWavePhase + 0.85) * r * (0.08 + moveRatio * 0.22)
     : 0;
   const snakeHeadSwing = (a.type === "snake" && moveRatio > 0.03)
-    ? Math.sin(slitherT * snakeWaveSpeed + (a.tailPhase || 0) + 1.55) * r * (0.05 + moveRatio * 0.12)
+    ? Math.sin(snakeWavePhase + 1.55) * r * (0.05 + moveRatio * 0.12)
     : 0;
 
   // ============================================================
@@ -15294,7 +15383,7 @@ function drawAnimal(a) {
   let headLift = 0;
   if (a.type === "snake" && moveRatio > 0.03) {
     biteNudge += Math.max(0, snakeHeadSwing * 0.32);
-    biteTilt += Math.sin(slitherT * snakeWaveSpeed + (a.tailPhase || 0) + 1.7) * (0.04 + moveRatio * 0.12);
+    biteTilt += Math.sin(snakeWavePhase + 1.7) * (0.04 + moveRatio * 0.12);
     headLift += snakeHeadSwing * 0.42;
   }
   ctx.save();
@@ -16648,7 +16737,6 @@ function frame(now) {
 
   try {
     trimRuntimeLists();
-    if (mobileMode) updateMobileInput(dt);
 
     if (game.started) {
       // Death only disables the player's actions. The world keeps simulating so
@@ -16657,8 +16745,9 @@ function frame(now) {
 
       if (net.room) {
         net.fullSyncAccum += dt;
-        if (net.fullSyncAccum >= 1 / 10) {
-          net.fullSyncAccum %= 1 / 10;
+        const fullSyncStep = mobileMode ? 1 / 6 : 1 / 8;
+        if (net.fullSyncAccum >= fullSyncStep) {
+          net.fullSyncAccum %= fullSyncStep;
           syncNetworkFullWorld();
         }
 
@@ -16705,7 +16794,8 @@ function frame(now) {
 
       // DOM HUD work doesn't need to run 60 times per second.
       hudSyncAccum += dt;
-      if (hudSyncAccum >= 0.08) {
+      const hudStep = mobileMode ? 0.12 : 0.08;
+      if (hudSyncAccum >= hudStep) {
         hudSyncAccum = 0;
         syncHud();
         updateTameBtn();
@@ -17331,8 +17421,10 @@ el("playBtn").addEventListener("click", async () => {
   meta.username = (el("username").value || "Cube").slice(0, 14);
   saveMeta();
   mobileMode = el("mobileMode").checked;
+  try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}
   document.getElementById("mobileControls").classList.toggle("on", mobileMode);
-  resize();
+  document.body.classList.toggle("mobile-performance", mobileMode);
+  if (!mobileMode) resetMobilePointers();
   setHomeControlsEnabled(false);
   const home = document.getElementById("home");
   home.style.display = "none";
@@ -17412,10 +17504,6 @@ el("homeBtn").addEventListener("click", () => {
   syncHomeWorldThemeState();
   setHomeControlsEnabled(true);
   document.getElementById("mobileControls").classList.remove("on");
-  mouse.down = false;
-  joyActive = false; joyTouchId = null;
-  joyRawDX = joyRawDY = joyDX = joyDY = 0;
-  if (joyKnob) joyKnob.style.transform = "translate(-50%,-50%)";
   game.homeCamReady = false;
   setupHome();
 });
