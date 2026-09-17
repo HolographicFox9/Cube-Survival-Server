@@ -2032,6 +2032,25 @@ export class WorldRoom extends Room {
     }
   }
 
+  safePetFollowPoint(p,tx,ty){
+    let x=clamp(tx,24,WORLD_W-24),y=clamp(ty,24,WORLD_H-24);
+    const pr=Math.max(10,(p.r||18)*.72+5),range=pr+130;
+    for(let pass=0;pass<2;pass++){
+      for(const s of this.nearbySolids(x,y,range)){
+        if(s.kind==="resource"){const r=this.state.resources.get(s.id);if(r&&!r.alive)continue;}
+        if(s.kind==="gold"){const g=this.state.gold.get(s.id);if(g&&!g.infinite&&g.goldLeft<=0)continue;}
+        if(s.kind==="chest"){const c=this.state.chests.get(s.id);if(c?.opened)continue;}
+        const d=dist(x,y,s.x,s.y),min=pr+s.r+4;
+        if(d<min){const a=d>.01?angTo(s.x,s.y,x,y):(p.angle||0);x=s.x+Math.cos(a)*min;y=s.y+Math.sin(a)*min;}
+      }
+      for(const[,w]of this.state.walls){
+        const d=dist(x,y,w.x,w.y),min=pr+w.r+5;
+        if(d<min){const a=d>.01?angTo(w.x,w.y,x,y):(p.angle||0);x=w.x+Math.cos(a)*min;y=w.y+Math.sin(a)*min;}
+      }
+    }
+    return{x:clamp(x,24,WORLD_W-24),y:clamp(y,24,WORLD_H-24)};
+  }
+
   updatePets(dt){
     for(const[id,p]of this.state.pets){
       if(p.dead)continue;
@@ -2143,17 +2162,26 @@ export class WorldRoom extends Room {
           trail=Math.max(trail,p.r*.75+PLAYER_R+14);
 
           const side=trail*p.followSlotSide,back=trail*p.followSlotDepth;
-          const ca=Math.cos(owner.angle||0),sa=Math.sin(owner.angle||0);
-          const tx=owner.x-ca*back-sa*side;
-          const ty=owner.y-sa*back+ca*side;
-          const dd=dist(p.x,p.y,tx,ty);
 
-          if(dd>4){
-            const a=angTo(p.x,p.y,tx,ty);
-            smoothTurn(p,a,dt,8.6);
-            const speedMul=clamp(.30+dd/Math.max(55,trail*.72),.30,1.72);
+          // Formation follows movement direction, not aim direction.
+          const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
+          const dirX=ml>.05?(owner.moveX||0)/ml:Math.cos(owner.angle||0);
+          const dirY=ml>.05?(owner.moveY||0)/ml:Math.sin(owner.angle||0);
+          const desiredX=owner.x-dirX*back-dirY*side;
+          const desiredY=owner.y-dirY*back+dirX*side;
+          const safe=this.safePetFollowPoint(p,desiredX,desiredY);
+          const tf=1-Math.exp(-6.2*dt);
+          p.followTargetX=Number.isFinite(p.followTargetX)?p.followTargetX+(safe.x-p.followTargetX)*tf:safe.x;
+          p.followTargetY=Number.isFinite(p.followTargetY)?p.followTargetY+(safe.y-p.followTargetY)*tf:safe.y;
+          const dd=dist(p.x,p.y,p.followTargetX,p.followTargetY);
+
+          if(dd>5){
+            const a=angTo(p.x,p.y,p.followTargetX,p.followTargetY);
+            smoothTurn(p,a,dt,7.2);
+            const speedMul=clamp(.24+dd/Math.max(62,trail*.78),.24,1.58);
             p.x+=Math.cos(p.angle)*p.speed*speedMul*dt;
             p.y+=Math.sin(p.angle)*p.speed*speedMul*dt;
+            this.resolveStatic(p,p.r*.72);
           }
         }else{
           // While the owner stands still, pets wander naturally nearby.

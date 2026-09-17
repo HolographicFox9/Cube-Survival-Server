@@ -16,7 +16,7 @@ app.disable("x-powered-by");
 
 // Render health check. This also gives you a quick way to verify the server is awake.
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 413, gameBuild: 441, chat: true });
+  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 414, gameBuild: 442, chat: true });
 });
 
 // Visiting the Render URL opens the game and tells the client to use this same server.

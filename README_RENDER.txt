@@ -673,3 +673,13 @@ SERVER 413 / GAME 441:
 - Remote player health bars only render below full health.
 - Multiplayer player names are larger, bolder, and outlined for visibility.
 - Gold rewards include exact server-authoritative balance to prevent multiplayer gold desync/stuck-at-3 behavior.
+
+
+SERVER 414 / GAME 442:
+- Pet follow formation now follows player movement direction instead of aim/facing direction.
+- Follow targets are pushed out of static hitboxes before pets steer toward them.
+- Follow target positions are smoothed and pet collision is resolved on the same movement frame.
+- Fixed offline pet-kill XP variable bug that could throw on a pet kill.
+- Viper bite animation now lunges the head/neck instead of shifting the whole body.
+- Pickaxe redrawn as a classic cross-head pickaxe and uses the same upright two-hand pose as the axe.
+- Small hotbar transition polish.

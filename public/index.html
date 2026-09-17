@@ -9003,7 +9003,11 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
   const left = -mergedW * 0.5;
 
   const attackT = Math.max(0, Math.min(1, Number(a.attackAnim) || 0));
-  const attackPush = a.sleeping ? 0 : Math.sin(attackT * Math.PI) * r * 0.10;
+  const attackPulse = a.sleeping ? 0 : Math.sin(attackT * Math.PI);
+  // The Viper's body stays planted; only the neck/head snaps forward to bite.
+  const attackPush = 0;
+  const headAttackLunge = attackPulse * r * 0.34;
+  const headAttackTilt = attackPulse * -0.10;
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.15)";
@@ -9107,7 +9111,7 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
   const headRestY = headTopBase + totalH * Number(layout.headOffsetY || 0);
   const headPivotFracX = Number(layout.headPivotFracX || 0.14);
   const headPivotFracY = Number(layout.headPivotFracY || 0.50);
-  const headPivotX = headRestX + headW * headPivotFracX;
+  const headPivotX = headRestX + headW * headPivotFracX + headAttackLunge;
   const headPivotY = headRestY + headH * headPivotFracY + neckY + headSide + headBob;
 
   const neckAheadT = 0.985;
@@ -9119,7 +9123,7 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
 
   ctx.save();
   ctx.translate(headPivotX, headPivotY);
-  ctx.rotate(neckSlopeRot + headRot);
+  ctx.rotate(neckSlopeRot + headRot + headAttackTilt);
   ctx.drawImage(
     img,
     headSrcX, headSrcY,
@@ -11526,11 +11530,11 @@ function petLockedCombat(p, target, dt) {
         setKilledBy(target, p);
         target.dead = true;
         game.kills++;
-        givePetExp(p, petKillXpForAnimal(target));
+        givePetExp(p, petKillXpForAnimal(targetEn));
         spark(target.x, target.y, PET_TYPES[target.type].color, 10, 100);
       } else {
         damageEnemy(target, 0, false, p);
-        givePetExp(p, petKillXpForEnemy(target));
+        givePetExp(p, petKillXpForEnemy(targetEn));
       }
       p.forcedTarget = null;
       p.forcedTargetAutoDefense = false;
@@ -12145,6 +12149,67 @@ function activatePetAbility(pet, batchCast = false) {
   if (!batchCast) syncPetCards();
 }
 
+function safePetFollowPoint(p, tx, ty) {
+  let x = clamp(tx, 24, WORLD_W - 24);
+  let y = clamp(ty, 24, WORLD_H - 24);
+  const pr = Math.max(10, (Number(p.r) || 18) * 0.72 + 5);
+  const range = pr + 130;
+
+  for (let pass = 0; pass < 2; pass++) {
+    for (const r of queryStaticNearby("resources", x, y, range)) {
+      if (!r.alive) continue;
+      let cx, cy, rr;
+      if (r.type === "log") {
+        const h = resourceHitboxes(r)[0];
+        if (!h) continue;
+        cx = h.x; cy = h.y; rr = h.r;
+      } else {
+        const c = resourceSolidCenter(r);
+        cx = c.x; cy = c.y; rr = r.solidR;
+      }
+      const d = dist(x, y, cx, cy), min = pr + rr + 4;
+      if (d < min) {
+        const a = d > 0.01 ? angTo(cx, cy, x, y) : (p.angle || 0);
+        x = cx + Math.cos(a) * min;
+        y = cy + Math.sin(a) * min;
+      }
+    }
+
+    for (const g of queryStaticNearby("gold", x, y, range)) {
+      if (!g.infinite && g.goldLeft <= 0) continue;
+      const h = goldSolidHitbox(g);
+      const d = dist(x, y, h.x, h.y), min = pr + h.r + 4;
+      if (d < min) {
+        const a = d > 0.01 ? angTo(h.x, h.y, x, y) : (p.angle || 0);
+        x = h.x + Math.cos(a) * min;
+        y = h.y + Math.sin(a) * min;
+      }
+    }
+
+    for (const c of queryStaticNearby("chests", x, y, range)) {
+      if (c.opened) continue;
+      const h = chestSolidHitbox(c);
+      const d = dist(x, y, h.x, h.y), min = pr + h.r + 4;
+      if (d < min) {
+        const a = d > 0.01 ? angTo(h.x, h.y, x, y) : (p.angle || 0);
+        x = h.x + Math.cos(a) * min;
+        y = h.y + Math.sin(a) * min;
+      }
+    }
+
+    for (const w of walls) {
+      const d = dist(x, y, w.x, w.y), min = pr + w.r + 5;
+      if (d < min) {
+        const a = d > 0.01 ? angTo(w.x, w.y, x, y) : (p.angle || 0);
+        x = w.x + Math.cos(a) * min;
+        y = w.y + Math.sin(a) * min;
+      }
+    }
+  }
+
+  return { x: clamp(x, 24, WORLD_W - 24), y: clamp(y, 24, WORLD_H - 24) };
+}
+
 function resolveAnimalWorld(a) {
   // Spatially-cull static collisions so off-screen wildlife is cheap to simulate.
   const searchRange = Math.max(260, a.r + 190);
@@ -12358,11 +12423,11 @@ function updateCombatHunt(p, dt) {
         if (hunt.isAnimal) {
           target.dead = true;
           game.kills++;
-          givePetExp(p, petKillXpForAnimal(target));
+          givePetExp(p, petKillXpForAnimal(targetEn));
           spark(target.x, target.y, PET_TYPES[target.type].color, 10, 100);
         } else {
           damageEnemy(target, 0, false, p);
-          givePetExp(p, petKillXpForEnemy(target));
+          givePetExp(p, petKillXpForEnemy(targetEn));
         }
         p.huntTarget = null;
         p.huntRetarget = 0;
@@ -12744,11 +12809,11 @@ function updateAnimals(dt) {
           if (targetIsAnimal) {
             targetEn.dead = true;
             game.kills++;
-            givePetExp(p, petKillXpForAnimal(target));
+            givePetExp(p, petKillXpForAnimal(targetEn));
             spark(targetEn.x, targetEn.y, PET_TYPES[targetEn.type].color, 10, 100);
           } else {
             damageEnemy(targetEn, 0, false, p);
-            givePetExp(p, petKillXpForEnemy(target));
+            givePetExp(p, petKillXpForEnemy(targetEn));
           }
         }
       }
@@ -12786,16 +12851,32 @@ function updateAnimals(dt) {
 
         const side = trail * p._followSlotSide;
         const back = trail * p._followSlotDepth;
-        const ca = Math.cos(player.angle || 0), sa = Math.sin(player.angle || 0);
-        const tx = player.x - ca * back - sa * side;
-        const ty = player.y - sa * back + ca * side;
-        const dd = dist(p.x, p.y, tx, ty);
 
-        if (dd > 4) {
-          const a = angTo(p.x, p.y, tx, ty);
-          smoothTurn(p, a, dt, 8.6);
-          const speedMul = clamp(0.30 + dd / Math.max(55, trail * 0.72), 0.30, 1.72);
+        // Follow the player's TRAVEL direction, not aim/facing direction.
+        // This prevents the formation from whipping around when the mouse turns.
+        const move = currentMoveVector();
+        const ml = Math.hypot(move.x, move.y);
+        const dirX = ml > 0.05 ? move.x / ml : Math.cos(player.angle || 0);
+        const dirY = ml > 0.05 ? move.y / ml : Math.sin(player.angle || 0);
+        const desiredX = player.x - dirX * back - dirY * side;
+        const desiredY = player.y - dirY * back + dirX * side;
+        const safe = safePetFollowPoint(p, desiredX, desiredY);
+
+        const targetFollow = 1 - Math.exp(-6.2 * dt);
+        p._followTargetX = Number.isFinite(p._followTargetX)
+          ? lerp(p._followTargetX, safe.x, targetFollow) : safe.x;
+        p._followTargetY = Number.isFinite(p._followTargetY)
+          ? lerp(p._followTargetY, safe.y, targetFollow) : safe.y;
+
+        const dd = dist(p.x, p.y, p._followTargetX, p._followTargetY);
+        if (dd > 5) {
+          const a = angTo(p.x, p.y, p._followTargetX, p._followTargetY);
+          smoothTurn(p, a, dt, 7.2);
+          const speedMul = clamp(0.24 + dd / Math.max(62, trail * 0.78), 0.24, 1.58);
           moveFacing(p, p.speed * speedMul, dt);
+          // Resolve on the same frame as movement so a follow step never visually
+          // enters a solid object and gets popped back on the next frame.
+          resolveAnimalWorld(p);
         }
 
         p.followReturning = dd > 16;
@@ -13399,7 +13480,7 @@ function iconSvg(name) {
   const s = {
     Fist: '<circle cx="13" cy="13" r="7" fill="#e8c9a0"/>',
     Axe: '<g transform="translate(0.5 0.5)"><path d="M12.4 5.2 L15 5.2 L15 22.4 L12.4 22.4 Z" fill="#9a5d31" stroke="#4f2f16" stroke-width="1"/><rect x="11.5" y="11" width="4.4" height="2.1" rx="0.9" fill="#c8844b" opacity="0.75"/><circle cx="14.3" cy="6.6" r="1.4" fill="#c8844b"/><path d="M4.9 10.2 L7.6 7.6 L12.4 7.6 L12.4 17.7 L7.6 17.7 L4.9 15.3 Z" fill="#b7a46f" stroke="#4c4230" stroke-width="1.05"/><path d="M6.4 10.6 L8.3 8.8 L11.6 8.8 L11.6 16.4 L8.3 16.4 L6.4 14.8 Z" fill="#d5c18b" opacity="0.42"/><path d="M6.5 9.9 Q5.5 12.4 6.5 15" fill="none" stroke="#eadcb5" stroke-width="0.9" stroke-linecap="round" opacity="0.7"/></g>',
-    Pickaxe: '<rect x="4" y="12" width="16" height="3" fill="#8a5a2b"/><path d="M15,13 Q18,3 26,4 Q20,10 15,13Z" fill="#9aa0a6"/><path d="M15,13 Q18,23 26,22 Q20,16 15,13Z" fill="#9aa0a6"/>',
+    Pickaxe: '<rect x="13" y="7" width="3.5" height="20" rx="1.5" fill="#8a5a2b"/><path d="M5,10 Q14,4 25,8 L24,11 Q16,8 9,13Z" fill="#aab4bd" stroke="#4d555c" stroke-width="1"/><path d="M16,8 Q22,10 28,15 L26,18 Q20,13 14,11Z" fill="#8f9aa3"/>',
     Sword: '<g transform="translate(0.5 0.5)"><circle cx="6.4" cy="13" r="2.1" fill="#d8b23f" stroke="#7a5a16" stroke-width="0.9"/><rect x="7.2" y="11.7" width="4.2" height="2.6" rx="1.2" fill="#5e3a22" stroke="#3a2416" stroke-width="0.8"/><path d="M11.2 9.5 L13.7 9.5 L14.8 11.1 L14.8 14.9 L13.7 16.5 L11.2 16.5 Z" fill="#d8b23f" stroke="#8a6a20" stroke-width="0.9"/><path d="M14.7 10.3 L18.9 8.7 L23.6 13 L18.9 17.3 L14.7 15.7 Z" fill="#d9dee3" stroke="#737981" stroke-width="1"/><path d="M15.5 12.05 L20.1 12.05 L20.1 13.95 L15.5 13.95 Z" fill="#f8fbff" opacity="0.85"/><path d="M18.9 9.9 L21.8 13 L18.9 16.1" fill="none" stroke="#a8b0b8" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></g>',
     Bow: '<path d="M20,3 Q28,13 20,23" stroke="#7a5327" stroke-width="3" fill="none"/><line x1="20" y1="5" x2="20" y2="21" stroke="#d9d9d9" stroke-width="1.5"/>',
     Wall: '<rect x="3" y="3" width="20" height="20" rx="2" fill="#a9744f" stroke="#5c3a22" stroke-width="2"/><line x1="3" y1="13" x2="23" y2="13" stroke="#5c3a22" stroke-width="1.5"/><line x1="13" y1="3" x2="13" y2="13" stroke="#5c3a22" stroke-width="1.5"/>',
@@ -15571,8 +15652,9 @@ function drawTwoHandWeapon(weapon, color, swing, walkArm = 0) {
     restAngle = 0.08;
     swingAngle = swing * -0.55;
   } else if (weapon === "Pickaxe") {
-    restAngle = 0.22;
-    swingAngle = swing * -0.95;
+    // Pickaxe uses the same upright two-hand ready pose as the axe.
+    restAngle = Math.PI / 2;
+    swingAngle = swing * -1.34;
   } else if (weapon === "Axe") {
     // Axe sits at a true 90-degree ready angle and swings forward across the front
     // of the character, almost toward the other side.
@@ -15588,8 +15670,8 @@ function drawTwoHandWeapon(weapon, color, swing, walkArm = 0) {
 
   // Move the held item slightly ahead of the face in space, but not far enough
   // to make the arms look almost straight.
-  const tx = weapon === "Axe" ? 8.5 : weapon === "Sword" ? 6.5 : 0;
-  const ty = weapon === "Axe" ? -1.2 : weapon === "Sword" ? -0.6 : 0;
+  const tx = (weapon === "Axe" || weapon === "Pickaxe") ? 8.5 : weapon === "Sword" ? 6.5 : 0;
+  const ty = (weapon === "Axe" || weapon === "Pickaxe") ? -1.2 : weapon === "Sword" ? -0.6 : 0;
 
   ctx.save();
   ctx.translate(tx, ty);
@@ -15638,26 +15720,41 @@ function drawTwoHandWeapon(weapon, color, swing, walkArm = 0) {
     ctx.quadraticCurveTo(36, 0, 37.5, 4.6);
     ctx.stroke();
   } else if (weapon === "Pickaxe") {
-    const handleStart = 11, handleEnd = 61;
+    // Wooden shaft, same scale/grip language as the axe.
     ctx.strokeStyle = "#3f2815"; ctx.lineWidth = 7; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(handleStart, 0); ctx.lineTo(handleEnd, 0); ctx.stroke();
-    ctx.strokeStyle = "#8b5528"; ctx.lineWidth = 4.8;
-    ctx.beginPath(); ctx.moveTo(handleStart, 0); ctx.lineTo(handleEnd, 0); ctx.stroke();
-    ctx.strokeStyle = "#b9783e"; ctx.lineWidth = 1.7;
-    for (const x of [18,22,26,30]) { ctx.beginPath(); ctx.moveTo(x,-3); ctx.lineTo(x,3); ctx.stroke(); }
-    // Dark socket where the steel head wraps around the handle.
-    ctx.fillStyle = "#555f67"; ctx.strokeStyle = "#30373d"; ctx.lineWidth = 1.4;
-    roundRect(49,-7,10,14,2.5); ctx.fill(); ctx.stroke();
-    // Forged double pick: one long sharp point and one broader mining tooth.
-    ctx.fillStyle = "#9da8b2"; ctx.strokeStyle = "#454d55"; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(54, 0); ctx.stroke();
+    ctx.strokeStyle = "#9a5d31"; ctx.lineWidth = 4.8;
+    ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(54, 0); ctx.stroke();
+    ctx.strokeStyle = "#c8844b"; ctx.lineWidth = 2.0;
+    for (const x of [19,23,27]) { ctx.beginPath(); ctx.moveTo(x,-2.8); ctx.lineTo(x,2.8); ctx.stroke(); }
+    ctx.fillStyle = "#c8844b";
+    ctx.beginPath(); ctx.ellipse(9, 0, 3.4, 4.0, 0, 0, TAU); ctx.fill();
+
+    // Classic cross-head pickaxe: pointed pick on one side, broad adze on the other.
+    ctx.fillStyle = "#606b74"; ctx.strokeStyle = "#30373d"; ctx.lineWidth = 1.4;
+    roundRect(48, -7, 11, 14, 2.2); ctx.fill(); ctx.stroke();
+
+    ctx.fillStyle = "#aab4bd"; ctx.strokeStyle = "#454d55"; ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(52,-5); ctx.quadraticCurveTo(63,-18,78,-15); ctx.quadraticCurveTo(67,-10,57,-1); ctx.closePath();
+    ctx.moveTo(50, -4);
+    ctx.quadraticCurveTo(48, -13, 42, -20);
+    ctx.lineTo(39, -25);
+    ctx.lineTo(44, -23);
+    ctx.quadraticCurveTo(54, -17, 57, -6);
+    ctx.closePath();
     ctx.fill(); ctx.stroke();
+
     ctx.beginPath();
-    ctx.moveTo(52,5); ctx.quadraticCurveTo(64,17,75,13); ctx.lineTo(59,1); ctx.closePath();
+    ctx.moveTo(51, 4);
+    ctx.quadraticCurveTo(58, 12, 67, 16);
+    ctx.lineTo(73, 18);
+    ctx.lineTo(71, 22);
+    ctx.quadraticCurveTo(59, 19, 53, 10);
+    ctx.closePath();
     ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = "rgba(238,246,251,.85)"; ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.moveTo(58,-8); ctx.quadraticCurveTo(66,-13,73,-13); ctx.stroke();
+
+    ctx.strokeStyle = "rgba(240,247,251,.9)"; ctx.lineWidth = 1.05;
+    ctx.beginPath(); ctx.moveTo(45,-20); ctx.quadraticCurveTo(51,-15,54,-8); ctx.stroke();
   } else if (weapon === "Sword") {
     ctx.fillStyle = "#d8b23f"; ctx.strokeStyle = "#7a5a16"; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(14, 0, 4, 0, TAU); ctx.fill(); ctx.stroke();
@@ -15697,7 +15794,7 @@ function drawTwoHandWeapon(weapon, color, swing, walkArm = 0) {
   // translate+rotate math as the weapon so the arms don't overextend.
   let hand1 = { x: 22, y: -5 };
   let hand2 = { x: 34, y: 5 };
-  if (weapon === "Axe") {
+  if (weapon === "Axe" || weapon === "Pickaxe") {
     hand1 = { x: 13.5, y: -4.3 };
     hand2 = { x: 18.7, y: 3.1 };
   } else if (weapon === "Sword") {
