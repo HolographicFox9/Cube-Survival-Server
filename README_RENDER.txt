@@ -701,3 +701,10 @@ SERVER 416 / GAME 444:
 - Large network deltas stretch interpolation time instead of causing catch-up zooms.
 - Wildlife render positions are visually kept outside static hitboxes during interpolation.
 - Client world-state reads now match the server's 10 Hz patch rate.
+
+
+SERVER 417 / GAME 445:
+- Multiplayer animal/pet animation phase speed now has its own smooth rate governor and hard cap.
+- Sudden network movement-speed spikes can no longer cause hyper-fast tail whipping.
+- Head rotation/nod/lift made more noticeable on segmented animals, deer, and generic uploaded animals.
+- Viper head movement slightly increased while preserving its already-smooth tail/body motion.
