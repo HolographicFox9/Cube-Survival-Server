@@ -568,6 +568,206 @@
     #mCraft{bottom:max(102px,calc(env(safe-area-inset-bottom) + 94px));}
   }
 
+
+  /* ---------- 459 true phone HUD layout ----------
+     Mobile mode uses both edges of the phone instead of shrinking the desktop HUD. */
+  body.mobile-performance{
+    --phone-left:max(10px,env(safe-area-inset-left));
+    --phone-right:max(10px,env(safe-area-inset-right));
+    --phone-top:max(8px,env(safe-area-inset-top));
+    --phone-bottom:max(8px,env(safe-area-inset-bottom));
+  }
+  body.mobile-performance #hud{font-size:11px;}
+  body.mobile-performance .hud-panel{border-radius:10px;box-shadow:0 6px 16px rgba(0,0,0,.20);}
+
+  /* Top-left information gets compact so it leaves room for the center banner. */
+  body.mobile-performance #playerLeaderboard{
+    left:calc(var(--phone-left) + 2px);top:calc(var(--phone-top) + 2px);
+    width:min(158px,41vw);max-height:126px;border-radius:10px;
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+  }
+  body.mobile-performance .leaderboard-head{
+    grid-template-columns:minmax(0,1fr) 30px 30px;gap:3px;padding:5px 6px 4px;font-size:7px;
+  }
+  body.mobile-performance #leaderboardRows{max-height:99px;}
+  body.mobile-performance .leaderboard-row{
+    grid-template-columns:minmax(0,1fr) 30px 30px;gap:3px;min-height:22px;padding:3px 6px;font-size:9px;
+  }
+  body.mobile-performance .leaderboard-rank{flex-basis:13px;font-size:8px;}
+
+  /* Top-right map and a small utility stack. Craft is already on the combat side. */
+  body.mobile-performance #minimapWrap{
+    top:calc(var(--phone-top) + 2px);right:calc(var(--phone-right) + 2px);
+    width:96px;height:96px;border-radius:11px;
+  }
+  body.mobile-performance #minimap{transform:none;}
+  body.mobile-performance #timeBanner{
+    top:calc(var(--phone-top) + 5px);padding:5px 10px;font-size:10px;max-width:34vw;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  body.mobile-performance #invBtn,
+  body.mobile-performance #runShopBtn{
+    right:calc(var(--phone-right) + 3px);min-width:76px;padding:7px 8px;border-radius:10px;font-size:10px;
+  }
+  body.mobile-performance #invBtn{top:calc(var(--phone-top) + 104px);}
+  body.mobile-performance #runShopBtn{top:calc(var(--phone-top) + 137px);}
+  body.mobile-performance #craftBtn{display:none;}
+
+  /* Pet controls live down the left edge between leaderboard and joystick. */
+  body.mobile-performance #petCards{
+    left:calc(var(--phone-left) + 3px);top:calc(var(--phone-top) + 138px);gap:4px;
+    max-height:calc(100dvh - var(--phone-top) - var(--phone-bottom) - 330px);
+    overflow-y:auto;overflow-x:visible;padding:1px 4px 3px 0;scrollbar-width:none;
+  }
+  body.mobile-performance #petCards::-webkit-scrollbar{display:none;}
+  body.mobile-performance .pet-card{width:52px;height:66px;border-radius:10px;gap:2px;padding:5px 4px 6px;}
+  body.mobile-performance .pet-card .pc-icon{font-size:18px;}
+  body.mobile-performance .pet-card .pc-name{font-size:7px;max-width:42px;}
+  body.mobile-performance .pet-card .pc-type{font-size:5px;max-width:42px;}
+  body.mobile-performance .pet-card .pc-hp{width:40px;height:4px;}
+  body.mobile-performance .pet-all-abilities{width:52px;min-height:34px;padding:5px 3px;font-size:8px;border-radius:10px;}
+  body.mobile-performance .pet-orders{width:15px;height:14px;line-height:14px;font-size:12px;}
+  body.mobile-performance .pet-menu{
+    left:58px;min-width:164px;max-width:min(210px,58vw);grid-template-columns:repeat(2,1fr);gap:5px;padding:6px;
+  }
+  body.mobile-performance .pet-menu button{min-height:48px;font-size:9px;padding:5px 3px;}
+
+  /* Bottom center stays for inventory selection; controls stay clear on both edges. */
+  body.mobile-performance #bottomDock{
+    left:50%;bottom:calc(var(--phone-bottom) + 2px);min-width:0;width:min(68vw,420px);max-width:calc(100vw - 128px);
+    gap:4px;padding:5px 6px;border-radius:12px;backdrop-filter:none;-webkit-backdrop-filter:none;
+    align-items:stretch;
+  }
+  body.mobile-performance #resourceStrip{gap:4px;padding-left:0;justify-content:center;}
+  body.mobile-performance .dock-res{gap:2px;font-size:9px;padding:2px 5px;}
+  body.mobile-performance .dock-res .ico{font-size:10px;}
+  body.mobile-performance .cubit-token{width:9px;height:9px;}
+  body.mobile-performance #hotbar{width:100%;max-width:100%;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
+  body.mobile-performance #hotbar::-webkit-scrollbar{display:none;}
+  body.mobile-performance .slot{flex:0 0 44px;width:44px;height:44px;border-radius:8px;border-width:1px;}
+  body.mobile-performance .slot .ico{width:22px;height:22px;}
+  body.mobile-performance .slot .key{font-size:8px;left:3px;top:1px;}
+  body.mobile-performance .slot .cost,
+  body.mobile-performance .slot .label{font-size:7px;}
+  body.mobile-performance .slot .qty{font-size:8px;}
+  body.mobile-performance #tameBtn{
+    bottom:calc(var(--phone-bottom) + 72px);width:48px;height:48px;border-radius:12px;
+  }
+  body.mobile-performance #tameBtn svg{width:27px;height:27px;}
+
+  /* Left-hand movement zone. */
+  body.mobile-performance .joy-base{
+    left:calc(var(--phone-left) + 5px);bottom:calc(var(--phone-bottom) + 88px);
+    width:104px;height:104px;border-width:1px;background:rgba(0,0,0,.25);
+  }
+  body.mobile-performance .joy-knob{width:46px;height:46px;}
+  body.mobile-performance #chatToggle{
+    left:calc(var(--phone-left) + 10px);bottom:calc(var(--phone-bottom) + 202px);
+    padding:6px 9px;border-radius:9px;font-size:9px;
+  }
+  body.mobile-performance #chatBox{
+    left:calc(var(--phone-left) + 6px);bottom:calc(var(--phone-bottom) + 236px);
+    width:min(255px,68vw);gap:3px;
+  }
+  body.mobile-performance #chatLog{max-height:88px;font-size:10px;padding:5px 6px;}
+  body.mobile-performance #chatInput{font-size:12px;padding:7px 8px;}
+  body.mobile-performance #chatHint{font-size:8px;}
+
+  /* Right-hand action cluster. ATK is the biggest target; bow/craft sit above/inside it. */
+  body.mobile-performance .m-btn{border-width:1px;box-shadow:0 6px 14px rgba(0,0,0,.20);}
+  body.mobile-performance #mAttack{
+    width:66px;height:66px;font-size:11px;
+    right:calc(var(--phone-right) + 8px);bottom:calc(var(--phone-bottom) + 99px);
+  }
+  body.mobile-performance #mShoot{
+    width:56px;height:56px;font-size:10px;
+    right:calc(var(--phone-right) + 78px);bottom:calc(var(--phone-bottom) + 109px);
+  }
+  body.mobile-performance #mCraft{
+    width:48px;height:48px;font-size:10px;
+    right:calc(var(--phone-right) + 16px);bottom:calc(var(--phone-bottom) + 172px);
+  }
+
+  /* Phone menus use the whole safe viewport instead of desktop-sized cards. */
+  body.mobile-performance #craftOverlay .card,
+  body.mobile-performance #invOverlay .card,
+  body.mobile-performance #runShopOverlay .card,
+  body.mobile-performance #cardInventoryOverlay .card,
+  body.mobile-performance #petShopOverlay .card,
+  body.mobile-performance #lootPopup .loot-card{
+    width:min(94vw,520px);max-height:calc(100dvh - var(--phone-top) - var(--phone-bottom) - 20px);
+    overflow:auto;padding:16px 14px;border-radius:14px;
+  }
+  body.mobile-performance #craftOverlay .btn,
+  body.mobile-performance #invOverlay .btn,
+  body.mobile-performance #runShopOverlay .btn,
+  body.mobile-performance #cardInventoryOverlay button,
+  body.mobile-performance #petShopOverlay button{min-height:40px;}
+  body.mobile-performance .inv-grid{grid-template-columns:repeat(3,1fr);gap:6px;}
+
+  /* Very narrow portrait phones: make the dock and controls slightly smaller. */
+  @media (orientation:portrait) and (max-width:430px){
+    body.mobile-performance #bottomDock{width:66vw;max-width:calc(100vw - 122px);}
+    body.mobile-performance #resourceStrip{gap:3px;}
+    body.mobile-performance .dock-res{font-size:8px;padding:2px 4px;}
+    body.mobile-performance .slot{flex-basis:42px;width:42px;height:42px;}
+    body.mobile-performance .joy-base{width:98px;height:98px;bottom:calc(var(--phone-bottom) + 86px);}
+    body.mobile-performance .joy-knob{width:43px;height:43px;}
+    body.mobile-performance #mAttack{width:62px;height:62px;}
+    body.mobile-performance #mShoot{width:52px;height:52px;right:calc(var(--phone-right) + 73px);}
+    body.mobile-performance #mCraft{width:46px;height:46px;}
+  }
+
+  /* Landscape phone: push controls to the edges and free the center view. */
+  @media (orientation:landscape) and (max-height:560px){
+    body.mobile-performance #playerLeaderboard{width:min(145px,23vw);max-height:94px;}
+    body.mobile-performance #leaderboardRows{max-height:68px;}
+    body.mobile-performance #minimapWrap{width:82px;height:82px;}
+    body.mobile-performance #timeBanner{font-size:9px;padding:4px 9px;max-width:25vw;}
+    body.mobile-performance #invBtn{top:calc(var(--phone-top) + 88px);min-width:68px;padding:5px 7px;}
+    body.mobile-performance #runShopBtn{top:calc(var(--phone-top) + 117px);min-width:68px;padding:5px 7px;}
+
+    body.mobile-performance #petCards{
+      left:calc(var(--phone-left) + 102px);top:calc(var(--phone-top) + 58px);
+      flex-direction:row;max-height:66px;max-width:36vw;overflow-x:auto;overflow-y:hidden;gap:4px;
+    }
+    body.mobile-performance .pet-card{flex:0 0 46px;width:46px;height:58px;padding:4px 3px;}
+    body.mobile-performance .pet-card .pc-icon{font-size:16px;}
+    body.mobile-performance .pet-card .pc-hp{width:34px;}
+    body.mobile-performance .pet-all-abilities{flex:0 0 46px;width:46px;min-height:58px;}
+    body.mobile-performance .pet-menu{left:0;top:62px;}
+
+    body.mobile-performance #bottomDock{
+      width:min(52vw,430px);max-width:52vw;bottom:calc(var(--phone-bottom) + 2px);padding:4px 5px;gap:3px;
+    }
+    body.mobile-performance #resourceStrip{gap:3px;}
+    body.mobile-performance .dock-res{font-size:8px;padding:1px 4px;}
+    body.mobile-performance .slot{flex-basis:40px;width:40px;height:40px;}
+    body.mobile-performance .slot .ico{width:20px;height:20px;}
+
+    body.mobile-performance .joy-base{
+      left:calc(var(--phone-left) + 4px);bottom:calc(var(--phone-bottom) + 5px);width:92px;height:92px;
+    }
+    body.mobile-performance .joy-knob{width:40px;height:40px;}
+    body.mobile-performance #chatToggle{
+      left:calc(var(--phone-left) + 104px);bottom:calc(var(--phone-bottom) + 10px);padding:5px 8px;
+    }
+    body.mobile-performance #chatBox{
+      left:calc(var(--phone-left) + 103px);bottom:calc(var(--phone-bottom) + 42px);width:min(250px,35vw);
+    }
+
+    body.mobile-performance #mAttack{
+      width:60px;height:60px;right:calc(var(--phone-right) + 6px);bottom:calc(var(--phone-bottom) + 8px);
+    }
+    body.mobile-performance #mShoot{
+      width:50px;height:50px;right:calc(var(--phone-right) + 71px);bottom:calc(var(--phone-bottom) + 13px);
+    }
+    body.mobile-performance #mCraft{
+      width:44px;height:44px;right:calc(var(--phone-right) + 13px);bottom:calc(var(--phone-bottom) + 72px);
+    }
+    body.mobile-performance #tameBtn{bottom:calc(var(--phone-bottom) + 58px);width:43px;height:43px;}
+  }
+
   #intro{display:none;}
 
   /* ---------- 329 home/shop/pet-card progression polish ---------- */
