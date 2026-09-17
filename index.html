@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cube Survival</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="bootLoadingScreen" role="status" aria-live="polite">
+  <div class="boot-loader-card">
+    <div class="boot-loader-mark">
+      <span class="boot-loader-cube"></span>
+      <span class="boot-loader-paw">🐾</span>
+    </div>
+    <div class="boot-loader-title">Cube Survival</div>
+    <div class="boot-loader-status" id="bootLoadingStatus">Preparing the world…</div>
+    <div class="boot-loader-track"><div class="boot-loader-fill" id="bootLoadingFill"></div></div>
+  </div>
+</div>
+<canvas id="game"></canvas>
+<div id="homeWorldBackgroundFx" aria-hidden="true"></div>
+
+<div id="hud" style="display:none;">
+
+  <div id="playerLeaderboard" aria-label="Player leaderboard">
+    <div class="leaderboard-head">
+      <span>Players</span><span style="text-align:right">Kills</span><span style="text-align:right">Gold</span>
+    </div>
+    <div id="leaderboardRows"><div class="leaderboard-empty">Offline</div></div>
+  </div>
+
+  <div id="topleft" class="hud-panel">
+    <div class="health-row">
+      <span class="health-label">Health</span>
+      <div class="bar-track"><div class="bar-fill" id="healthFill" style="width:100%"></div></div>
+    </div>
+    <div class="res-row"><span>Wood</span><span class="w" id="resWood">0</span></div>
+    <div class="res-row"><span>Stone</span><span class="s" id="resStone">0</span></div>
+    <div class="res-row"><span>Gold</span><span class="g" id="resGold">0</span></div>
+    <div class="res-row"><span>Gold Cubits</span><span class="sv" id="resServs">0</span></div>
+    <div class="res-row"><span>Berries</span><span style="color:#f283a6" id="resBerries">0</span></div>
+  </div>
+
+  <div id="minimapWrap"><canvas id="minimap" width="140" height="140"></canvas></div>
+
+  <div id="timeBanner">Day</div>
+
+  <div id="petCards"></div>
+
+  <button id="invBtn">Inventory (E)</button>
+  <button id="craftBtn">Craft (C)</button>
+  <button id="runShopBtn">Shop (P)</button>
+
+  <button id="chatToggle" type="button" title="Open chat (Enter)">Chat</button>
+  <div id="chatBox" aria-label="Game chat">
+    <div id="chatLog" aria-live="polite"></div>
+    <input id="chatInput" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="Message players…" aria-label="Chat message">
+    <div id="chatHint">Enter to send • Esc to close • no links or bad words</div>
+  </div>
+
+  <button id="tameBtn" title="Tame sleeping baby">
+    <svg viewBox="0 0 32 32" fill="none">
+      <!-- bone -->
+      <path d="M8 12c-2 0-3.5 1.5-3.5 3.5S6 19 8 19c.5 0 1-.1 1.4-.3l13.2 0c.4.2.9.3 1.4.3 2 0 3.5-1.5 3.5-3.5S26 12 24 12c-.5 0-1 .1-1.4.3H9.4C9 12.1 8.5 12 8 12z" fill="#f5e6d0" stroke="#5c3a22" stroke-width="1.2"/>
+      <circle cx="7" cy="13.5" r="3.2" fill="#f5e6d0" stroke="#5c3a22" stroke-width="1.2"/>
+      <circle cx="7" cy="17.5" r="3.2" fill="#f5e6d0" stroke="#5c3a22" stroke-width="1.2"/>
+      <circle cx="25" cy="13.5" r="3.2" fill="#f5e6d0" stroke="#5c3a22" stroke-width="1.2"/>
+      <circle cx="25" cy="17.5" r="3.2" fill="#f5e6d0" stroke="#5c3a22" stroke-width="1.2"/>
+    </svg>
+  </button>
+  <div id="bottomDock">
+    <div id="resourceStrip">
+      <div class="dock-res wood"><span class="ico">🪵</span><span class="val" id="dockWood">0</span></div>
+      <div class="dock-res stone"><span class="ico">🪨</span><span class="val" id="dockStone">0</span></div>
+      <div class="dock-res gold"><span class="ico">🟡</span><span class="val" id="dockGold">0</span></div>
+      <div class="dock-res servs" title="Gold Cubits"><span class="cubit-token"></span><span class="val" id="dockServs">0</span></div>
+      <div class="dock-res berries"><span class="ico">🍓</span><span class="val" id="dockBerries">0</span></div>
+    </div>
+    <div id="hotbar"></div>
+  </div>
+  <div id="banner"></div>
+</div>
+
+<div id="lootPopup">
+  <div class="loot-card">
+    <div class="loot-shine"></div>
+    <div class="loot-icon-wrap"><div class="loot-icon" id="lootIcon"></div></div>
+    <h2 class="loot-title" id="lootTitle">Chest Opened!</h2>
+    <p class="loot-sub" id="lootSub">Treasure found</p>
+    <div class="loot-lines" id="lootLines"></div>
+    <button class="btn" id="closeLootPopup" type="button">Nice</button>
+  </div>
+</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>You died</h1>
+    <p class="lead">You died.</p>
+    <div class="stat-grid">
+      <div id="finalTime">0:00<span>survived</span></div>
+      <div id="finalKills">0<span>kills</span></div>
+      <div id="finalWave">1<span>wave</span></div>
+    </div>
+    <p style="font-size:13px;opacity:0.75;">Earned <span class="cubit-token"></span> <b id="finalServs" style="color:#f4c65f;">0</b> Gold Cubits</p>
+    <button class="btn" id="restartBtn">Try again</button>
+    <button class="btn secondary" id="homeBtn">Home</button>
+  </div>
+</div>
+
+<div id="craftOverlay">
+  <div class="card">
+    <button class="btn secondary modal-close" id="closeCraft">Close (C)</button>
+    <h1 class="modal-title-clear">Crafting</h1>
+    <p class="lead">Build tools, walls, towers & gear for your pets.</p>
+    <div class="craft-list" id="craftList"></div>
+  </div>
+</div>
+
+<div id="invOverlay">
+  <div class="card">
+    <button class="btn secondary modal-close" id="closeInv">Close (E)</button>
+    <h1 class="modal-title-clear">Inventory</h1>
+    <p class="lead">Resources and run-shop gear. Click bought gear here to equip it.</p>
+    <div class="inv-grid" id="invGrid"></div>
+  </div>
+</div>
+
+<div id="runShopOverlay">
+  <div class="card">
+    <button class="btn secondary modal-close" id="closeRunShop">Close (P)</button>
+    <div class="run-shop-head modal-title-clear">
+      <div style="text-align:left"><div class="home-section-label">This Run Only</div><h1 style="margin:2px 0">Gold Gear Shop</h1></div>
+      <div class="run-shop-gold">🟡 <span id="runShopGold">0</span></div>
+    </div>
+    <p class="lead">Buy and equip one Hat, one Cape, and one Armor. Everything here resets when you start a new run.</p>
+    <div class="run-shop-grid" id="runShopGrid"></div>
+  </div>
+</div>
+
+<div id="playerDesignOverlay">
+  <div class="card game-scroll player-design-card">
+    <button class="btn secondary modal-close" id="closePlayerDesign">Close</button>
+    <div class="modal-title-clear">
+      <div class="home-section-label">Your Cube</div>
+      <h1>Player Design</h1>
+      <p class="lead">Choose how your cube looks. More player designs can live here later.</p>
+    </div>
+
+    <div class="player-design-preview-wrap player-design-preview-only">
+      <canvas id="homePreview" width="96" height="96" title="Your cube"></canvas>
+      <div class="player-design-preview-copy">
+        <div class="player-design-label">Current Look</div>
+        <div class="player-design-preview-title">Your Cube</div>
+        <div class="player-design-preview-sub">Pick a color below. More designs can be added here later.</div>
+      </div>
+    </div>
+
+    <div class="player-design-section">
+      <div class="player-design-label">Cube Color</div>
+      <div class="color-swatches player-design-colors" id="colorSwatches"></div>
+    </div>
+  </div>
+</div>
+
+<div id="homeThemeOverlay">
+  <div class="card game-scroll">
+    <button class="btn secondary modal-close" id="closeHomeThemes">Close</button>
+    <div class="modal-title-clear">
+      <div class="home-section-label">Personalize</div>
+      <h1>Home Themes</h1>
+      <p class="lead">Pick the color style you want for the Cube Survival home screen. Your choice saves automatically.</p>
+      <label class="theme-effects-toggle" for="homeThemeEffectsToggle">
+        <span class="theme-effects-toggle-copy">
+          <b>Theme Effects</b>
+          <small>Bigger particles plus lightning, rain, glitch, slime, wind, vines and more</small>
+        </span>
+        <span class="theme-effects-switch">
+          <input type="checkbox" id="homeThemeEffectsToggle" checked>
+          <span class="theme-effects-track"><span class="theme-effects-knob"></span></span>
+          <strong id="homeThemeEffectsState">On</strong>
+        </span>
+      </label>
+      <label class="theme-effects-toggle background-effects-toggle" for="homeBackgroundEffectsToggle">
+        <span class="theme-effects-toggle-copy">
+          <b>Background Effects</b>
+          <small>Changes the live world behind the Home screen to match the selected theme</small>
+        </span>
+        <span class="theme-effects-switch">
+          <input type="checkbox" id="homeBackgroundEffectsToggle" checked>
+          <span class="theme-effects-track"><span class="theme-effects-knob"></span></span>
+          <strong id="homeBackgroundEffectsState">On</strong>
+        </span>
+      </label>
+    </div>
+    <div class="theme-picker-grid" id="homeThemeGrid"></div>
+  </div>
+</div>
+
+<div id="starterShopOverlay">
+  <div class="card game-scroll">
+    <button class="btn secondary modal-close" id="closeStarterShop">Close</button>
+    <div class="shop-overlay-top modal-title-clear">
+      <div>
+        <div class="home-section-label">Loadout</div>
+        <h1>Shop</h1>
+      </div>
+      <div class="shop-overlay-cubits" title="Gold Cubits">
+        <span class="cubit-token"></span>
+        <span id="starterShopServs">0</span>
+      </div>
+    </div>
+    <p class="lead">Starter gear and supplies. This screen is ready to grow as more shop items are added.</p>
+    <div class="shop-grid" id="shopGrid"></div>
+  </div>
+</div>
+
+<div id="petShopOverlay">
+  <div class="card game-scroll">
+    <button class="btn secondary modal-close" id="closePetShop">Close</button>
+    <h1 class="modal-title-clear">Pets</h1>
+    <p class="lead">Every pet lives here — including Dog, Cat, and Bearded Dragon. Unlock pets, choose a starter, or open its cards and upgrades.</p>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;opacity:0.82;margin-bottom:8px;">
+      <span>Your Gold Cubits: <span class="cubit-token"></span> <b id="petShopServs" style="color:#f4c65f">0</b></span>
+      <button class="pet-shop-action cards" id="petShopCardsBtn" type="button" style="flex:0 0 auto;padding:0 14px;">Pet Cards &amp; Upgrades</button>
+    </div>
+    <div class="pet-shop-grid" id="petShopGrid"></div>
+  </div>
+</div>
+
+<div id="cardInventoryOverlay">
+  <div class="card game-scroll">
+    <button class="btn secondary modal-close" id="closeCardInventory">Close</button>
+    <h1 class="modal-title-clear">Pet Cards &amp; Upgrades</h1>
+    <p class="lead" id="cardInventoryLead">Click a pet to open its upgrade page. Spend that species' cards on stats or its permanent starting stage.</p>
+    <div class="card-inventory-list" id="cardInventoryList"></div>
+    <div class="pet-upgrade-page" id="petUpgradePage">
+      <button class="btn secondary pet-upgrade-back" id="petUpgradeBack" type="button">← All Pets</button>
+      <div id="petUpgradePageContent"></div>
+    </div>
+  </div>
+</div>
+
+<div id="chooseStarterPetOverlay">
+  <div class="card game-scroll">
+    <button class="btn secondary modal-close" id="closeChooseStarterPet">Close</button>
+    <div class="shop-overlay-top modal-title-clear">
+      <div>
+        <div class="home-section-label">Starter Companion</div>
+        <h1>Choose a Pet</h1>
+      </div>
+    </div>
+    <p class="lead">Pick one pet you own to start with, or choose None.</p>
+    <div class="owned-starter-grid" id="ownedStarterPetList"></div>
+  </div>
+</div>
+
+<div id="renamePetOverlay" aria-hidden="true">
+  <div class="rename-card" role="dialog" aria-modal="true" aria-labelledby="renamePetTitle">
+    <h2 id="renamePetTitle">Name Your Pet</h2>
+    <div class="rename-species" id="renamePetSpecies">Pet</div>
+    <input id="renamePetInput" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Type a pet name">
+    <div class="rename-actions">
+      <button class="btn" id="savePetName" type="button">Save Name</button>
+      <button class="btn secondary" id="cancelPetName" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div id="home">
+  <div id="homeThemeFx" aria-hidden="true"></div>
+  <div class="home-shell">
+    <div class="home-topbar">
+      <div class="home-logo-wrap">
+        <div class="home-logo-badge">🐾</div>
+        <div class="home-logo-text">
+          <div class="kicker">Live World</div>
+          <div class="title">Cube Survival</div>
+          <div class="tag">Pick your setup and jump in.</div>
+        </div>
+      </div>
+      <div class="home-top-actions">
+        <div class="home-cubits-pill" title="Gold Cubits">
+          <span class="cubit-token"></span>
+          <div>
+            <div class="label">Gold Cubits</div>
+            <b id="homeServs">0</b>
+          </div>
+        </div>
+        <button type="button" id="homeCardsBtn">Pet Cards</button>
+        <button type="button" id="otherPetsBtn">Pets</button>
+        <button type="button" id="homeThemesBtn">Themes</button>
+      </div>
+    </div>
+
+    <div class="home-card">
+      <div class="home-hero">
+        <div class="home-main-panel">
+          <h1>Cube Survival</h1>
+          <p class="sub">Choose your look, shop, and start when you want.</p>
+
+          <div class="home-name-row">
+            <span class="home-field-label">Player Name</span>
+            <input type="text" id="username" placeholder="Username" maxlength="14" value="Cube">
+            <button class="btn" id="choosePlayerDesignBtn" type="button">Character Design</button>
+          </div>
+
+          <div class="home-start-row">
+            <button class="btn" id="playBtn">Play</button>
+            <button class="btn" id="chooseStarterPetBtn" type="button">Choose a Pet</button>
+          </div>
+          <div id="selectedStarterPet"></div>
+          <div id="dailyServsHint" class="home-inline-note"></div>
+
+          <div class="online-panel">
+            <button type="button" class="online-mode-btn selected" id="offlineModeBtn">Offline</button>
+            <button type="button" class="online-mode-btn" id="onlineModeBtn">Online</button>
+            <input type="text" id="serverUrl" value="ws://localhost:2567" placeholder="Saved automatically" spellcheck="false" aria-label="Multiplayer server address" title="Saved automatically after you connect once">
+            <span id="netStatus">Offline</span>
+          </div>
+
+          <div class="mobile-toggle">
+            <label><input type="checkbox" id="mobileMode"> Mobile controls</label>
+          </div>
+        </div>
+
+        <div class="home-side-panel home-shop-launcher">
+          <button id="openStarterShop" type="button">
+            <span class="shop-launch-kicker">Loadout &amp; Supplies</span>
+            <span class="shop-launch-title">Shop</span>
+            <span class="shop-launch-sub">Open the full shop. More items can be added here later without cramming the home screen.</span>
+            <span class="shop-launch-arrow">→</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div id="mobileControls">
+  <div class="joy-base" id="joyBase"><div class="joy-knob" id="joyKnob"></div></div>
+  <div class="m-btn" id="mAttack">ATK</div>
+  <div class="m-btn" id="mShoot">BOW</div>
+  <div class="m-btn" id="mCraft">C</div>
+</div>
+
+<script src="https://unpkg.com/colyseus.js@0.16.22/dist/colyseus.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
