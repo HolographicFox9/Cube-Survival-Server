@@ -703,8 +703,7 @@ SERVER 416 / GAME 444:
 - Client world-state reads now match the server's 10 Hz patch rate.
 
 
-SERVER 417 / GAME 445:
-- Multiplayer animal/pet animation phase speed now has its own smooth rate governor and hard cap.
-- Sudden network movement-speed spikes can no longer cause hyper-fast tail whipping.
-- Head rotation/nod/lift made more noticeable on segmented animals, deer, and generic uploaded animals.
-- Viper head movement slightly increased while preserving its already-smooth tail/body motion.
+SERVER 418 / GAME 446:
+- Rebuilt from known-good Game 444 after Game 445 load regression.
+- Tail speed uses simpler capped/smoothed movement ratio with no new runtime animation-rate state.
+- Head movement remains more noticeable across segmented animals, deer, generic animals, and Viper.

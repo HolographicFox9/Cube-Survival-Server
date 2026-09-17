@@ -6721,19 +6721,12 @@ function updateNetworkAnimalInterpolation(dt) {
     da = Math.atan2(Math.sin(da), Math.cos(da));
     a.angle = fromA + da * t;
 
-    const measuredRatio = Math.max(0, Math.min(1.35, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
+    const measuredRatio = Math.max(0, Math.min(1.15, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
     const oldAnimRatio = Number(a._netAnimMoveRatio) || 0;
-    const animFollow = 1 - Math.exp(-3.0 * dt);
+    const animFollow = 1 - Math.exp(-2.6 * dt);
     a._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
-
-    // Smooth animation speed independently from movement speed. This prevents
-    // one network velocity spike from making the tail suddenly whip backward.
-    const targetAnimRate = Math.min(5.4, 1.35 + a._netAnimMoveRatio * 3.1);
-    const oldAnimRate = Number(a._netAnimRate) || targetAnimRate;
-    const maxRateStep = 2.0 * dt; // rad/s change per frame, intentionally gentle
-    const rateDelta = Math.max(-maxRateStep, Math.min(maxRateStep, targetAnimRate - oldAnimRate));
-    a._netAnimRate = oldAnimRate + rateDelta;
-    a._netAnimPhase = (Number(a._netAnimPhase) || Number(a.tailPhase) || 0) + dt * a._netAnimRate;
+    a._netAnimPhase = (Number(a._netAnimPhase) || Number(a.tailPhase) || 0) +
+      dt * (1.35 + Math.min(1, a._netAnimMoveRatio) * 2.9);
     a.tailPhase = a._netAnimPhase;
 
     const renderSpeed = Math.hypot(a._renderVX, a._renderVY);
@@ -6794,17 +6787,12 @@ function updateNetworkPetInterpolation(dt) {
 
     // Local continuous pet animation instead of server snapshot phase.
     const renderSpeed = Math.hypot(p._renderVX, p._renderVY);
-    const measuredRatio = Math.max(0, Math.min(1.35, renderSpeed / Math.max(1, p.speed || 1)));
+    const measuredRatio = Math.max(0, Math.min(1.15, renderSpeed / Math.max(1, p.speed || 1)));
     const oldAnimRatio = Number(p._netAnimMoveRatio) || 0;
-    const animFollow = 1 - Math.exp(-3.2 * dt);
+    const animFollow = 1 - Math.exp(-2.8 * dt);
     p._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
-
-    const targetAnimRate = Math.min(5.6, 1.4 + p._netAnimMoveRatio * 3.15);
-    const oldAnimRate = Number(p._netAnimRate) || targetAnimRate;
-    const maxRateStep = 2.1 * dt;
-    const rateDelta = Math.max(-maxRateStep, Math.min(maxRateStep, targetAnimRate - oldAnimRate));
-    p._netAnimRate = oldAnimRate + rateDelta;
-    p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) + dt * p._netAnimRate;
+    p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) +
+      dt * (1.4 + Math.min(1, p._netAnimMoveRatio) * 3.0);
     p.tailPhase = p._netAnimPhase;
 
     const oldVisual = Number(p._visualMoveSpeed) || 0;
@@ -8288,11 +8276,11 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
     ? a._netAnimPhase * 0.72 + 0.8
     : motionTime * headFrequency + (a.x || 0) * 0.009 + (a.tailPhase || 0) * 0.30;
   const headTurn = Math.sin(headPhase) *
-    (tunedMeta.headRotAmp ?? 0.09) * (a.sleeping ? 0.18 : (0.40 + moveRatio * 0.72));
+    (tunedMeta.headRotAmp ?? 0.09) * (a.sleeping ? 0.16 : (0.38 + moveRatio * 0.68));
   const headNod = Math.cos(headPhase * 0.82 + 0.45) *
-    r * (a.sleeping ? 0.007 : (0.016 + moveRatio * 0.022));
+    r * (a.sleeping ? 0.006 : (0.015 + moveRatio * 0.020));
   const headLift = Math.sin(headPhase * 0.92 + 0.8) *
-    r * (a.sleeping ? 0.006 : (0.010 + moveRatio * 0.015));
+    r * (a.sleeping ? 0.005 : (0.009 + moveRatio * 0.014));
   const headAngle = headTurn + bite * (tunedMeta.headRotAmp ?? 0.07) * 0.95;
   const headTx = bite * (tunedMeta.headPush ?? 0.18) * r;
   const headTy = headNod - headLift;
@@ -8725,9 +8713,9 @@ function drawReassembledDeerPartsSkin(a, stage, sleeping) {
   const tailLift = Math.cos(deerPhase * 0.72 + 0.4) *
     r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.008));
   const headAngle = Math.sin(deerPhase * 0.58 + 0.8) *
-    (a.sleeping ? 0.045 : (0.105 + moveRatio * 0.17));
+    (a.sleeping ? 0.04 : (0.10 + moveRatio * 0.16));
   const headBob = Math.cos(deerPhase * 0.49 + 0.35) *
-    r * (a.sleeping ? 0.0045 : (0.013 + moveRatio * 0.017));
+    r * (a.sleeping ? 0.004 : (0.012 + moveRatio * 0.016));
   // The separated pieces are now reference-aligned at their zero-motion pose,
   // so do not apply a permanent horizontal correction to the head.
   const headPush = 0;
@@ -9224,8 +9212,8 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
 
   const wobble = Math.sin(phase * 0.82 + 0.8);
   const headSide = wobble * bodyH * 0.055 * motion;
-  const headRot = wobble * 0.245 * motion;
-  const headBob = Math.sin(phase * 0.52 + 1.4) * bodyH * 0.026 * motion;
+  const headRot = wobble * 0.235 * motion;
+  const headBob = Math.sin(phase * 0.52 + 1.4) * bodyH * 0.024 * motion;
 
   const headRestX = left + bodyW - overlap + totalW * Number(layout.headOffsetX || 0);
   const headRestY = headTopBase + totalH * Number(layout.headOffsetY || 0);
@@ -9574,13 +9562,13 @@ function drawUploadedAnimalSkin(a) {
     Math.sin((net.room && Number.isFinite(a._netAnimPhase))
       ? a._netAnimPhase * 0.66 + 0.7
       : motionTime * headFrequency + (a.x || 0) * 0.007) *
-    (0.050 + speedRatio * 0.125);
+    (0.048 + speedRatio * 0.120);
 
   const strongerHeadBob = a.sleeping ? 0 :
     Math.sin((net.room && Number.isFinite(a._netAnimPhase))
       ? a._netAnimPhase * 0.84 + 0.35
       : motionTime * headFrequency * 1.28 + (a.y || 0) * 0.006) *
-    drawH * (0.016 + speedRatio * 0.026);
+    drawH * (0.015 + speedRatio * 0.025);
 
   // ---- Layer 1: copied tail UNDER the body ----
   ctx.save();
