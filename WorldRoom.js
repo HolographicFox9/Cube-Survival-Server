@@ -2169,7 +2169,22 @@ export class WorldRoom extends Room {
           const dirY=ml>.05?(owner.moveY||0)/ml:Math.sin(owner.angle||0);
           const desiredX=owner.x-dirX*back-dirY*side;
           const desiredY=owner.y-dirY*back+dirX*side;
-          const safe=this.safePetFollowPoint(p,desiredX,desiredY);
+
+          // Safe follow-point scans walk nearby solids and walls. Recompute at
+          // ~11 Hz per moving pet instead of every 20 Hz simulation tick; the
+          // formation target is smoothed between scans, so movement stays fluid
+          // without creating a server CPU spike whenever a player holds WASD.
+          if(!Number.isFinite(p.followSafeX)||!Number.isFinite(p.followSafeY)||
+             !Number.isFinite(p.followSafeAt)||this.state.worldTime>=p.followSafeAt){
+            const safe=this.safePetFollowPoint(p,desiredX,desiredY);
+            p.followSafeX=safe.x;p.followSafeY=safe.y;
+            p.followSafeAt=this.state.worldTime+.09;
+          }else{
+            const drift=Math.min(1,dt*8);
+            p.followSafeX+=(desiredX-p.followSafeX)*drift;
+            p.followSafeY+=(desiredY-p.followSafeY)*drift;
+          }
+          const safe={x:p.followSafeX,y:p.followSafeY};
           const tf=1-Math.exp(-6.2*dt);
           p.followTargetX=Number.isFinite(p.followTargetX)?p.followTargetX+(safe.x-p.followTargetX)*tf:safe.x;
           p.followTargetY=Number.isFinite(p.followTargetY)?p.followTargetY+(safe.y-p.followTargetY)*tf:safe.y;
@@ -2181,7 +2196,7 @@ export class WorldRoom extends Room {
             const speedMul=clamp(.24+dd/Math.max(62,trail*.78),.24,1.58);
             p.x+=Math.cos(p.angle)*p.speed*speedMul*dt;
             p.y+=Math.sin(p.angle)*p.speed*speedMul*dt;
-            this.resolveStatic(p,p.r*.72);
+            // Static collision is resolved once at the end of this pet update.
           }
         }else{
           // While the owner stands still, pets wander naturally nearby.

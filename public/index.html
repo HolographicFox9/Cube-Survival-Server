@@ -2011,6 +2011,20 @@
     to{transform:scale(1.008)}
   }
 
+  @keyframes homeWorldHologramScan{
+    0%{background-position:center 0,0 0,center center; opacity:calc(var(--home-bg-overlay-opacity,.28) * .82)}
+    50%{background-position:center 18px,0 36px,center center; opacity:var(--home-bg-overlay-opacity,.28)}
+    100%{background-position:center 36px,0 72px,center center; opacity:calc(var(--home-bg-overlay-opacity,.28) * .9)}
+  }
+
+  @keyframes homeWorldHologramWorld{
+    0%,100%{transform:scale(1.006);filter:var(--home-bg-filter,none)}
+    35%{transform:scale(1.010) translateY(-.15%);filter:var(--home-bg-filter,none) brightness(1.05)}
+    36%{transform:scale(1.010) translateX(.12%);filter:var(--home-bg-filter,none) brightness(1.08)}
+    37%{transform:scale(1.010);filter:var(--home-bg-filter,none)}
+    70%{transform:scale(1.013);filter:var(--home-bg-filter,none) brightness(1.04)}
+  }
+
   @keyframes homeWorldOverlayBreathe{
     from{transform:scale(1);background-position:center center}
     to{transform:scale(1.015);background-position:52% 48%}
@@ -2522,6 +2536,74 @@
     display:none;
   }
 
+  #home.theme-hologram .home-topbar{
+    background:linear-gradient(180deg,rgba(12,28,45,.88),rgba(7,18,30,.72)) !important;
+    box-shadow:
+      0 0 0 1px rgba(113,232,255,.12),
+      inset 0 0 0 1px rgba(184,245,255,.05),
+      0 14px 30px rgba(0,0,0,.34) !important;
+    backdrop-filter:blur(10px) saturate(1.08);
+  }
+
+  #home.theme-hologram .home-logo-text .title,
+  #home.theme-hologram h1,
+  #home.theme-hologram .home-section-label,
+  #home.theme-hologram #homeThemeOverlay h1{
+    color:#E8FBFF !important;
+    text-shadow:
+      0 0 8px rgba(113,232,255,.55),
+      0 0 18px rgba(52,163,255,.36),
+      -1px 0 rgba(184,245,255,.30),
+      1px 0 rgba(46,186,217,.28) !important;
+    animation:hologramTextStutter 6.6s steps(1,end) infinite, hologramTextGlow 3.4s ease-in-out infinite alternate;
+  }
+
+  #home.theme-hologram .home-logo-text .kicker,
+  #home.theme-hologram .home-logo-text .tag,
+  #home.theme-hologram .lead,
+  #home.theme-hologram .online-panel .hint,
+  #home.theme-hologram .theme-effects-toggle-copy small{
+    color:#CFF7FF !important;
+    text-shadow:0 0 8px rgba(113,232,255,.28);
+    animation:hologramSoftFlicker 5.8s steps(1,end) infinite;
+  }
+
+  #home.theme-hologram #playBtn,
+  #home.theme-hologram #chooseStarterPetBtn,
+  #home.theme-hologram #choosePlayerDesignBtn,
+  #home.theme-hologram #homeCardsBtn,
+  #home.theme-hologram #otherPetsBtn,
+  #home.theme-hologram #homeThemesBtn{
+    color:#EAFDFF !important;
+    background:
+      linear-gradient(180deg,rgba(18,49,73,.92),rgba(10,28,43,.82)) !important;
+    border-color:rgba(113,232,255,.34) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(184,245,255,.08),
+      0 0 16px rgba(46,186,217,.18),
+      0 8px 18px rgba(0,0,0,.28) !important;
+  }
+
+  #home.theme-hologram #playBtn{
+    background:linear-gradient(180deg,#B8F5FF,#71E8FF 55%,#2EBAD9) !important;
+    color:#082132 !important;
+    text-shadow:none !important;
+  }
+
+  #home.theme-hologram #username,
+  #home.theme-hologram .online-panel,
+  #home.theme-hologram .online-mode-btn,
+  #home.theme-hologram #openStarterShop,
+  #home.theme-hologram #homeThemeOverlay .card{
+    background:
+      linear-gradient(180deg,rgba(10,25,39,.92),rgba(7,20,31,.86)),
+      repeating-linear-gradient(0deg,rgba(255,255,255,.03) 0 1px,transparent 1px 6px) !important;
+    border-color:rgba(113,232,255,.18) !important;
+    box-shadow:
+      inset 0 0 0 1px rgba(184,245,255,.04),
+      0 12px 24px rgba(0,0,0,.28) !important;
+  }
+
   .fx-glitch-scanlines{
     inset:0;
     opacity:.26;
@@ -2599,6 +2681,28 @@
 
   @keyframes glitchScanMove{
     to{background-position:0 24px;}
+  }
+
+  @keyframes hologramTextStutter{
+    0%,82%,100%{transform:translate(0,0);opacity:1}
+    83%{transform:translate(-1px,0);opacity:.92}
+    84%{transform:translate(1px,0);opacity:.86}
+    85%{transform:translate(0,0);opacity:1}
+    93%{transform:translate(0,1px);opacity:.96}
+    94%{transform:translate(0,0);opacity:1}
+  }
+
+  @keyframes hologramTextGlow{
+    from{text-shadow:0 0 8px rgba(113,232,255,.45),0 0 18px rgba(52,163,255,.28),-1px 0 rgba(184,245,255,.24),1px 0 rgba(46,186,217,.22)}
+    to{text-shadow:0 0 10px rgba(113,232,255,.70),0 0 24px rgba(52,163,255,.42),-1px 0 rgba(184,245,255,.34),1px 0 rgba(46,186,217,.30)}
+  }
+
+  @keyframes hologramSoftFlicker{
+    0%,88%,100%{opacity:1}
+    89%{opacity:.76}
+    90%{opacity:1}
+    96%{opacity:.88}
+    97%{opacity:1}
   }
 
   @keyframes glitchTearBurst{
@@ -3949,6 +4053,10 @@ function captureLastGoodFrame(force = false) {
   // GPU->canvas recovery copy while online; large canvas copies can stall the
   // main thread on some browsers/GPUs.
   if (net && net.room) return;
+  // Canvas readback can be surprisingly expensive on some GPUs. Never perform
+  // it while movement/camera motion is active; keep the most recent stationary
+  // recovery frame instead.
+  if (!force && typeof movementRecentlyActive === "function" && movementRecentlyActive(520)) return;
   const now = performance.now();
   if (!force && hasLastGoodFrame && now - lastGoodFrameCaptureAt < LAST_GOOD_FRAME_CAPTURE_MS) return;
   lastGoodFrameCaptureAt = now;
@@ -4459,6 +4567,86 @@ const HOME_THEMES = {
     primary:"#9BCB7A", primary2:"#72A154",
     secondary:"#79A7B0", secondary2:"#5B8088",
     accent:"#F0E6B2", text:"#F8F8EB", muted:"#CBD4BA", special:"#CFE89D"
+  },
+
+  lightningElement: {
+    name:"Lightning Element", desc:"Storm-black clouds, electric yellow and white-blue shock lines.",
+    bg:"#11161F", panel:"#1A2430", panel2:"#141C25",
+    primary:"#FFE45C", primary2:"#D0B12E",
+    secondary:"#6FA6FF", secondary2:"#456FBC",
+    accent:"#F5FBFF", text:"#F8FBFF", muted:"#B8C4D3", special:"#FFF29A"
+  },
+
+  powerElement: {
+    name:"Power Element", desc:"Deep crimson energy, dark iron shadow and savage saber-tooth power.",
+    bg:"#170B0D", panel:"#291317", panel2:"#200F12",
+    primary:"#D93A48", primary2:"#9E2331",
+    secondary:"#6A1E2A", secondary2:"#4A151F",
+    accent:"#FF8A7A", text:"#FFF0F0", muted:"#D8B8B8", special:"#FF5252"
+  },
+
+  viperwave: {
+    name:"Viperwave", desc:"Venom green, midnight purple and smooth neon serpent energy.",
+    bg:"#120F1F", panel:"#201A36", panel2:"#18142A",
+    primary:"#72F45C", primary2:"#42B636",
+    secondary:"#7754D8", secondary2:"#553CA0",
+    accent:"#D2FF7B", text:"#F7FFF5", muted:"#BFC8D7", special:"#8CFF61"
+  },
+
+  hologram: {
+    name:"Hologram", desc:"Cool blue hologram glass with cyan scanlines, projected-world glow and subtle digital shimmer.",
+    bg:"#07131D", panel:"#10273A", panel2:"#0B1E30",
+    primary:"#71E8FF", primary2:"#2EBAD9",
+    secondary:"#63A9FF", secondary2:"#3B78CE",
+    accent:"#B8F5FF", text:"#F3FCFF", muted:"#A9CDDA", special:"#9EFCFF"
+  },
+
+  hyperwave: {
+    name:"Hyperwave", desc:"Hot neon magenta, cyber violet and electric aqua in a high-energy arcade glow.",
+    bg:"#120B1F", panel:"#211438", panel2:"#190F2D",
+    primary:"#FF49C8", primary2:"#C12F96",
+    secondary:"#7C5CFF", secondary2:"#5640BD",
+    accent:"#57F7FF", text:"#FAF7FF", muted:"#CABEE3", special:"#A8FFF8"
+  },
+
+  rabbitMeadow: {
+    name:"Rabbit Meadow", desc:"Soft spring grass, peach flowers and cozy bunny-burrow warmth.",
+    bg:"#2A3526", panel:"#3F523A", panel2:"#32422E",
+    primary:"#F6B38D", primary2:"#D78664",
+    secondary:"#8CBF72", secondary2:"#688F54",
+    accent:"#FFE7C8", text:"#FFF9F1", muted:"#D9CFBF", special:"#FFC8D7"
+  },
+
+  deerGrove: {
+    name:"Deer Grove", desc:"Forest greens, antler tan and soft meadow light inspired by the deer.",
+    bg:"#243123", panel:"#344735", panel2:"#2A3A2A",
+    primary:"#C7A06A", primary2:"#9A764D",
+    secondary:"#6F9C68", secondary2:"#50744B",
+    accent:"#EAD9B0", text:"#FBF7EC", muted:"#CCC5B2", special:"#D6BE85"
+  },
+
+  owlNight: {
+    name:"Owl Night", desc:"Moonlit midnight blue, feather gray and calm horned-owl gold.",
+    bg:"#161C2B", panel:"#232D42", panel2:"#1B2435",
+    primary:"#D7BE78", primary2:"#AA9156",
+    secondary:"#7D8DAF", secondary2:"#5C6989",
+    accent:"#E7F0FF", text:"#F7F9FF", muted:"#C4CBDA", special:"#B9CBFF"
+  },
+
+  beardedDunes: {
+    name:"Bearded Dunes", desc:"Warm desert sand, sun-baked orange and lizard-scale olive tones.",
+    bg:"#31261A", panel:"#4A3929", panel2:"#3A2D21",
+    primary:"#E0A04F", primary2:"#B87434",
+    secondary:"#8B8B4A", secondary2:"#666634",
+    accent:"#F7D48A", text:"#FFF5E7", muted:"#D9C6A9", special:"#F0B968"
+  },
+
+  saberFang: {
+    name:"Saber Fang", desc:"Predator black, blood-red power and icy fang-white highlights.",
+    bg:"#120C0D", panel:"#211518", panel2:"#180F11",
+    primary:"#D64141", primary2:"#9E2B2B",
+    secondary:"#6E788D", secondary2:"#50596B",
+    accent:"#F1F6FF", text:"#FFF6F6", muted:"#CABFC2", special:"#FF9A72"
   }
 
 };
@@ -4518,7 +4706,17 @@ const HOME_THEME_EFFECTS = {
   sakuraBreeze:  {mode:"fall", count:28, glyphs:["🌸","✿","♡","✦"], colors:["#F3A6BD","#FFE3E9","#799B78"], special:"sakuraBreeze", size:[21,40]},
   lavenderDream: {mode:"float",count:24, glyphs:["☾","✦","☁","·"], colors:["#B7A0E8","#E8DEFF","#718AB7"], special:"lavenderDream", size:[20,38]},
   rainyWindow:   {mode:"fall", count:32, glyphs:["│","•","○","·"], colors:["#83AFC4","#C9DCE5","#526A79"], special:"rainyWindow", size:[14,28]},
-  quietMeadow:   {mode:"float",count:25, glyphs:["✦","🍃","•","❋"], colors:["#9BCB7A","#F0E6B2","#79A7B0"], special:"quietMeadow", size:[18,34]}
+  quietMeadow:   {mode:"float",count:25, glyphs:["✦","🍃","•","❋"], colors:["#9BCB7A","#F0E6B2","#79A7B0"], special:"quietMeadow", size:[18,34]},
+  lightningElement:{mode:"fall", count:34, glyphs:["⚡","│","✦","•"], colors:["#FFE45C","#F5FBFF","#6FA6FF"], special:"lightningStorm", size:[18,34]},
+  powerElement:    {mode:"pulse",count:26, glyphs:["✦","◆","▲","•"], colors:["#D93A48","#FF8A7A","#FF5252"], special:"dragonForge", size:[20,38]},
+  viperwave:       {mode:"drift",count:28, glyphs:["≈","✦","•","◆"], colors:["#72F45C","#7754D8","#D2FF7B"], special:"toxicReactor", size:[19,35]},
+  hologram:        {mode:"pulse",count:24, glyphs:["□","◆","✦","•"], colors:["#5BE9FF","#FF8EEA","#A8FBFF"], special:"chromeSweep", size:[18,34]},
+  hyperwave:       {mode:"pulse",count:28, glyphs:["✦","◆","▣","•"], colors:["#FF49C8","#57F7FF","#7C5CFF"], special:"neonGrid", size:[19,36]},
+  rabbitMeadow:    {mode:"float",count:24, glyphs:["♡","✦","•","✿"], colors:["#F6B38D","#FFE7C8","#FFC8D7"], special:"bunnyHop", size:[20,38]},
+  deerGrove:       {mode:"fall", count:24, glyphs:["🍃","✦","◆","•"], colors:["#C7A06A","#6F9C68","#EAD9B0"], special:"leafSway", size:[20,38]},
+  owlNight:        {mode:"float",count:24, glyphs:["☾","✦","·","•"], colors:["#D7BE78","#E7F0FF","#7D8DAF"], special:"moonOrb", size:[19,36]},
+  beardedDunes:    {mode:"drift",count:22, glyphs:["•","◆","✦","~"], colors:["#E0A04F","#F7D48A","#8B8B4A"], special:"dustGust", size:[18,34]},
+  saberFang:       {mode:"rise", count:28, glyphs:["▲","✦","◆","•"], colors:["#D64141","#F1F6FF","#FF9A72"], special:"bloodMoon", size:[19,36]}
 };
 
 const HOME_WORLD_BACKGROUND_EFFECTS = {
@@ -4775,6 +4973,56 @@ const HOME_WORLD_BACKGROUND_EFFECTS = {
     filter:"saturate(.92) contrast(.96) brightness(.96) sepia(.03)",
     overlay:"radial-gradient(circle at 76% 18%,rgba(240,230,178,.20),transparent 28%), radial-gradient(circle at 20% 76%,rgba(155,203,122,.14),transparent 34%)",
     opacity:.34, blend:"soft-light", overlayAnimation:"homeWorldMeadow 11s ease-in-out infinite alternate"
+  },
+  lightningElement: {
+    filter:"saturate(.86) contrast(1.20) brightness(.64) hue-rotate(4deg)",
+    overlay:"linear-gradient(180deg,rgba(245,251,255,.06),rgba(17,22,31,.34)), repeating-linear-gradient(112deg,transparent 0 34px,rgba(255,228,92,.10) 35px 38px,transparent 39px 72px)",
+    opacity:.46, blend:"screen"
+  },
+  powerElement: {
+    filter:"saturate(1.02) contrast(1.16) brightness(.62) sepia(.06)",
+    overlay:"radial-gradient(circle at 50% 112%,rgba(217,58,72,.28),rgba(255,82,82,.10) 36%,transparent 68%), radial-gradient(circle at 84% 16%,rgba(255,138,122,.12),transparent 24%)",
+    opacity:.44, blend:"screen"
+  },
+  viperwave: {
+    filter:"saturate(1.10) contrast(1.11) brightness(.70) hue-rotate(6deg)",
+    overlay:"radial-gradient(circle at 20% 74%,rgba(114,244,92,.18),transparent 26%), radial-gradient(circle at 82% 26%,rgba(119,84,216,.16),transparent 28%), repeating-linear-gradient(160deg,transparent 0 44px,rgba(210,255,123,.07) 45px 48px,transparent 49px 90px)",
+    opacity:.42, blend:"screen"
+  },
+  hologram: {
+    filter:"saturate(1.10) contrast(1.12) brightness(.74) hue-rotate(8deg)",
+    overlay:"linear-gradient(180deg,rgba(113,232,255,.14),transparent 26%,rgba(62,157,255,.10) 62%,transparent), repeating-linear-gradient(0deg,rgba(201,248,255,.08) 0 1px,transparent 1px 6px), radial-gradient(circle at 50% 112%,rgba(158,252,255,.16),transparent 42%)",
+    opacity:.44, blend:"screen", overlayAnimation:"homeWorldHologramScan 6.2s linear infinite", canvasAnimation:"homeWorldHologramWorld 7.8s ease-in-out infinite alternate"
+  },
+  hyperwave: {
+    filter:"saturate(1.18) contrast(1.16) brightness(.74) hue-rotate(10deg)",
+    overlay:"linear-gradient(180deg,rgba(255,73,200,.10),transparent 28%,rgba(87,247,255,.08) 65%,transparent), repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 9px), radial-gradient(circle at 50% 108%,rgba(124,92,255,.18),transparent 42%)",
+    opacity:.42, blend:"screen"
+  },
+  rabbitMeadow: {
+    filter:"saturate(.96) contrast(.98) brightness(.96) sepia(.04)",
+    overlay:"radial-gradient(circle at 18% 72%,rgba(246,179,141,.18),transparent 28%), radial-gradient(circle at 78% 24%,rgba(255,231,200,.18),transparent 30%), radial-gradient(circle at 52% 50%,rgba(140,191,114,.10),transparent 36%)",
+    opacity:.36, blend:"screen"
+  },
+  deerGrove: {
+    filter:"saturate(.98) contrast(1.02) brightness(.86) sepia(.07)",
+    overlay:"radial-gradient(circle at 18% 20%,rgba(111,156,104,.16),transparent 28%), radial-gradient(circle at 80% 74%,rgba(199,160,106,.16),transparent 30%), linear-gradient(180deg,transparent 0 60%,rgba(234,217,176,.08))",
+    opacity:.34, blend:"soft-light"
+  },
+  owlNight: {
+    filter:"saturate(.78) contrast(1.10) brightness(.62) hue-rotate(6deg)",
+    overlay:"radial-gradient(circle at 80% 18%,rgba(231,240,255,.26),transparent 16%), radial-gradient(circle at center,transparent 34%,rgba(22,28,43,.34) 86%)",
+    opacity:.42, blend:"screen"
+  },
+  beardedDunes: {
+    filter:"saturate(1.02) contrast(1.04) brightness(.88) sepia(.14)",
+    overlay:"linear-gradient(180deg,rgba(224,160,79,.10),transparent 44%,rgba(247,212,138,.16)), radial-gradient(circle at 84% 18%,rgba(139,139,74,.12),transparent 22%)",
+    opacity:.38, blend:"soft-light"
+  },
+  saberFang: {
+    filter:"saturate(.90) contrast(1.18) brightness(.60) hue-rotate(2deg)",
+    overlay:"radial-gradient(circle at 50% 108%,rgba(214,65,65,.26),rgba(255,154,114,.12) 34%,transparent 68%), radial-gradient(circle at 82% 16%,rgba(241,246,255,.12),transparent 20%)",
+    opacity:.44, blend:"screen"
   }
 };
 
@@ -5292,6 +5540,7 @@ function applyHomeTheme(themeId, save = false) {
   currentHomeTheme = HOME_THEMES[themeId] ? themeId : "forestGold";
   home.classList.add("home-themed");
   home.classList.toggle("theme-glitch", currentHomeTheme === "glitch");
+  home.classList.toggle("theme-hologram", currentHomeTheme === "hologram");
 
   const vars = {
     "--ht-bg": theme.bg,
@@ -5334,6 +5583,8 @@ function buildHomeThemeGrid() {
   const elementThemeOrder = [
     "fireElement",
     "waterElement",
+    "lightningElement",
+    "powerElement",
     "windElement",
     "plantElement",
     "stoneElement",
@@ -5341,10 +5592,10 @@ function buildHomeThemeGrid() {
     "soundElement"
   ];
 
-  const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush"];
-  const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk"];
-  const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse"];
-  const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow"];
+  const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow"];
+  const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave"];
+  const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang"];
+  const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes"];
   const featuredThemeIds = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
   const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !featuredThemeIds.includes(id));
   const themeOrder = [...featuredThemeIds, ...otherThemeOrder];
@@ -7384,6 +7635,7 @@ function disconnectMultiplayer() {
   setNetStatus(net.enabled ? "Ready" : "Offline");
 }
 
+let lastMovementInputAt = 0;
 function currentMoveVector() {
   let x = 0, y = 0;
   if (keys.has("a") || keys.has("arrowleft")) x -= 1;
@@ -7394,6 +7646,15 @@ function currentMoveVector() {
   const len = Math.hypot(x, y);
   if (len > 1) { x /= len; y /= len; }
   return { x, y };
+}
+function movementInputActive() {
+  const mv = currentMoveVector();
+  const active = Math.hypot(mv.x, mv.y) > 0.05;
+  if (active) lastMovementInputAt = performance.now();
+  return active;
+}
+function movementRecentlyActive(ms = 420) {
+  return movementInputActive() || performance.now() - lastMovementInputAt < ms;
 }
 
 function localMoveEscapingAnimal(a) {
@@ -7600,6 +7861,8 @@ function textEntryFocused() {
   return tag === "input" || tag === "textarea" || !!active.isContentEditable;
 }
 
+const GAME_MOVEMENT_KEYS = new Set(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright"]);
+
 window.addEventListener("keydown", e => {
   const ci = document.getElementById("chatInput");
   if (ci && document.activeElement === ci) {
@@ -7613,24 +7876,47 @@ window.addEventListener("keydown", e => {
   // Text fields (for example pet rename) also consume their own keystrokes.
   if (!gameplayKeyboardActive() || textEntryFocused()) return;
 
+  const k = e.key.toLowerCase();
+  const movementKey = GAME_MOVEMENT_KEYS.has(k);
+
+  // Arrow keys must never scroll the page while playing. Held movement keys only
+  // need their first keydown because `keys` remembers the held state; discarding
+  // browser auto-repeat prevents a repeat-event flood on slower devices.
+  if (movementKey) {
+    e.preventDefault();
+    if (!e.repeat) keys.add(k);
+    return;
+  }
+
   if (e.key === "Enter") {
     e.preventDefault();
     setChatOpen(true);
     return;
   }
 
+  // One-shot shortcuts should not fire over and over from keyboard auto-repeat.
+  if (e.repeat) return;
   if (["1","2","3","4","5","6","7","8","9","0"].includes(e.key)) handleHotkey(e.key);
-  if (e.key.toLowerCase() === "c") toggleCraft();
-  if (e.key.toLowerCase() === "e") toggleInv();
-  if (e.key.toLowerCase() === "t") tryTameNearby();
-  if (e.key.toLowerCase() === "g") commandPets();
-  if (e.key.toLowerCase() === "b") selectBerry();
-  if (e.key.toLowerCase() === "p") toggleRunShop();
+  if (k === "c") toggleCraft();
+  if (k === "e") toggleInv();
+  if (k === "t") tryTameNearby();
+  if (k === "g") commandPets();
+  if (k === "b") selectBerry();
+  if (k === "p") toggleRunShop();
 
-  // Movement / attack / ride keys are also recorded only during active gameplay.
-  keys.add(e.key.toLowerCase());
+  // Attack / ride keys are recorded only during active gameplay.
+  keys.add(k);
 });
-window.addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
+window.addEventListener("keyup", e => {
+  const k = e.key.toLowerCase();
+  if (GAME_MOVEMENT_KEYS.has(k) && gameplayKeyboardActive()) e.preventDefault();
+  keys.delete(k);
+});
+
+// Never keep a movement key stuck if the browser loses focus or the tab is hidden.
+function clearHeldKeyboardInput() { keys.clear(); }
+window.addEventListener("blur", clearHeldKeyboardInput);
+document.addEventListener("visibilitychange", () => { if (document.hidden) clearHeldKeyboardInput(); });
 canvas.addEventListener("mousemove", e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
 canvas.addEventListener("mousedown", e => {
   if (e.button === 0) mouse.down = true;
@@ -10097,38 +10383,57 @@ function queryStaticNearby(kind, x, y, range = 320) {
   return out;
 }
 
-// Rendering normally uses the fast spatial grid. If a camera enters a region
-// whose bucket data is unexpectedly empty/stale, fall back to the authoritative
-// world arrays for that frame and rebuild the grid. This prevents visual "dead
-// zones" where scenery exists but temporarily disappears.
+// Rendering uses the fast spatial grid. A full authoritative-array validation is
+// deliberately NEVER performed in the movement/render path: scanning thousands of
+// world objects while WASD is held was one source of long main-thread stalls.
+// Suspicious empty areas schedule an idle repair instead, and an expanded bucket
+// query keeps border objects visible immediately.
 let lastStaticRenderRepairAt = 0;
-function queryStaticForRender(kind, x, y, range = 320) {
-  let out = queryStaticNearby(kind, x, y, range);
+let staticRenderValidationPending = false;
+function scheduleStaticRenderValidation(kind, x, y, range) {
+  if (staticRenderValidationPending) return;
+  staticRenderValidationPending = true;
 
-  const source = kind === "resources" ? resources :
-                 kind === "gold" ? goldChunks :
-                 kind === "chests" ? chests : null;
-  if (!source || !source.length) return out;
-
-  // An entirely empty result in the interior of a populated world is suspicious.
-  // Validate against the real array only in that case, keeping normal frames fast.
-  if (out.length === 0) {
-    const r2 = range * range;
-    const fallback = [];
-    for (let i = 0; i < source.length; i++) {
-      const o = source[i];
-      if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.y)) continue;
-      const dx = o.x - x, dy = o.y - y;
-      if (dx * dx + dy * dy <= r2) fallback.push(o);
+  const validate = () => {
+    // Movement/rendering gets priority. Try again later instead of interrupting a walk.
+    if (typeof movementRecentlyActive === "function" && movementRecentlyActive(420)) {
+      staticRenderValidationPending = false;
+      setTimeout(() => scheduleStaticRenderValidation(kind, x, y, range), 180);
+      return;
     }
-    if (fallback.length) {
-      out = fallback;
+
+    const source = kind === "resources" ? resources :
+                   kind === "gold" ? goldChunks :
+                   kind === "chests" ? chests : null;
+    let found = false;
+    if (source && source.length) {
+      const r2 = range * range;
+      for (let i = 0; i < source.length; i++) {
+        const o = source[i];
+        if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.y)) continue;
+        const dx = o.x - x, dy = o.y - y;
+        if (dx * dx + dy * dy <= r2) { found = true; break; }
+      }
+    }
+    if (found) {
       const now = performance.now();
       if (now - lastStaticRenderRepairAt > 750) {
         lastStaticRenderRepairAt = now;
         rebuildStaticCollisionGrid();
       }
     }
+    staticRenderValidationPending = false;
+  };
+
+  if (typeof requestIdleCallback === "function") requestIdleCallback(validate, { timeout: 700 });
+  else setTimeout(validate, 180);
+}
+function queryStaticForRender(kind, x, y, range = 320) {
+  let out = queryStaticNearby(kind, x, y, range);
+  if (out.length === 0) {
+    // Cheap bucket-only expansion first. No whole-world scan on this frame.
+    out = queryStaticNearby(kind, x, y, range + STATIC_GRID_CELL * 1.5);
+    if (out.length === 0) scheduleStaticRenderValidation(kind, x, y, range);
   }
   return out;
 }
@@ -12101,26 +12406,66 @@ function updateTowers(dt) {
 }
 
 // ---------- resources / walls ----------
+let resourceBulkSyncAccum = 0;
+function syncResourceNetState(r) {
+  if (!r || !r.netState) return;
+  r.hp = Math.max(0, Number(r.netState.hp) || 0);
+  r.maxHp = Math.max(0.01, Number(r.netState.maxHp) || r.maxHp || 1);
+  r.alive = r.netState.alive !== false;
+}
+function syncGoldNetState(g) {
+  if (!g || !g.netState) return;
+  g.infinite = !!g.netState.infinite;
+  g.pure = !!g.netState.pure;
+  g.goldLeft = g.infinite ? Infinity : Math.max(0, Number(g.netState.goldLeft) || 0);
+}
 function updateResources(dt) {
-  for (const r of resources) {
-    if (r.pulse > 0) r.pulse -= dt * 4;
-    if (r.netState) {
-      r.hp = Math.max(0, Number(r.netState.hp) || 0);
-      r.maxHp = Math.max(0.01, Number(r.netState.maxHp) || r.maxHp || 1);
-      r.alive = r.netState.alive !== false;
-    } else if (!r.alive && game.time >= r.respawnAt) {
+  // Per-frame work is limited to the part of the world that can actually be seen
+  // or collided with. Previously all ~2,600 resources were touched every frame.
+  const nearRange = Math.hypot(W, H) * 0.72 + 360;
+  const cx = Number.isFinite(game.camX) ? game.camX + W * 0.5 : player.x;
+  const cy = Number.isFinite(game.camY) ? game.camY + H * 0.5 : player.y;
+
+  for (const r of queryStaticNearby("resources", cx, cy, nearRange)) {
+    if (!r) continue;
+    if (r.pulse > 0) r.pulse = Math.max(0, r.pulse - dt * 4);
+    syncResourceNetState(r);
+    if (!r.netState && !r.alive && game.time >= r.respawnAt) {
       r.alive = true; r.hp = r.maxHp; r.gatherCredit = 0;
     }
   }
-  for (const g of goldChunks) {
-    if (g.pulse > 0) g.pulse -= dt * 3;
-    if (g.netState) {
-      g.infinite = !!g.netState.infinite;
-      g.pure = !!g.netState.pure;
-      g.goldLeft = g.infinite ? Infinity : Math.max(0, Number(g.netState.goldLeft) || 0);
-    }
+  for (const g of queryStaticNearby("gold", cx, cy, nearRange)) {
+    if (!g) continue;
+    if (g.pulse > 0) g.pulse = Math.max(0, g.pulse - dt * 3);
+    syncGoldNetState(g);
   }
-  for (const c of chests) if (c.pulse > 0) c.pulse -= dt * 2.8;
+  for (const c of queryStaticNearby("chests", cx, cy, nearRange)) {
+    if (c && c.pulse > 0) c.pulse = Math.max(0, c.pulse - dt * 2.8);
+  }
+
+  // Distant network state / respawn bookkeeping does not need 60 Hz. A short
+  // bulk pass keeps the whole world correct without stealing movement frames.
+  resourceBulkSyncAccum += dt;
+  if (resourceBulkSyncAccum < 0.28) return;
+  const bulkDt = resourceBulkSyncAccum;
+  resourceBulkSyncAccum = 0;
+
+  for (const r of resources) {
+    if (!r) continue;
+    syncResourceNetState(r);
+    if (!r.netState && !r.alive && game.time >= r.respawnAt) {
+      r.alive = true; r.hp = r.maxHp; r.gatherCredit = 0;
+    }
+    if (r.pulse > 0 && !renderInView(r.x, r.y, 220)) r.pulse = Math.max(0, r.pulse - bulkDt * 4);
+  }
+  for (const g of goldChunks) {
+    if (!g) continue;
+    syncGoldNetState(g);
+    if (g.pulse > 0 && !renderInView(g.x, g.y, 180)) g.pulse = Math.max(0, g.pulse - bulkDt * 3);
+  }
+  for (const c of chests) {
+    if (c && c.pulse > 0 && !renderInView(c.x, c.y, 180)) c.pulse = Math.max(0, c.pulse - bulkDt * 2.8);
+  }
 }
 function updateWalls(dt) {
   for (const w of walls) {
@@ -13171,7 +13516,24 @@ function updateAnimals(dt) {
         const dirY = ml > 0.05 ? move.y / ml : Math.sin(player.angle || 0);
         const desiredX = player.x - dirX * back - dirY * side;
         const desiredY = player.y - dirY * back + dirX * side;
-        const safe = safePetFollowPoint(p, desiredX, desiredY);
+
+        // Obstacle-safe formation points are relatively expensive to calculate.
+        // Reuse one briefly instead of scanning resources/gold/chests twice for
+        // every pet on every single frame while WASD is held.
+        const followNow = performance.now();
+        if (!Number.isFinite(p._followSafeX) || !Number.isFinite(p._followSafeY) ||
+            !Number.isFinite(p._followSafeAt) || followNow >= p._followSafeAt) {
+          const safe = safePetFollowPoint(p, desiredX, desiredY);
+          p._followSafeX = safe.x;
+          p._followSafeY = safe.y;
+          p._followSafeAt = followNow + 90;
+        } else {
+          // Let the cached point drift with the owner between collision scans.
+          const drift = Math.min(1, dt * 8.0);
+          p._followSafeX = lerp(p._followSafeX, desiredX, drift);
+          p._followSafeY = lerp(p._followSafeY, desiredY, drift);
+        }
+        const safe = { x:p._followSafeX, y:p._followSafeY };
 
         const targetFollow = 1 - Math.exp(-6.2 * dt);
         p._followTargetX = Number.isFinite(p._followTargetX)
@@ -13185,9 +13547,7 @@ function updateAnimals(dt) {
           smoothTurn(p, a, dt, 7.2);
           const speedMul = clamp(0.24 + dd / Math.max(62, trail * 0.78), 0.24, 1.58);
           moveFacing(p, p.speed * speedMul, dt);
-          // Resolve on the same frame as movement so a follow step never visually
-          // enters a solid object and gets popped back on the next frame.
-          resolveAnimalWorld(p);
+          // Static collision is resolved once at the end of this pet update.
         }
 
         p.followReturning = dd > 16;
@@ -13387,8 +13747,8 @@ function resolveSolidCollisions() {
       }
     }
   }
-  // gold chunks solid
-  for (const g of goldChunks) {
+  // gold chunks solid — only nearby chunks can possibly collide.
+  for (const g of queryStaticNearby("gold", player.x, player.y, 230)) {
     if (!g.infinite && g.goldLeft <= 0) continue;
     const gh = goldSolidHitbox(g);
     const d = dist(player.x, player.y, gh.x, gh.y);
@@ -13643,6 +14003,7 @@ function updatePlayer(dt) {
   if (keys.has("d") || keys.has("arrowright")) dx += 1;
   if (mobileMode && joyActive) { dx += joyDX; dy += joyDY; }
   if (dx || dy) {
+    lastMovementInputAt = performance.now();
     const len = Math.hypot(dx, dy) || 1;
     if (mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10) {
       player.angle = Math.atan2(dy, dx);
@@ -16439,7 +16800,7 @@ function drawTopHealthOverlays(viewResources = resources, viewGold = goldChunks,
   }
   // Big Mommas always show a health bar so their huge health pool is readable.
   for (const a of animals) {
-    if (a.dead || a.stage !== "bigmomma" || !inView(a.x, a.y, Math.max(180, a.r * 2.2))) continue;
+    if (a.dead || a.stage !== "bigmomma" || !renderInView(a.x, a.y, Math.max(220, a.r * 3.2))) continue;
     const ratio = clamp(a.hp / Math.max(1, a.maxHp), 0, 1);
     const fill = ratio > 0.6 ? "#e6b85c" : ratio > 0.3 ? "#e58f4f" : "#e0563f";
     const w = Math.max(96, Math.min(170, a.r * 1.5));
@@ -16527,6 +16888,34 @@ function inView(x, y, pad) {
   return x > cx - pad && x < cx + W + pad && y > cy - pad && y < cy + H + pad;
 }
 
+// Rendering must never trust chunk/bucket membership more than the real world
+// coordinates. A few stale buckets were able to create invisible map patches.
+// This view check is deliberately generous and also accepts objects near the
+// player, so a camera/culling disagreement cannot hide nearby scenery/wildlife.
+function renderInView(x, y, pad = 80) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const extra = Math.max(120, Number(pad) || 0);
+  if (inView(x, y, extra)) return true;
+  if (game.started && Number.isFinite(player.x) && Number.isFinite(player.y)) {
+    const safeRange = Math.hypot(W, H) * 0.72 + extra + 180;
+    const dx = x - player.x, dy = y - player.y;
+    if (dx * dx + dy * dy <= safeRange * safeRange) return true;
+  }
+  return false;
+}
+
+function authoritativeResourcesForRender() {
+  const out = [];
+  for (let i = 0; i < resources.length; i++) {
+    const r = resources[i];
+    if (!r || !r.alive || !Number.isFinite(r.x) || !Number.isFinite(r.y)) continue;
+    const pad = r.type === "tree" ? Math.max(180, (Number(r.canopyR) || 0) + 110) : 140;
+    if (renderInView(r.x, r.y, pad)) out.push(r);
+  }
+  return out;
+}
+
+let lastMinimapDrawAt = 0;
 function drawMinimap() {
   const s = 140 / Math.max(WORLD_W, WORLD_H);
   mmCtx.fillStyle = "#1a2820";
@@ -16616,22 +17005,28 @@ function draw(menuMode = false) {
 
   const viewCx = game.camX + W * 0.5;
   const viewCy = game.camY + H * 0.5;
-  const viewRange = Math.hypot(W, H) * 0.55 + 220;
-  const viewResources = queryStaticForRender("resources", viewCx, viewCy, viewRange);
-  const viewGold = queryStaticForRender("gold", viewCx, viewCy, viewRange);
-  const viewChests = queryStaticForRender("chests", viewCx, viewCy, viewRange);
+  const viewRange = Math.hypot(W, H) * 0.62 + 320;
+  // Render only nearby static objects. The recovery query validates suspiciously
+  // empty buckets against the authoritative arrays and rebuilds the grid when
+  // needed, so we keep the dead-zone fix without scanning the entire map every frame.
+  const viewResources = queryStaticForRender("resources", viewCx, viewCy, viewRange)
+    .filter(r => r && r.alive && renderInView(r.x, r.y, r.type === "tree" ? Math.max(150, (Number(r.canopyR) || 0) + 90) : 120));
+  const viewGold = queryStaticForRender("gold", viewCx, viewCy, viewRange)
+    .filter(g => g && (g.infinite || g.goldLeft > 0) && renderInView(g.x, g.y, g.pure ? (g.r || 18) + 140 : 125));
+  const viewChests = queryStaticForRender("chests", viewCx, viewCy, viewRange)
+    .filter(c => c && !c.opened && renderInView(c.x, c.y, 125));
   const visibleTrees = [];
   for (const r of viewResources) {
-    if (r.alive && r.type === "tree" && inView(r.x, r.y, 90)) visibleTrees.push(r);
+    if (r.alive && r.type === "tree") visibleTrees.push(r);
   }
   visibleTrees.sort((a, b) => resourceDrawY(a) - resourceDrawY(b));
 
   // Rocks and every kind of gold chunk are low ground objects: draw them first
   // so the player can visually pass over them. Trees still remain above everyone.
   for (const r of viewResources) {
-    if (r.alive && r.type === "rock" && inView(r.x, r.y, 70)) drawResource(r);
+    if (r.alive && r.type === "rock") drawResource(r);
   }
-  for (const g of viewGold) if (inView(g.x, g.y, g.pure ? g.r + 40 : 80)) drawGoldChunk(g);
+  for (const g of viewGold) drawGoldChunk(g);
 
   // On foot, draw the player after rocks/gold but before taller world objects.
   // When riding, delay the player until after the mount so the rider sits on top.
@@ -16643,9 +17038,9 @@ function draw(menuMode = false) {
 
   // Taller world objects still sit over an on-foot player.
   for (const r of viewResources) {
-    if (r.alive && r.type !== "tree" && r.type !== "rock" && inView(r.x, r.y, 70)) drawResource(r);
+    if (r.alive && r.type !== "tree" && r.type !== "rock") drawResource(r);
   }
-  for (const c of viewChests) if (!c.opened && inView(c.x, c.y, 60)) drawChest(c);
+  for (const c of viewChests) drawChest(c);
   for (const w of walls) if (inView(w.x, w.y, 50)) drawWall(w);
   for (const t of towers) if (inView(t.x, t.y, 50)) drawTower(t);
 
@@ -16657,10 +17052,10 @@ function draw(menuMode = false) {
     circ(p.x, p.y, p.size);
   }
   ctx.globalAlpha = 1;
-  for (const a of animals) if (!a.owned && inView(a.x, a.y, 50)) drawAnimal(a);
-  for (const p of player.pets) if (inView(p.x, p.y, 50)) drawAnimal(p);
+  for (const a of animals) if (!a.owned && renderInView(a.x, a.y, Math.max(135, (Number(a.r) || 18) * 3.5))) drawAnimal(a);
+  for (const p of player.pets) if (renderInView(p.x, p.y, Math.max(135, (Number(p.r) || 18) * 3.5))) drawAnimal(p);
   if (!menuMode) drawRemotePets();
-  for (const en of enemies) if (!en.dead && inView(en.x, en.y, 50)) drawEnemy(en);
+  for (const en of enemies) if (!en.dead && renderInView(en.x, en.y, 130)) drawEnemy(en);
   for (const p of projectiles) if (inView(p.x, p.y, 30)) drawProjectile(p);
   for (const b of petBlasts) {
     if (!inView(b.x, b.y, 30)) continue;
@@ -16713,7 +17108,13 @@ function draw(menuMode = false) {
     ctx.fillRect(0, 0, W, H);
   }
 
-  if (!menuMode) drawMinimap();
+  if (!menuMode) {
+    const mmNow = performance.now();
+    if (mmNow - lastMinimapDrawAt >= 80) {
+      lastMinimapDrawAt = mmNow;
+      drawMinimap();
+    }
+  }
 
   // Only a fully completed frame becomes the recovery frame.
   captureLastGoodFrame();
@@ -16869,7 +17270,10 @@ function frame(now) {
 
       if (net.room) {
         net.fullSyncAccum += dt;
-        const fullSyncStep = mobileMode ? 1 / 6 : 1 / 8;
+        const movingNow = movementInputActive();
+        const fullSyncStep = mobileMode
+          ? (movingNow ? 1 / 5 : 1 / 6)
+          : (movingNow ? 1 / 6 : 1 / 8);
         if (net.fullSyncAccum >= fullSyncStep) {
           net.fullSyncAccum %= fullSyncStep;
           syncNetworkFullWorld();
@@ -17754,11 +18158,12 @@ function selectShopPage(page) {
 
 const PLANNED_THEMES = [
   "Classic","Forest","Ocean","Sunset","Midnight","Desert","Snow","Rose","Neon","Purple",
-  "Galaxy","Cherry Blossom","Golden","Emerald","Crimson","Arctic","Volcanic","Candy","Shadow","Royal"
+  "Galaxy","Cherry Blossom","Golden","Emerald","Crimson","Arctic","Volcanic","Candy","Shadow","Royal",
+  "Lightning","Power","Viperwave","Hologram","Hyperwave","Rabbit Meadow","Deer Grove","Owl Night","Bearded Dunes","Saber Fang"
 ];
 const GUEST_THEMES = new Set(PLANNED_THEMES.slice(0,GUEST_THEME_LIMIT));
-const ACCOUNT_THEMES = new Set(["Emerald","Crimson","Arctic","Volcanic"]);
-const AD_THEMES = new Set(["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal"]);
+const ACCOUNT_THEMES = new Set(["Emerald","Crimson","Arctic","Volcanic","Lightning","Rabbit Meadow","Deer Grove"]);
+const AD_THEMES = new Set(["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal","Power","Viperwave","Hologram","Hyperwave","Owl Night","Bearded Dunes","Saber Fang"]);
 
 function renderThemeGrid() {
   const grid = document.getElementById("themeGrid");

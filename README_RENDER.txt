@@ -756,3 +756,30 @@ SERVER 423 / GAME 451:
 - Spatial grid automatically rebuilds when the render fallback finds missing scenery.
 - Added finite camera recovery so invalid camera coordinates cannot blank visibility checks.
 - Hardened inView against invalid object coordinates.
+
+
+SERVER 427 / GAME 455:
+- Removed spatial-bucket dependency from scenery rendering.
+- Trees/resources now render from authoritative world arrays with camera filtering.
+- Added renderInView safety check that keeps nearby world objects visible even if camera/culling data briefly disagrees.
+- Wildlife, pets, enemies, gold, and chests use the same safer render visibility check.
+- Increased render padding for large animal stages and tree canopies.
+- Collision spatial grid remains enabled for performance; only rendering bypasses stale buckets.
+
+
+SERVER 428 / GAME 456:
+- Fixed movement-key freeze/backlog issue.
+- WASD/arrow hold no longer processes keyboard auto-repeat work; arrow scrolling is prevented.
+- Held keyboard state clears on blur/tab hide.
+- Client and server pet-follow obstacle scans are cached/throttled while the owner moves.
+- Removed duplicate same-frame pet static-collision resolution.
+
+
+SERVER 430 / GAME 458:
+- Movement-priority performance pass.
+- Client no longer touches all ~2,600 static resources every frame; nearby visual state stays 60 Hz and distant bulk state syncs ~4 Hz.
+- Static render dead-zone validation moved out of active movement frames into idle/stationary repair.
+- Offline recovery canvas snapshots are skipped while movement/camera motion is active.
+- Minimap rendering is throttled to ~12.5 Hz.
+- Player/gold collision now queries nearby spatial buckets only.
+- Multiplayer dynamic full-world resync drops from 8 Hz to 6 Hz while moving (5 Hz mobile) while interpolation remains per-frame.
