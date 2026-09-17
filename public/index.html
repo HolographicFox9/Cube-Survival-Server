@@ -8083,19 +8083,28 @@ async function connectMultiplayer() {
   if (net.connecting) return false;
   net.connecting = true;
   setNetStatus("Connecting…");
+  let joinPromise = null;
+  let joinAccepted = false;
+  let joinTimeoutId = 0;
   try {
     if (!window.Colyseus || !window.Colyseus.Client) {
       throw new Error("Colyseus client did not load");
     }
     const serverUrl = saveMultiplayerServerInput();
     const client = new window.Colyseus.Client(serverUrl);
-    const room = await client.joinOrCreate("world", {
+    joinPromise = client.joinOrCreate("world", {
       username: meta.username || "Cube",
       color: meta.color || COLORS[0],
       startPet: game.startPet || "",
       startPetStage: game.startPet ? starterStageFor(game.startPet) : "baby",
       petStatUpgrades: JSON.stringify(meta.petStatUpgrades || {}),
     });
+    const timeoutPromise = new Promise((_, reject) => {
+      joinTimeoutId = setTimeout(() => reject(new Error("Multiplayer connection timed out")), 12000);
+    });
+    const room = await Promise.race([joinPromise, timeoutPromise]);
+    joinAccepted = true;
+    if (joinTimeoutId) { clearTimeout(joinTimeoutId); joinTimeoutId = 0; }
     net.client = client;
     net.room = room;
     net.sessionId = room.sessionId;
@@ -8230,12 +8239,22 @@ async function connectMultiplayer() {
     return true;
   } catch (err) {
     console.warn("Multiplayer connection failed", err);
-    setNetStatus("No server", "bad");
+    const timedOut = /timed out/i.test(String(err && err.message || err || ""));
+    setNetStatus(timedOut ? "Server too slow" : "No server", "bad");
+    // Promise.race cannot cancel Colyseus' join request. If a timed-out request
+    // eventually succeeds, immediately leave that late room so it cannot leak a
+    // ghost player after the client has already fallen back to offline play.
+    if (joinPromise && !joinAccepted) {
+      joinPromise.then(lateRoom => {
+        try { lateRoom && lateRoom.leave && lateRoom.leave(); } catch (_) {}
+      }).catch(() => {});
+    }
     net.room = null;
     net.client = null;
     net.sessionId = null;
     return false;
   } finally {
+    if (joinTimeoutId) clearTimeout(joinTimeoutId);
     net.connecting = false;
   }
 }
@@ -11634,6 +11653,52 @@ function updateCreatureRecovery(creature, dt, regenRate) {
   }
 }
 
+let cleanWorldTemplate = null;
+
+function cloneWorldAnimalForReset(a) {
+  return {
+    ...a,
+    spots: Array.isArray(a.spots) ? a.spots.map(s => ({...s})) : [],
+  };
+}
+
+function captureCleanWorldTemplate() {
+  // The Home screen already built a complete clean world. Keep one lightweight
+  // template so Play/Try Again can restore it instead of regenerating thousands
+  // of objects and repeating expensive collision placement checks.
+  cleanWorldTemplate = {
+    resources: resources.map(r => ({...r})),
+    goldChunks: goldChunks.map(g => ({...g})),
+    chests: chests.map(c => ({
+      ...c,
+      reward: c.reward && typeof c.reward === "object" ? {...c.reward} : c.reward,
+    })),
+    animals: animals.map(cloneWorldAnimalForReset),
+  };
+}
+
+function restoreCleanWorldTemplate() {
+  const t = cleanWorldTemplate;
+  if (!t || !t.resources || !t.animals) return false;
+  resources = t.resources.map(r => ({...r}));
+  goldChunks = t.goldChunks.map(g => ({...g}));
+  chests = t.chests.map(c => ({
+    ...c,
+    reward: c.reward && typeof c.reward === "object" ? {...c.reward} : c.reward,
+  }));
+  animals = t.animals.map(cloneWorldAnimalForReset);
+  walls = [];
+  towers = [];
+  projectiles = [];
+  petBlasts = [];
+  particles = [];
+  floaters = [];
+  enemies = [];
+  abilityFx = [];
+  rebuildStaticCollisionGrid();
+  return true;
+}
+
 function initWorld() {
   resources = [];
   // The giant world should feel full instead of sparse: many more, larger resources.
@@ -11651,6 +11716,7 @@ function initWorld() {
   for (let i = 0; i < 14; i++) spawnWildAnimal(false, "superboss");
   for (let i = 0; i < 5; i++) spawnWildAnimal(false, "bigmomma");
   rebuildStaticCollisionGrid();
+  if (!cleanWorldTemplate) captureCleanWorldTemplate();
 }
 
 function chooseRandomPlayerSpawn(avoidX = null, avoidY = null, minDistance = 0) {
@@ -17921,7 +17987,10 @@ function resetGame() {
   game.earnedServs = 0;
   restartAllowedAt = 0;
 
-  initWorld();
+  // Reuse the clean world that was generated for the Home screen. Full world
+  // generation is intentionally avoided here because it can block the main
+  // thread for seconds on slower PCs right after Play/Try Again is pressed.
+  if (!restoreCleanWorldTemplate()) initWorld();
 
   // Every run begins at a safe random location. After death, force the new run
   // into a clearly different region so Try Again never feels like a same-spot revive.
@@ -18687,8 +18756,12 @@ el("playBtn").addEventListener("click", async () => {
   document.getElementById("hud").style.display = "block";
   game.started = true;
   game.over = false;
+  setLoadingScreen("Restoring the world…", 52, true);
   resetGame();
-  setLoadingScreen(net.enabled ? "Joining multiplayer…" : "Finishing world setup…", 72, !!net.enabled);
+  // Always give the browser one paint after reset so the first playable frame
+  // never has to compete with menu teardown and world restoration in one task.
+  await waitOneFrame();
+  setLoadingScreen(net.enabled ? "Joining multiplayer…" : "Finishing world setup…", 76, !!net.enabled);
   await waitOneFrame();
   if (net.enabled) {
     const ok = await connectMultiplayer();
