@@ -13160,7 +13160,12 @@ function updateTowers(dt) {
 }
 
 // ---------- resources / walls ----------
-let resourceBulkSyncAccum = 0;
+// Keep distant bookkeeping spread across frames. Doing a full ~2,600-resource
+// sweep every few tenths of a second created garbage-collection / main-thread
+// spikes on slower PCs even though average FPS looked okay.
+let resourceSweepIndex = 0;
+let goldSweepIndex = 0;
+let chestSweepIndex = 0;
 function syncResourceNetState(r) {
   if (!r || !r.netState) return;
   r.hp = Math.max(0, Number(r.netState.hp) || 0);
@@ -13197,28 +13202,42 @@ function updateResources(dt) {
     if (c && c.pulse > 0) c.pulse = Math.max(0, c.pulse - dt * 2.8);
   }
 
-  // Distant network state / respawn bookkeeping does not need 60 Hz. A short
-  // bulk pass keeps the whole world correct without stealing movement frames.
-  resourceBulkSyncAccum += dt;
-  if (resourceBulkSyncAccum < 0.28) return;
-  const bulkDt = resourceBulkSyncAccum;
-  resourceBulkSyncAccum = 0;
+  // Round-robin distant bookkeeping: never touch the whole world in one frame.
+  // At 60fps every resource is still refreshed several times per second; at
+  // lower FPS the work scales down instead of creating one giant periodic hitch.
+  const relief = typeof performanceReliefActive === "function" && performanceReliefActive();
+  const resourceBudget = relief ? 36 : (mobileMode ? 56 : 84);
+  const goldBudget = relief ? 12 : 22;
+  const chestBudget = relief ? 5 : 10;
+  const sweepDt = Math.max(dt, 1 / 60);
 
-  for (const r of resources) {
-    if (!r) continue;
-    syncResourceNetState(r);
-    if (!r.netState && !r.alive && game.time >= r.respawnAt) {
-      r.alive = true; r.hp = r.maxHp; r.gatherCredit = 0;
+  if (resources.length) {
+    for (let n = 0; n < Math.min(resourceBudget, resources.length); n++) {
+      if (resourceSweepIndex >= resources.length) resourceSweepIndex = 0;
+      const r = resources[resourceSweepIndex++];
+      if (!r) continue;
+      syncResourceNetState(r);
+      if (!r.netState && !r.alive && game.time >= r.respawnAt) {
+        r.alive = true; r.hp = r.maxHp; r.gatherCredit = 0;
+      }
+      if (r.pulse > 0 && !renderInView(r.x, r.y, 220)) r.pulse = Math.max(0, r.pulse - sweepDt * 4);
     }
-    if (r.pulse > 0 && !renderInView(r.x, r.y, 220)) r.pulse = Math.max(0, r.pulse - bulkDt * 4);
   }
-  for (const g of goldChunks) {
-    if (!g) continue;
-    syncGoldNetState(g);
-    if (g.pulse > 0 && !renderInView(g.x, g.y, 180)) g.pulse = Math.max(0, g.pulse - bulkDt * 3);
+  if (goldChunks.length) {
+    for (let n = 0; n < Math.min(goldBudget, goldChunks.length); n++) {
+      if (goldSweepIndex >= goldChunks.length) goldSweepIndex = 0;
+      const g = goldChunks[goldSweepIndex++];
+      if (!g) continue;
+      syncGoldNetState(g);
+      if (g.pulse > 0 && !renderInView(g.x, g.y, 180)) g.pulse = Math.max(0, g.pulse - sweepDt * 3);
+    }
   }
-  for (const c of chests) {
-    if (c && c.pulse > 0 && !renderInView(c.x, c.y, 180)) c.pulse = Math.max(0, c.pulse - bulkDt * 2.8);
+  if (chests.length) {
+    for (let n = 0; n < Math.min(chestBudget, chests.length); n++) {
+      if (chestSweepIndex >= chests.length) chestSweepIndex = 0;
+      const c = chests[chestSweepIndex++];
+      if (c && c.pulse > 0 && !renderInView(c.x, c.y, 180)) c.pulse = Math.max(0, c.pulse - sweepDt * 2.8);
+    }
   }
 }
 function updateWalls(dt) {
@@ -13894,9 +13913,33 @@ function carryPlayerWithOfflineWildMovement(a, oldX, oldY) {
 }
 
 function updateAnimals(dt) {
-  // wild
+  // Wild animals far from the player do not need 60fps collision/AI. Keeping
+  // ~350 distant animals fully simulated created a lot of short-lived arrays
+  // and eventually large browser garbage-collection pauses. Nearby/combat
+  // wildlife remains full-rate; distant wildlife gets a cheap timer tick.
+  const fullSimRange = (typeof performanceReliefActive === "function" && performanceReliefActive()) ? 1250 : 1650;
+  const fullSimRange2 = fullSimRange * fullSimRange;
   for (const a of animals) {
     if (a.dead || a.owned) continue;
+
+    const adx = a.x - player.x, ady = a.y - player.y;
+    const farAway = adx * adx + ady * ady > fullSimRange2;
+    const playerRelevantTarget = a.hostileTarget === player || !!(a.hostileTarget && a.hostileTarget.owned);
+    const forceFullSim = playerRelevantTarget || a.enemyOwner || a.tameFailedAggro || a.desperateAggro || (a.recentHit || 0) > 0;
+    if (farAway && !forceFullSim) {
+      a._farTickAccum = (a._farTickAccum || 0) + dt;
+      if (a._farTickAccum < 0.72) continue;
+      const fdt = Math.min(0.9, a._farTickAccum);
+      a._farTickAccum = 0;
+      a.flash = Math.max(0, (a.flash || 0) - fdt);
+      a.atkCd = Math.max(0, (a.atkCd || 0) - fdt);
+      a.abilityCd = Math.max(0, (a.abilityCd || 0) - fdt);
+      a.combat = Math.max(0, (a.combat || 0) - fdt);
+      updateCreatureRecovery(a, fdt, Math.max(0.8, a.maxHp * 0.018));
+      a.tailPhase = (a.tailPhase || 0) + fdt * 0.55;
+      continue;
+    }
+    a._farTickAccum = 0;
     if (a.flash > 0) a.flash -= dt;
     if (a.atkCd > 0) a.atkCd -= dt;
     if (a.abilityCd > 0) a.abilityCd -= dt;
@@ -17903,8 +17946,10 @@ function draw(menuMode = false) {
     }
   }
 
-  // Only a fully completed frame becomes the recovery frame.
-  captureLastGoodFrame();
+  // Do not copy the gameplay canvas into a backup every second. Some GPU/
+  // browser combinations stall hard on canvas-to-canvas copies. The main loop
+  // is already schedule-first and recovers on the next frame after an error.
+  if (menuMode) captureLastGoodFrame();
 }
 
 // ---------- main loop ----------
@@ -18041,10 +18086,42 @@ let recentFrameErrorCount = 0;
 let frameErrorWindowAt = 0;
 let hudSyncAccum = 0;
 
+// Long-frame safety: one browser/GC/GPU stall should not immediately trigger
+// another pile of expensive work. For a few seconds after a large frame gap we
+// automatically reduce distant/background work, while combat/player movement
+// and everything visible around the player continue normally.
+let performanceReliefUntil = 0;
+let previousRawFrameAt = performance.now();
+const freezeDiagnostics = {
+  longFrames: 0,
+  worstGapMs: 0,
+  worstWorkMs: 0,
+  lastLongFrameAt: 0,
+  lastLongFrameGapMs: 0,
+  lastFrameWorkMs: 0,
+};
+function performanceReliefActive() {
+  return performance.now() < performanceReliefUntil;
+}
+function triggerPerformanceRelief(now, gapMs = 0) {
+  performanceReliefUntil = Math.max(performanceReliefUntil, now + 6500);
+  freezeDiagnostics.longFrames++;
+  freezeDiagnostics.lastLongFrameAt = now;
+  freezeDiagnostics.lastLongFrameGapMs = gapMs;
+  freezeDiagnostics.worstGapMs = Math.max(freezeDiagnostics.worstGapMs, gapMs);
+}
+// Kept available for debugging without adding an always-visible debug panel.
+window.getCubeFreezeDiagnostics = () => ({...freezeDiagnostics, reliefActive: performanceReliefActive()});
+
 function frame(now) {
   // Schedule FIRST. If anything below throws, one bad frame cannot permanently
   // stop requestAnimationFrame and freeze the whole game.
   requestAnimationFrame(frame);
+
+  const rawGapMs = Math.max(0, now - previousRawFrameAt);
+  previousRawFrameAt = now;
+  if (game.started && rawGapMs > 180) triggerPerformanceRelief(now, rawGapMs);
+  const frameWorkStart = performance.now();
 
   let dt = (now - last) / 1000;
   last = now;
@@ -18064,9 +18141,12 @@ function frame(now) {
       if (net.room) {
         net.fullSyncAccum += dt;
         const movingNow = movementInputActive();
-        const fullSyncStep = mobileMode
-          ? (movingNow ? 1 / 5 : 1 / 6)
-          : (movingNow ? 1 / 6 : 1 / 8);
+        const relief = performanceReliefActive();
+        const fullSyncStep = relief
+          ? (mobileMode ? 1 / 4 : 1 / 5)
+          : mobileMode
+            ? (movingNow ? 1 / 5 : 1 / 6)
+            : (movingNow ? 1 / 6 : 1 / 8);
         if (net.fullSyncAccum >= fullSyncStep) {
           net.fullSyncAccum %= fullSyncStep;
           syncNetworkFullWorld();
@@ -18125,6 +18205,13 @@ function frame(now) {
       updateHomeCamera(dt);
       updateHomeAnimals(dt);
       draw(true);
+    }
+
+    const frameWorkMs = performance.now() - frameWorkStart;
+    freezeDiagnostics.lastFrameWorkMs = frameWorkMs;
+    freezeDiagnostics.worstWorkMs = Math.max(freezeDiagnostics.worstWorkMs, frameWorkMs);
+    if (game.started && frameWorkMs > 90 && rawGapMs <= 180) {
+      triggerPerformanceRelief(performance.now(), Math.max(rawGapMs, frameWorkMs));
     }
   } catch (err) {
     // Keep the game alive even if one entity/effect produces a bad frame.

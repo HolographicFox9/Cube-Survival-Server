@@ -2002,7 +2002,14 @@ export class WorldRoom extends Room {
 
   resolveAnimalAnimalCollisions(){
     const all=[];
-    for(const[id,a]of this.state.animals)if(a&&a.hp>0)all.push({kind:"animal",id,obj:a});
+    // Only solve creature-vs-creature physics in active player regions. Distant
+    // wildlife is already low-frequency simulated, so rebuilding/solving the
+    // entire world every server tick wastes CPU and can cause network stalls.
+    for(const[id,a]of this.state.animals){
+      if(!a||a.hp<=0)continue;
+      const forced=this.animalAggro.has(id)||this.enemyOwnerByPet.has(id)||a.tameFailedAggro||a.desperateAggro||(a.recentHit||0)>0;
+      if(forced||this.hasNearbyPlayerOrPet(a.x,a.y,1850))all.push({kind:"animal",id,obj:a});
+    }
     for(const[id,p]of this.state.pets)if(p&&!p.dead&&p.hp>0)all.push({kind:"pet",id,obj:p});
 
     const CELL=220,grid=new Map(),moved=new Set();
