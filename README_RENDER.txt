@@ -748,3 +748,11 @@ SERVER 422 / GAME 450:
 - Sleeping Vipers now preserve stage/body thickness instead of using a separate smaller sleep scale.
 - Deer separated renderers already shared awake/sleep stage scale and remain unchanged.
 - Owl width-based sizing remains shared across awake/sleep states.
+
+
+SERVER 423 / GAME 451:
+- Fixed possible world-render dead zones caused by stale/missing static spatial buckets.
+- Render queries now validate suspiciously empty areas against authoritative world arrays.
+- Spatial grid automatically rebuilds when the render fallback finds missing scenery.
+- Added finite camera recovery so invalid camera coordinates cannot blank visibility checks.
+- Hardened inView against invalid object coordinates.

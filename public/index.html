@@ -10063,6 +10063,42 @@ function queryStaticNearby(kind, x, y, range = 320) {
   return out;
 }
 
+// Rendering normally uses the fast spatial grid. If a camera enters a region
+// whose bucket data is unexpectedly empty/stale, fall back to the authoritative
+// world arrays for that frame and rebuild the grid. This prevents visual "dead
+// zones" where scenery exists but temporarily disappears.
+let lastStaticRenderRepairAt = 0;
+function queryStaticForRender(kind, x, y, range = 320) {
+  let out = queryStaticNearby(kind, x, y, range);
+
+  const source = kind === "resources" ? resources :
+                 kind === "gold" ? goldChunks :
+                 kind === "chests" ? chests : null;
+  if (!source || !source.length) return out;
+
+  // An entirely empty result in the interior of a populated world is suspicious.
+  // Validate against the real array only in that case, keeping normal frames fast.
+  if (out.length === 0) {
+    const r2 = range * range;
+    const fallback = [];
+    for (let i = 0; i < source.length; i++) {
+      const o = source[i];
+      if (!o || !Number.isFinite(o.x) || !Number.isFinite(o.y)) continue;
+      const dx = o.x - x, dy = o.y - y;
+      if (dx * dx + dy * dy <= r2) fallback.push(o);
+    }
+    if (fallback.length) {
+      out = fallback;
+      const now = performance.now();
+      if (now - lastStaticRenderRepairAt > 750) {
+        lastStaticRenderRepairAt = now;
+        rebuildStaticCollisionGrid();
+      }
+    }
+  }
+  return out;
+}
+
 const RUN_SHOP_ITEMS = [
   {id:"minerHat",cat:"hat",icon:"⛏️",name:"Miner Hat",cost:25,desc:"Gather 25% more wood, stone, berries, and mined gold."},
   {id:"healerHood",cat:"hat",icon:"💚",name:"Healer Hood",cost:35,desc:"Regenerate 0.7 HP per second while alive."},
@@ -16451,7 +16487,10 @@ function drawFx() {
 }
 
 function inView(x, y, pad) {
-  return x > game.camX - pad && x < game.camX + W + pad && y > game.camY - pad && y < game.camY + H + pad;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const cx = Number.isFinite(game.camX) ? game.camX : 0;
+  const cy = Number.isFinite(game.camY) ? game.camY : 0;
+  return x > cx - pad && x < cx + W + pad && y > cy - pad && y < cy + H + pad;
 }
 
 function drawMinimap() {
@@ -16517,6 +16556,11 @@ function drawMinimap() {
 }
 
 function draw(menuMode = false) {
+  // Never allow a bad camera value to make the entire world fail visibility tests.
+  if (!Number.isFinite(game.camX) || !Number.isFinite(game.camY)) {
+    game.camX = clamp((Number(player.x) || WORLD_W * 0.5) - W * 0.5, 0, Math.max(0, WORLD_W - W));
+    game.camY = clamp((Number(player.y) || WORLD_H * 0.5) - H * 0.5, 0, Math.max(0, WORLD_H - H));
+  }
   // Defensive canvas reset: if any previous frame threw while a translated/rotated
   // drawing state was active, never allow that transform to leak into this frame.
   // IMPORTANT: restore the DPR-scaled transform, not identity, or the world only
@@ -16539,9 +16583,9 @@ function draw(menuMode = false) {
   const viewCx = game.camX + W * 0.5;
   const viewCy = game.camY + H * 0.5;
   const viewRange = Math.hypot(W, H) * 0.55 + 220;
-  const viewResources = queryStaticNearby("resources", viewCx, viewCy, viewRange);
-  const viewGold = queryStaticNearby("gold", viewCx, viewCy, viewRange);
-  const viewChests = queryStaticNearby("chests", viewCx, viewCy, viewRange);
+  const viewResources = queryStaticForRender("resources", viewCx, viewCy, viewRange);
+  const viewGold = queryStaticForRender("gold", viewCx, viewCy, viewRange);
+  const viewChests = queryStaticForRender("chests", viewCx, viewCy, viewRange);
   const visibleTrees = [];
   for (const r of viewResources) {
     if (r.alive && r.type === "tree" && inView(r.x, r.y, 90)) visibleTrees.push(r);
