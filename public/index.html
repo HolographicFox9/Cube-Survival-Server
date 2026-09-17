@@ -529,16 +529,18 @@
   /* Mobile controls */
   #mobileControls{display:none;position:fixed;inset:0;pointer-events:none;z-index:15;}
   #mobileControls.on{display:block;}
-  .joy-base{position:absolute;bottom:80px;left:30px;width:110px;height:110px;border-radius:50%;
-    background:rgba(0,0,0,0.25);border:2px solid rgba(255,255,255,0.15);pointer-events:auto;}
-  .joy-knob{position:absolute;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,0.35);
-    top:50%;left:50%;transform:translate(-50%,-50%);}
-  .m-btn{position:absolute;width:64px;height:64px;border-radius:50%;background:rgba(0,0,0,0.35);
-    border:2px solid rgba(240,230,200,0.25);pointer-events:auto;display:flex;align-items:center;
-    justify-content:center;font-size:12px;color:var(--parchment);font-weight:600;}
-  #mAttack{bottom:100px;right:40px;}
-  #mShoot{bottom:100px;right:120px;}
-  #mCraft{bottom:180px;right:40px;width:50px;height:50px;font-size:11px;}
+  .joy-base{position:absolute;bottom:calc(78px + env(safe-area-inset-bottom));left:calc(24px + env(safe-area-inset-left));width:118px;height:118px;border-radius:50%;
+    background:rgba(0,0,0,0.28);border:2px solid rgba(255,255,255,0.18);pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;}
+  .joy-knob{position:absolute;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.38);
+    top:50%;left:50%;transform:translate(-50%,-50%);will-change:transform;pointer-events:none;}
+  .m-btn{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(0,0,0,0.38);
+    border:2px solid rgba(240,230,200,0.28);pointer-events:auto;display:flex;align-items:center;
+    justify-content:center;font-size:12px;color:var(--parchment);font-weight:700;touch-action:none;
+    user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;}
+  .m-btn:active{transform:scale(.94);background:rgba(55,67,48,.62);}
+  #mAttack{bottom:calc(96px + env(safe-area-inset-bottom));right:calc(28px + env(safe-area-inset-right));}
+  #mShoot{bottom:calc(96px + env(safe-area-inset-bottom));right:calc(112px + env(safe-area-inset-right));}
+  #mCraft{bottom:calc(180px + env(safe-area-inset-bottom));right:calc(30px + env(safe-area-inset-right));width:54px;height:54px;font-size:11px;}
 
   #intro{display:none;}
 
@@ -3917,7 +3919,8 @@ let vignetteGradient = null;
 
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
-  DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  const mobileRender = mobileMode || (window.matchMedia && window.matchMedia("(pointer:coarse)").matches);
+  DPR = Math.min(window.devicePixelRatio || 1, mobileRender ? 1.25 : 1.5);
   canvas.width = W * DPR; canvas.height = H * DPR;
   canvas.style.width = W + "px"; canvas.style.height = H + "px";
   resizeLastGoodFrameBuffer();
@@ -6574,31 +6577,49 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
       v.x = sx; v.y = sy; v.angle = sa;
     }
   } else {
-    // Wildlife patches arrive less often online to save bandwidth. Keep each
-    // server position as an interpolation target so movement still looks smooth.
+    // Wild multiplayer animals use buffered interpolation ONLY. Do not predict
+    // ahead of the server: prediction was causing late updates to create large
+    // catch-up jumps that could visually skip through hitboxes.
     const patchNow = performance.now();
     const oldNetX = Number.isFinite(v._netX) ? v._netX : sx;
     const oldNetY = Number.isFinite(v._netY) ? v._netY : sy;
+    const oldNetAngle = Number.isFinite(v._netAngle) ? v._netAngle : sa;
     const mdx = sx - oldNetX, mdy = sy - oldNetY;
     const moveLen = Math.hypot(mdx, mdy);
-    const patchDt = Math.max(0.025, Math.min(0.25, (patchNow - (v._netPatchAt || patchNow - 50)) / 1000));
+    const patchDt = Math.max(0.06, Math.min(0.30, (patchNow - (v._netPatchAt || patchNow - 100)) / 1000));
     v._netPatchAt = patchNow;
-    if (moveLen > 0.001) {
-      const measuredSpeed = Math.min(420, moveLen / patchDt);
-      const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
-      v._visualMoveSpeed = prevVisualSpeed + (measuredSpeed - prevVisualSpeed) * 0.24;
-      v._visualMoveAt = patchNow;
-    } else {
-      v._visualMoveSpeed = (Number(v._visualMoveSpeed) || 0) * 0.88;
-    }
 
-    v._netX = sx; v._netY = sy; v._netAngle = sa;
     if (fresh || !Number.isFinite(v.x) || !Number.isFinite(v.y) || Math.hypot(sx - v.x, sy - v.y) > 360) {
       v.x = sx; v.y = sy; v.angle = sa;
+      v._snapFromX = sx; v._snapFromY = sy;
+      v._snapToX = sx; v._snapToY = sy;
+      v._snapFromAngle = sa; v._snapToAngle = sa;
+      v._snapStart = patchNow; v._snapDuration = 100;
       v._carryPending = false;
-    } else if (moveLen > 0.001) {
+    } else if (Math.abs(mdx) > 0.001 || Math.abs(mdy) > 0.001 || Math.abs(sa - oldNetAngle) > 0.001) {
+      // Start the next segment from the CURRENT rendered point, not the previous
+      // network point. If a packet arrives late, this prevents a backwards snap.
+      v._snapFromX = v.x; v._snapFromY = v.y;
+      v._snapToX = sx; v._snapToY = sy;
+      v._snapFromAngle = Number.isFinite(v.angle) ? v.angle : oldNetAngle;
+      v._snapToAngle = sa;
+      v._snapStart = patchNow;
+
+      // Never animate faster than a believable short sprint. If one update spans
+      // more distance, stretch the interpolation time instead of zooming forward.
+      const normalSpeed = Math.max(35, Number(s.speed) || animalSpeed(v.type, v.stage, false) || 60);
+      const maxVisualSpeed = normalSpeed * 1.85 + 30;
+      const distanceMs = moveLen > 0.01 ? (moveLen / maxVisualSpeed) * 1000 : 0;
+      v._snapDuration = Math.max(90, Math.min(320, Math.max(patchDt * 1050, distanceMs)));
+
+      if (moveLen > 0.001) {
+        const measuredSpeed = Math.min(maxVisualSpeed, moveLen / patchDt);
+        const prevVisualSpeed = Number(v._visualMoveSpeed) || 0;
+        v._visualMoveSpeed = prevVisualSpeed + (measuredSpeed - prevVisualSpeed) * 0.20;
+        v._visualMoveAt = patchNow;
+      }
+
       if (moveLen < 150) {
-        // Preserve the real server movement delta used by physical animal carry.
         v._moveDx = mdx;
         v._moveDy = mdy;
         v._carryPending = true;
@@ -6606,6 +6627,8 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
         v._carryPending = false;
       }
     }
+
+    v._netX = sx; v._netY = sy; v._netAngle = sa;
   }
   v.r = Number(s.r) || animalRadius(v.type, v.stage);
   v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
@@ -6653,46 +6676,51 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
 
 function updateNetworkAnimalInterpolation(dt) {
   if (!net.room) return;
+  const now = performance.now();
+
   for (const a of net.animalVisuals.values()) {
     if (!a || !Number.isFinite(a._netX) || !Number.isFinite(a._netY)) continue;
 
-    // Far-off wildlife is not rendered, so don't spend 60fps CPU time
-    // interpolating and animating it. Snap it to authoritative state instead.
+    // Off-screen animals do not need interpolation work.
     if (!inView(a._netX, a._netY, 420)) {
-      a.x = a._netX; a.y = a._netY; a.angle = a._netAngle || a.angle || 0;
-      a._renderVX = 0; a._renderVY = 0;
+      a.x = a._netX;
+      a.y = a._netY;
+      a.angle = a._netAngle || a.angle || 0;
+      a._renderVX = 0;
+      a._renderVY = 0;
       continue;
     }
 
-    const targetVX = Number(a._netVX) || 0;
-    const targetVY = Number(a._netVY) || 0;
-    const velFollow = 1 - Math.exp(-9 * dt);
-    a._renderVX = (Number(a._renderVX) || 0) + (targetVX - (Number(a._renderVX) || 0)) * velFollow;
-    a._renderVY = (Number(a._renderVY) || 0) + (targetVY - (Number(a._renderVY) || 0)) * velFollow;
+    const fromX = Number.isFinite(a._snapFromX) ? a._snapFromX : a.x;
+    const fromY = Number.isFinite(a._snapFromY) ? a._snapFromY : a.y;
+    const toX = Number.isFinite(a._snapToX) ? a._snapToX : a._netX;
+    const toY = Number.isFinite(a._snapToY) ? a._snapToY : a._netY;
+    const startAt = Number(a._snapStart) || now;
+    const duration = Math.max(1, Number(a._snapDuration) || 120);
+    const t = clamp((now - startAt) / duration, 0, 1);
 
-    // Move continuously every render frame instead of waiting on state patches.
-    a.x += a._renderVX * dt;
-    a.y += a._renderVY * dt;
+    // Linear snapshot interpolation gives consistent speed and does not overshoot.
+    const prevX = a.x, prevY = a.y;
+    a.x = lerp(fromX, toX, t);
+    a.y = lerp(fromY, toY, t);
 
-    // Gently pull back toward authoritative server position so prediction never drifts.
-    const dx = a._netX - a.x, dy = a._netY - a.y;
-    const d = Math.hypot(dx, dy);
-    if (d > 320) {
-      a.x = a._netX; a.y = a._netY;
-      a._renderVX = targetVX; a._renderVY = targetVY;
-    } else {
-      const correction = 1 - Math.exp(-7.5 * dt);
-      a.x += dx * correction;
-      a.y += dy * correction;
-    }
+    // Keep the rendered wildlife outside static collision geometry. This is only
+    // a visual guard; the server remains authoritative for actual collisions.
+    resolveAnimalWorld(a);
 
-    let da = (a._netAngle || 0) - (a.angle || 0);
+    const frameDt = Math.max(1 / 240, dt);
+    const rvx = (a.x - prevX) / frameDt;
+    const rvy = (a.y - prevY) / frameDt;
+    const velocityBlend = 1 - Math.exp(-7 * dt);
+    a._renderVX = (Number(a._renderVX) || 0) + (rvx - (Number(a._renderVX) || 0)) * velocityBlend;
+    a._renderVY = (Number(a._renderVY) || 0) + (rvy - (Number(a._renderVY) || 0)) * velocityBlend;
+
+    let fromA = Number.isFinite(a._snapFromAngle) ? a._snapFromAngle : (a.angle || 0);
+    let toA = Number.isFinite(a._snapToAngle) ? a._snapToAngle : (a._netAngle || 0);
+    let da = toA - fromA;
     da = Math.atan2(Math.sin(da), Math.cos(da));
-    const angleFollow = 1 - Math.exp(-11 * dt);
-    a.angle = (a.angle || 0) + da * angleFollow;
+    a.angle = fromA + da * t;
 
-    // Keep animation phase continuous locally. This is what removes the visible
-    // head/tail "phase jumping" from server snapshots.
     const measuredRatio = Math.max(0, Math.min(1.5, Math.hypot(a._renderVX, a._renderVY) / Math.max(1, a.speed || 1)));
     const oldAnimRatio = Number(a._netAnimMoveRatio) || 0;
     const animFollow = 1 - Math.exp(-4.2 * dt);
@@ -6704,7 +6732,7 @@ function updateNetworkAnimalInterpolation(dt) {
     const renderSpeed = Math.hypot(a._renderVX, a._renderVY);
     const oldVisual = Number(a._visualMoveSpeed) || 0;
     a._visualMoveSpeed = oldVisual + (renderSpeed - oldVisual) * (1 - Math.exp(-4.5 * dt));
-    if (a._visualMoveSpeed > 0.3) a._visualMoveAt = performance.now();
+    if (a._visualMoveSpeed > 0.3) a._visualMoveAt = now;
   }
 }
 
@@ -7473,7 +7501,7 @@ function drawRemotePlayers() {
 const keys = new Set();
 const mouse = { sx: W / 2, sy: H / 2, down: false, rdown: false };
 let mobileMode = false;
-let joyActive = false, joyDX = 0, joyDY = 0;
+let joyActive = false, joyDX = 0, joyDY = 0, joyRawDX = 0, joyRawDY = 0, joyTouchId = null;
 
 function gameplayKeyboardActive() {
   return !!(game.started && !game.over);
@@ -7540,34 +7568,114 @@ canvas.addEventListener("contextmenu", e => e.preventDefault());
 // mobile joy
 const joyBase = document.getElementById("joyBase");
 const joyKnob = document.getElementById("joyKnob");
-function joyStart(e) {
-  e.preventDefault();
-  joyActive = true;
-  joyMove(e);
+
+function mobileTouchById(list, id) {
+  if (!list) return null;
+  for (let i = 0; i < list.length; i++) if (list[i].identifier === id) return list[i];
+  return null;
 }
-function joyMove(e) {
-  if (!joyActive) return;
-  const t = e.touches ? e.touches[0] : e;
+function joySetRawFromTouch(t) {
+  if (!t) return;
   const rect = joyBase.getBoundingClientRect();
   const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
   let dx = t.clientX - cx, dy = t.clientY - cy;
-  const max = 36;
+  const max = Math.max(34, rect.width * 0.34);
   const len = Math.hypot(dx, dy) || 1;
   if (len > max) { dx = dx / len * max; dy = dy / len * max; }
-  joyDX = dx / max; joyDY = dy / max;
+
+  // Small deadzone prevents tiny thumb movements from making the player jitter.
+  let nx = dx / max, ny = dy / max;
+  const mag = Math.hypot(nx, ny);
+  const dead = 0.10;
+  if (mag <= dead) {
+    nx = 0; ny = 0;
+  } else {
+    const scaled = (mag - dead) / (1 - dead);
+    nx = nx / mag * scaled;
+    ny = ny / mag * scaled;
+  }
+
+  joyRawDX = nx; joyRawDY = ny;
   joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
 }
-function joyEnd() {
-  joyActive = false; joyDX = 0; joyDY = 0;
+function joyStart(e) {
+  if (!game.started || game.over) return;
+  e.preventDefault();
+  const t = (e.changedTouches && e.changedTouches[0]) || (e.targetTouches && e.targetTouches[0]);
+  if (!t) return;
+  joyTouchId = t.identifier;
+  joyActive = true;
+  joySetRawFromTouch(t);
+}
+function joyMove(e) {
+  if (!joyActive) return;
+  e.preventDefault();
+  const t = mobileTouchById(e.touches, joyTouchId) || mobileTouchById(e.targetTouches, joyTouchId);
+  if (t) joySetRawFromTouch(t);
+}
+function joyEnd(e) {
+  if (e && joyTouchId != null) {
+    const stillThere = mobileTouchById(e.touches, joyTouchId);
+    if (stillThere) return;
+  }
+  joyActive = false;
+  joyTouchId = null;
+  joyRawDX = 0; joyRawDY = 0;
   joyKnob.style.transform = "translate(-50%,-50%)";
 }
+function updateMobileInput(dt) {
+  // Frame-rate independent smoothing keeps analog motion stable even when touch
+  // events arrive irregularly on phones.
+  const targetX = joyActive ? joyRawDX : 0;
+  const targetY = joyActive ? joyRawDY : 0;
+  const follow = 1 - Math.exp(-18 * Math.max(0, dt));
+  joyDX += (targetX - joyDX) * follow;
+  joyDY += (targetY - joyDY) * follow;
+  if (!joyActive && Math.hypot(joyDX, joyDY) < 0.003) { joyDX = 0; joyDY = 0; }
+}
+
 joyBase.addEventListener("touchstart", joyStart, { passive: false });
 joyBase.addEventListener("touchmove", joyMove, { passive: false });
-joyBase.addEventListener("touchend", joyEnd);
-document.getElementById("mAttack").addEventListener("touchstart", e => { e.preventDefault(); mouse.down = true; });
-document.getElementById("mAttack").addEventListener("touchend", () => { mouse.down = false; });
-document.getElementById("mShoot").addEventListener("touchstart", e => { e.preventDefault(); fireBow(); });
-document.getElementById("mCraft").addEventListener("touchstart", e => { e.preventDefault(); toggleCraft(); });
+joyBase.addEventListener("touchend", joyEnd, { passive: false });
+joyBase.addEventListener("touchcancel", joyEnd, { passive: false });
+
+const mobileAttackBtn = document.getElementById("mAttack");
+const mobileShootBtn = document.getElementById("mShoot");
+const mobileCraftBtn = document.getElementById("mCraft");
+
+function mobileAttackStart(e) {
+  if (!game.started || game.over) return;
+  e.preventDefault();
+  mouse.down = true;
+}
+function mobileAttackEnd(e) {
+  if (e) e.preventDefault();
+  mouse.down = false;
+}
+mobileAttackBtn.addEventListener("touchstart", mobileAttackStart, { passive: false });
+mobileAttackBtn.addEventListener("touchend", mobileAttackEnd, { passive: false });
+mobileAttackBtn.addEventListener("touchcancel", mobileAttackEnd, { passive: false });
+
+mobileShootBtn.addEventListener("touchstart", e => {
+  if (!game.started || game.over) return;
+  e.preventDefault();
+  fireBow();
+}, { passive: false });
+
+mobileCraftBtn.addEventListener("touchstart", e => {
+  if (!game.started || game.over) return;
+  e.preventDefault();
+  toggleCraft();
+}, { passive: false });
+
+// If the browser interrupts touches (app switch, notification shade, etc.), never
+// leave movement or attack stuck on.
+window.addEventListener("blur", () => {
+  mouse.down = false;
+  joyActive = false; joyTouchId = null;
+  joyRawDX = joyRawDY = joyDX = joyDY = 0;
+  if (joyKnob) joyKnob.style.transform = "translate(-50%,-50%)";
+});
 
 // ---------- audio ----------
 let actx = null;
@@ -13321,7 +13429,12 @@ function updatePlayer(dt) {
   }
 
   const wx = mouse.sx + game.camX, wy = mouse.sy + game.camY;
-  player.angle = angTo(player.x, player.y, wx, wy);
+  if (mobileMode && Math.hypot(joyDX, joyDY) > 0.10) {
+    // Mobile has no mouse cursor; face the direction the player is actually moving.
+    player.angle = Math.atan2(joyDY, joyDX);
+  } else if (!mobileMode) {
+    player.angle = angTo(player.x, player.y, wx, wy);
+  }
 
   let dx = 0, dy = 0;
   if (keys.has("w") || keys.has("arrowup")) dy -= 1;
@@ -13331,10 +13444,11 @@ function updatePlayer(dt) {
   if (mobileMode && joyActive) { dx += joyDX; dy += joyDY; }
   if (dx || dy) {
     const len = Math.hypot(dx, dy) || 1;
+    const analog = mobileMode && joyActive && !keys.size ? Math.min(1, len) : 1;
     let speed = 148;
     if (player.riding) speed = player.riding.speed || animalSpeed(player.riding.type, player.riding.stage, true);
-    player.x += (dx / len) * speed * dt;
-    player.y += (dy / len) * speed * dt;
+    player.x += (dx / len) * speed * analog * dt;
+    player.y += (dy / len) * speed * analog * dt;
   }
   player.x = clamp(player.x, PLAYER_R, WORLD_W - PLAYER_R);
   player.y = clamp(player.y, PLAYER_R, WORLD_H - PLAYER_R);
@@ -16534,6 +16648,7 @@ function frame(now) {
 
   try {
     trimRuntimeLists();
+    if (mobileMode) updateMobileInput(dt);
 
     if (game.started) {
       // Death only disables the player's actions. The world keeps simulating so
@@ -16542,8 +16657,8 @@ function frame(now) {
 
       if (net.room) {
         net.fullSyncAccum += dt;
-        if (net.fullSyncAccum >= 1 / 8) {
-          net.fullSyncAccum %= 1 / 8;
+        if (net.fullSyncAccum >= 1 / 10) {
+          net.fullSyncAccum %= 1 / 10;
           syncNetworkFullWorld();
         }
 
@@ -17217,6 +17332,7 @@ el("playBtn").addEventListener("click", async () => {
   saveMeta();
   mobileMode = el("mobileMode").checked;
   document.getElementById("mobileControls").classList.toggle("on", mobileMode);
+  resize();
   setHomeControlsEnabled(false);
   const home = document.getElementById("home");
   home.style.display = "none";
@@ -17296,6 +17412,10 @@ el("homeBtn").addEventListener("click", () => {
   syncHomeWorldThemeState();
   setHomeControlsEnabled(true);
   document.getElementById("mobileControls").classList.remove("on");
+  mouse.down = false;
+  joyActive = false; joyTouchId = null;
+  joyRawDX = joyRawDY = joyDX = joyDY = 0;
+  if (joyKnob) joyKnob.style.transform = "translate(-50%,-50%)";
   game.homeCamReady = false;
   setupHome();
 });

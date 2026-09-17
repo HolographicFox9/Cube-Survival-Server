@@ -683,3 +683,21 @@ SERVER 414 / GAME 442:
 - Viper bite animation now lunges the head/neck instead of shifting the whole body.
 - Pickaxe redrawn as a classic cross-head pickaxe and uses the same upright two-hand pose as the axe.
 - Small hotbar transition polish.
+
+
+SERVER 415 / GAME 443:
+- Mobile joystick now tracks its own touch identifier for reliable multitouch.
+- Added analog deadzone and frame-rate-independent joystick smoothing.
+- Mobile movement preserves joystick magnitude instead of forcing every movement to full speed.
+- Mobile player faces joystick movement direction for sensible melee/ranged attacks without a mouse.
+- Touch-cancel/window-blur cleanup prevents stuck movement or attack input.
+- Mobile controls use safe-area insets, larger touch targets, and touch-action:none.
+- Mobile/coarse-pointer rendering caps DPR at 1.25 for smoother GPU performance.
+
+
+SERVER 416 / GAME 444:
+- Multiplayer wild animals no longer use forward velocity prediction.
+- Wildlife now buffers and interpolates between actual server snapshots.
+- Large network deltas stretch interpolation time instead of causing catch-up zooms.
+- Wildlife render positions are visually kept outside static hitboxes during interpolation.
+- Client world-state reads now match the server's 10 Hz patch rate.

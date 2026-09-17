@@ -1,6 +1,6 @@
 {
   "name": "cube-survival-full-multiplayer-server",
-  "version": "0.13.0",
+  "version": "0.13.2",
   "private": true,
   "type": "module",
   "scripts": {
