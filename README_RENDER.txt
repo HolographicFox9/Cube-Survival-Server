@@ -703,3 +703,48 @@ SERVER 416 / GAME 444 TAIL SMOOTHING:
 - Deer and generic animal tail renderers use the dedicated multiplayer tail phase.
 - Snake/Viper wave motion no longer stacks absolute-time motion on top of multiplayer tail phase.
 - Head/body animation remains responsive and separate from tail smoothing.
+
+
+SERVER 418 / GAME 446:
+- Added Account button and account modal.
+- Guest mode remains playable; account UI is optional.
+- Added local placeholder signup/login/session flow for UI testing only.
+- Signup grants 500 Cubits once, plus the normal +10 daily Cubits on that day.
+- Logged-in placeholder sessions persist across reloads.
+- Added Shop tabs: Gear, Themes, Chests.
+- Added 10 guest-accessible planned themes and account/ad-locked theme placeholders.
+- Added Daily Chest UI at top of Chests tab; ad opening intentionally disabled for now.
+- Added Cubit chest listings; purchases intentionally disabled until reward tables are defined.
+- No ad SDK or ad code was added.
+- Real authentication/cloud save still requires the future backend connection.
+
+
+SERVER 419 / GAME 447:
+- Account modal is now the highest UI layer.
+- Account opens above HUD/mobile/death/shop overlays.
+- Opening Account closes Shop; opening Shop closes Account.
+
+
+SERVER 420 / GAME 448:
+- Fixed Account and Shop popup buttons binding before popup HTML existed.
+- Close buttons now bind after DOMContentLoaded.
+- Escape closes Account/Shop popups.
+- Clicking the dark popup backdrop also closes the popup.
+
+
+SERVER 421 / GAME 449:
+- Chests shop page is now functional in the local account test system.
+- Daily Chest is free once per UTC day.
+- After the free opening, Daily Chest can be reopened for 50 Cubits.
+- Small 75, Explorer 200, Rare 500, and Legendary 1000 Cubit chests now work.
+- Chests award Cubits and can permanently unlock planned locked themes.
+- Chest purchases require a logged-in local test account and check Cubit balance.
+- No ad SDK or rewarded-ad code has been added.
+
+
+SERVER 422 / GAME 450:
+- Sleeping animals now preserve the same physical stage scale as their awake form.
+- Removed generic sleep-only 1.02 visual scaling.
+- Sleeping Vipers now preserve stage/body thickness instead of using a separate smaller sleep scale.
+- Deer separated renderers already shared awake/sleep stage scale and remain unchanged.
+- Owl width-based sizing remains shared across awake/sleep states.
