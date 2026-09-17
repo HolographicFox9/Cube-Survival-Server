@@ -703,7 +703,8 @@ SERVER 416 / GAME 444:
 - Client world-state reads now match the server's 10 Hz patch rate.
 
 
-SERVER 418 / GAME 446:
-- Rebuilt from known-good Game 444 after Game 445 load regression.
-- Tail speed uses simpler capped/smoothed movement ratio with no new runtime animation-rate state.
-- Head movement remains more noticeable across segmented animals, deer, generic animals, and Viper.
+SERVER 421 / GAME 444 MODULAR:
+- Runtime gameplay is byte-for-byte the original Game 444 JavaScript.
+- HTML and CSS are separate.
+- Editable game source is split into five ordered fragments under public/src/.
+- public/build-game.js rebuilds public/js/game.js after source edits.
