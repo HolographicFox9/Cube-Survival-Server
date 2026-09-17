@@ -481,14 +481,14 @@ class PlayerState extends Schema {
     this.id = ""; this.username = "Cube";
     this.x = WORLD_W / 2; this.y = WORLD_H / 2; this.angle = 0;
     this.health = 100; this.maxHealth = 100; this.dead = false;
-    this.color = "#3fa7ff"; this.tool = "Fist"; this.ridingPetId = "";
+    this.color = "#3fa7ff"; this.tool = "Fist"; this.heldSpecial = ""; this.ridingPetId = "";
     this.moveX = 0; this.moveY = 0; this.moving = false; this.animalCarryT = 0;
     this.kills = 0; this.gold = 0;
   }
 }
 defineTypes(PlayerState, {
   id:"string", username:"string", x:"number", y:"number", angle:"number",
-  health:"number", maxHealth:"number", dead:"boolean", color:"string", tool:"string", ridingPetId:"string",
+  health:"number", maxHealth:"number", dead:"boolean", color:"string", tool:"string", heldSpecial:"string", ridingPetId:"string",
   moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number"
 });
 
@@ -1296,6 +1296,7 @@ export class WorldRoom extends Room {
     if(Number.isFinite(+input.angle))p.angle=+input.angle;
     if(typeof input.color==="string"&&input.color.length<32)p.color=input.color;
     if(typeof input.tool==="string"&&input.tool.length<24)p.tool=this.validTool(input.tool);
+    if(typeof input.heldSpecial==="string")p.heldSpecial=["Berry","Wall"].includes(input.heldSpecial)?input.heldSpecial:"";
     if(typeof input.ridingPetId==="string")p.ridingPetId=input.ridingPetId.slice(0,32);
 
     // Escape input wins immediately over a stale carry window. This is the key
@@ -1318,7 +1319,7 @@ export class WorldRoom extends Room {
     }
   }
   handleHeal(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const amount=clamp(+data.amount||0,0,40);p.health=clamp(p.health+amount,0,p.maxHealth);}
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   ensureStarterPetFor(client,type,stage){
     if(!client||!PET_TYPES[type])return null;

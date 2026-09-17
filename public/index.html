@@ -3787,6 +3787,395 @@
     border:1px solid rgba(240,230,200,.18);background:rgba(0,0,0,.18)}
   .divider{height:1px;background:rgba(240,230,200,.12);margin:14px 0}
 
+
+  /* ---------- 460 mobile-mode home screen layout ---------- */
+  body.mobile-home-layout #home{
+    align-items:flex-start !important;
+    justify-content:center !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding:
+      calc(env(safe-area-inset-top,0px) + 8px)
+      calc(env(safe-area-inset-right,0px) + 10px)
+      calc(env(safe-area-inset-bottom,0px) + 12px)
+      calc(env(safe-area-inset-left,0px) + 10px) !important;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.mobile-home-layout #home .home-shell{
+    width:100% !important;
+    max-width:540px !important;
+    max-height:none !important;
+    gap:8px !important;
+    margin:0 auto;
+  }
+  body.mobile-home-layout #home .home-topbar{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:8px !important;
+    width:100%;
+    padding:6px 0 8px !important;
+  }
+  body.mobile-home-layout #home .home-logo-wrap{
+    width:100%;
+    gap:9px;
+    align-items:center;
+  }
+  body.mobile-home-layout #home .home-logo-badge{
+    width:38px !important;
+    height:38px !important;
+    flex:0 0 38px;
+    border-radius:11px;
+    font-size:20px !important;
+  }
+  body.mobile-home-layout #home .home-logo-text{
+    width:100%;
+    min-width:0;
+  }
+  body.mobile-home-layout #home .home-logo-text .kicker{
+    font-size:8px;
+    letter-spacing:.15em;
+  }
+  body.mobile-home-layout #home .home-title-row{
+    width:100%;
+    gap:6px !important;
+    flex-wrap:wrap;
+  }
+  body.mobile-home-layout #home .home-logo-text .title{
+    flex:1 1 auto;
+    min-width:150px;
+    font-size:22px !important;
+  }
+  body.mobile-home-layout #home .home-logo-text .tag{
+    font-size:10px;
+    margin-top:1px;
+  }
+  body.mobile-home-layout #home .mobile-title-btn,
+  body.mobile-home-layout #home .account-btn{
+    min-height:32px;
+    min-width:0 !important;
+    padding:6px 9px !important;
+    border-radius:10px;
+    font-size:10px !important;
+    line-height:1;
+  }
+  body.mobile-home-layout #home .home-top-actions{
+    display:grid !important;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:6px !important;
+    width:100% !important;
+    margin:0 !important;
+  }
+  body.mobile-home-layout #home .home-cubits-pill{
+    grid-column:1 / -1;
+    min-height:36px;
+    padding:6px 10px !important;
+    border-radius:11px;
+    justify-content:center;
+  }
+  body.mobile-home-layout #home .home-cubits-pill .label{font-size:8px;}
+  body.mobile-home-layout #home .home-cubits-pill b{font-size:15px;}
+  body.mobile-home-layout #home #homeCardsBtn,
+  body.mobile-home-layout #home #otherPetsBtn,
+  body.mobile-home-layout #home #homeThemesBtn{
+    width:100% !important;
+    min-width:0 !important;
+    min-height:38px !important;
+    margin:0 !important;
+    padding:7px 5px !important;
+    border-radius:11px !important;
+    font-size:10px !important;
+    white-space:nowrap;
+  }
+  body.mobile-home-layout #home .home-card{
+    padding-top:0 !important;
+    min-height:0;
+  }
+  body.mobile-home-layout #home .home-hero{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) !important;
+    gap:8px !important;
+    align-items:start !important;
+  }
+  body.mobile-home-layout #home .home-main-panel{
+    min-width:0;
+    gap:7px !important;
+    padding:2px 0 0 !important;
+  }
+  body.mobile-home-layout #home h1{
+    font-size:28px !important;
+    line-height:1.02;
+  }
+  body.mobile-home-layout #home .sub{
+    font-size:11px !important;
+    line-height:1.3;
+  }
+  body.mobile-home-layout #home .home-name-row{
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:6px !important;
+    width:100% !important;
+    margin:1px 0 3px !important;
+  }
+  body.mobile-home-layout #home .home-name-row .home-field-label{
+    grid-column:1 / -1;
+    width:auto !important;
+    font-size:9px;
+  }
+  body.mobile-home-layout #home .home-name-row #username{
+    width:100% !important;
+    min-width:0 !important;
+    min-height:38px;
+    box-sizing:border-box;
+    padding:8px 10px !important;
+    font-size:12px !important;
+  }
+  body.mobile-home-layout #home .home-name-row #choosePlayerDesignBtn{
+    width:auto !important;
+    min-width:104px !important;
+    min-height:38px !important;
+    padding:8px 10px !important;
+    font-size:9px !important;
+    white-space:normal !important;
+    line-height:1.05;
+  }
+  body.mobile-home-layout #home .home-start-row{
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px !important;
+    width:100%;
+    margin-top:0 !important;
+  }
+  body.mobile-home-layout #home .home-start-row .btn,
+  body.mobile-home-layout #home #playBtn,
+  body.mobile-home-layout #home #chooseStarterPetBtn{
+    width:100% !important;
+    min-width:0 !important;
+    min-height:46px !important;
+    margin:0 !important;
+    padding:10px 8px !important;
+    font-size:13px !important;
+    border-radius:12px !important;
+  }
+  body.mobile-home-layout #home #selectedStarterPet,
+  body.mobile-home-layout #home .home-inline-note{
+    min-height:14px;
+    font-size:9px;
+  }
+  body.mobile-home-layout #home .online-panel{
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px !important;
+    width:100% !important;
+    max-width:none !important;
+    box-sizing:border-box;
+    margin-top:0 !important;
+    padding:7px !important;
+  }
+  body.mobile-home-layout #home .online-mode-btn{
+    width:100%;
+    min-height:36px;
+    padding:7px 8px !important;
+    font-size:10px !important;
+  }
+  body.mobile-home-layout #home #serverUrl{
+    grid-column:1 / -1;
+    width:100% !important;
+    max-width:none !important;
+    min-width:0;
+    box-sizing:border-box;
+    min-height:36px;
+    padding:7px 9px !important;
+    font-size:10px !important;
+  }
+  body.mobile-home-layout #home #netStatus{
+    grid-column:1 / -1;
+    min-width:0;
+    text-align:center;
+    font-size:9px;
+  }
+  body.mobile-home-layout #home .home-side-panel{
+    padding:0 !important;
+    min-width:0;
+  }
+  body.mobile-home-layout #home #openStarterShop{
+    width:100% !important;
+    min-height:105px !important;
+    padding:12px 14px !important;
+    border-radius:15px !important;
+  }
+  body.mobile-home-layout #home .shop-launch-kicker{font-size:8px;}
+  body.mobile-home-layout #home .shop-launch-title{font-size:24px !important;}
+  body.mobile-home-layout #home .shop-launch-sub{
+    max-width:85%;
+    font-size:9px !important;
+    line-height:1.25;
+  }
+  body.mobile-home-layout #home .shop-launch-arrow{font-size:21px;}
+
+  /* Home-launched menus also stay inside a phone screen. */
+  body.mobile-home-layout .account-modal,
+  body.mobile-home-layout .shop-modal{
+    padding:
+      calc(env(safe-area-inset-top,0px) + 8px)
+      calc(env(safe-area-inset-right,0px) + 8px)
+      calc(env(safe-area-inset-bottom,0px) + 8px)
+      calc(env(safe-area-inset-left,0px) + 8px) !important;
+  }
+  body.mobile-home-layout .account-modal .modal-card,
+  body.mobile-home-layout .shop-modal .modal-card{
+    width:100% !important;
+    max-width:520px !important;
+    max-height:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 16px) !important;
+    box-sizing:border-box;
+    padding:14px !important;
+    border-radius:15px;
+  }
+
+  /* Landscape phones: use both sides rather than stacking everything tall. */
+  @media (orientation:landscape) and (max-height:620px){
+    body.mobile-home-layout #home{
+      padding:
+        calc(env(safe-area-inset-top,0px) + 5px)
+        calc(env(safe-area-inset-right,0px) + 8px)
+        calc(env(safe-area-inset-bottom,0px) + 6px)
+        calc(env(safe-area-inset-left,0px) + 8px) !important;
+    }
+    body.mobile-home-layout #home .home-shell{
+      max-width:980px !important;
+      gap:4px !important;
+    }
+    body.mobile-home-layout #home .home-topbar{
+      grid-template-columns:minmax(250px,.9fr) minmax(360px,1.1fr) !important;
+      align-items:center;
+      gap:10px !important;
+      padding:2px 0 4px !important;
+    }
+    body.mobile-home-layout #home .home-logo-badge{
+      width:32px !important;height:32px !important;flex-basis:32px;font-size:17px !important;
+    }
+    body.mobile-home-layout #home .home-logo-text .kicker,
+    body.mobile-home-layout #home .home-logo-text .tag{display:none;}
+    body.mobile-home-layout #home .home-logo-text .title{
+      min-width:120px;
+      font-size:18px !important;
+    }
+    body.mobile-home-layout #home .mobile-title-btn,
+    body.mobile-home-layout #home .account-btn{
+      min-height:28px;
+      padding:5px 7px !important;
+      font-size:9px !important;
+    }
+    body.mobile-home-layout #home .home-top-actions{
+      grid-template-columns:minmax(92px,1.05fr) repeat(3,minmax(70px,1fr));
+      gap:5px !important;
+    }
+    body.mobile-home-layout #home .home-cubits-pill{
+      grid-column:auto;
+      min-height:31px;
+      padding:4px 7px !important;
+      gap:6px;
+    }
+    body.mobile-home-layout #home .home-cubits-pill .label{display:none;}
+    body.mobile-home-layout #home .home-cubits-pill b{font-size:13px;}
+    body.mobile-home-layout #home #homeCardsBtn,
+    body.mobile-home-layout #home #otherPetsBtn,
+    body.mobile-home-layout #home #homeThemesBtn{
+      min-height:31px !important;
+      padding:5px 4px !important;
+      font-size:9px !important;
+    }
+    body.mobile-home-layout #home .home-hero{
+      grid-template-columns:minmax(0,1.45fr) minmax(190px,.55fr) !important;
+      gap:10px !important;
+      align-items:stretch !important;
+    }
+    body.mobile-home-layout #home .home-main-panel{
+      gap:4px !important;
+      padding:0 !important;
+    }
+    body.mobile-home-layout #home h1{font-size:22px !important;}
+    body.mobile-home-layout #home .sub{
+      font-size:9px !important;
+      line-height:1.15;
+      margin-bottom:1px;
+    }
+    body.mobile-home-layout #home .home-name-row{
+      grid-template-columns:auto minmax(130px,1fr) auto;
+      align-items:center;
+      margin:0 !important;
+      gap:5px !important;
+    }
+    body.mobile-home-layout #home .home-name-row .home-field-label{
+      grid-column:auto;
+      font-size:8px;
+      white-space:nowrap;
+    }
+    body.mobile-home-layout #home .home-name-row #username,
+    body.mobile-home-layout #home .home-name-row #choosePlayerDesignBtn{
+      min-height:31px !important;
+      padding:5px 7px !important;
+    }
+    body.mobile-home-layout #home .home-name-row #choosePlayerDesignBtn{
+      min-width:90px !important;
+      font-size:8px !important;
+    }
+    body.mobile-home-layout #home .home-start-row{
+      gap:5px !important;
+    }
+    body.mobile-home-layout #home .home-start-row .btn,
+    body.mobile-home-layout #home #playBtn,
+    body.mobile-home-layout #home #chooseStarterPetBtn{
+      min-height:35px !important;
+      padding:6px !important;
+      font-size:11px !important;
+    }
+    body.mobile-home-layout #home #selectedStarterPet,
+    body.mobile-home-layout #home .home-inline-note{
+      min-height:10px;
+      font-size:8px;
+      line-height:1.1;
+    }
+    body.mobile-home-layout #home .online-panel{
+      grid-template-columns:auto auto minmax(150px,1fr) auto;
+      gap:5px !important;
+      padding:5px !important;
+      align-items:center;
+    }
+    body.mobile-home-layout #home .online-mode-btn{
+      min-height:29px;
+      padding:5px 7px !important;
+      font-size:9px !important;
+    }
+    body.mobile-home-layout #home #serverUrl{
+      grid-column:auto;
+      min-height:29px;
+      padding:5px 7px !important;
+      font-size:9px !important;
+    }
+    body.mobile-home-layout #home #netStatus{
+      grid-column:auto;
+      text-align:left;
+      white-space:nowrap;
+      font-size:8px;
+    }
+    body.mobile-home-layout #home .home-side-panel{
+      display:flex;
+      min-height:0;
+    }
+    body.mobile-home-layout #home #openStarterShop{
+      flex:1 1 auto;
+      min-height:0 !important;
+      height:100%;
+      padding:11px !important;
+    }
+    body.mobile-home-layout #home .shop-launch-title{font-size:23px !important;}
+    body.mobile-home-layout #home .shop-launch-sub{
+      max-width:92%;
+      font-size:8px !important;
+      line-height:1.18;
+    }
+  }
+
 </style>
 </head>
 <body>
@@ -7898,7 +8287,8 @@ function sendNetworkInput(dt) {
       y: player.y,
       angle: player.angle,
       color: player.color,
-      tool: player.heldSpecial || player.tool || "Fist",
+      tool: player.tool || "Fist",
+      heldSpecial: player.heldSpecial || "",
       ridingPetId: player.riding && player.riding.netId ? player.riding.netId : "",
       attacking: !!mouse.down,
     });
@@ -7962,6 +8352,7 @@ function updateRemotePlayers(dt) {
     v.health = Number.isFinite(Number(p.health)) ? Number(p.health) : 100;
     v.maxHealth = Number.isFinite(Number(p.maxHealth)) ? Number(p.maxHealth) : 100;
     v.tool = p.tool || "Fist";
+    v.heldSpecial = p.heldSpecial || "";
     v.dead = !!p.dead;
     v.moving = !!p.moving;
     v.ridingPetId = String(p.ridingPetId || "");
@@ -7989,10 +8380,14 @@ function drawRemotePlayer(v) {
 
   const body = v.color || "#3fa7ff";
   const arm = shadeColor(body, -30);
-  const holding = v.tool || "Fist";
+  const holding = v.heldSpecial || v.tool || "Fist";
 
-  // Use the same arm/tool geometry as the local player.
-  if (holding === "Fist") {
+  // Use the same held-item geometry as the local player.
+  if (holding === "Berry") {
+    drawHeldBerry(arm, 0);
+  } else if (holding === "Wall") {
+    drawHeldWall(arm);
+  } else if (holding === "Fist") {
     drawArm(1, 0, arm, null, false, -armWalk);
     drawArm(-1, 0, arm, null, false, armWalk);
   } else {
@@ -8050,6 +8445,7 @@ const keys = new Set();
 const mouse = { sx: W / 2, sy: H / 2, down: false, rdown: false };
 let mobileMode = false;
 let joyActive = false, joyDX = 0, joyDY = 0;
+let mobileFacingAngle = 0; // remembers the joystick's last real direction
 
 function gameplayKeyboardActive() {
   return !!(game.started && !game.over);
@@ -8119,7 +8515,14 @@ window.addEventListener("blur", clearHeldKeyboardInput);
 document.addEventListener("visibilitychange", () => { if (document.hidden) clearHeldKeyboardInput(); });
 canvas.addEventListener("mousemove", e => { mouse.sx = e.clientX; mouse.sy = e.clientY; });
 canvas.addEventListener("mousedown", e => {
-  if (e.button === 0) mouse.down = true;
+  if (e.button === 0) {
+    if (player.heldSpecial === "Berry" || player.heldSpecial === "Wall") {
+      mouse.down = false;
+      meleeAttack();
+    } else {
+      mouse.down = true;
+    }
+  }
   if (e.button === 2) {
     mouse.rdown = true;
     const wx = e.clientX + game.camX;
@@ -8145,6 +8548,14 @@ const joyKnob = document.getElementById("joyKnob");
 const mobileAttackBtn = document.getElementById("mAttack");
 const mobileShootBtn = document.getElementById("mShoot");
 const mobileCraftBtn = document.getElementById("mCraft");
+function syncMobilePrimaryButton() {
+  if (!mobileAttackBtn) return;
+  const special = player?.heldSpecial || "";
+  const label = special === "Berry" ? "EAT" : special === "Wall" ? "PLACE" : "ATK";
+  mobileAttackBtn.textContent = label;
+  mobileAttackBtn.setAttribute("aria-label", special === "Berry" ? "Eat berry" : special === "Wall" ? "Place wall" : "Attack");
+  mobileAttackBtn.title = special === "Berry" ? "Eat berry" : special === "Wall" ? "Place wall" : "Attack";
+}
 let joyPointerId = null;
 let attackPointerId = null;
 
@@ -8170,6 +8581,7 @@ function updateJoyFromPointer(e) {
     ny = ny / nl * Math.min(1, mag);
   }
   joyDX = nx; joyDY = ny;
+  if (Math.hypot(nx, ny) > 0.10) mobileFacingAngle = Math.atan2(ny, nx);
   joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
 }
 
@@ -8207,7 +8619,12 @@ mobileAttackBtn.addEventListener("pointerdown", e => {
   if (!mobileMode || attackPointerId != null) return;
   e.preventDefault();
   attackPointerId = e.pointerId;
-  mouse.down = true;
+  if (player.heldSpecial === "Berry" || player.heldSpecial === "Wall") {
+    mouse.down = false;
+    meleeAttack();
+  } else {
+    mouse.down = true;
+  }
   mobileAttackBtn.classList.add("pressed");
   try { mobileAttackBtn.setPointerCapture(e.pointerId); } catch (_) {}
 }, { passive:false });
@@ -8268,6 +8685,8 @@ function syncMobileTitleButton(){
   mobileTitleBtn.classList.toggle("on", on);
   mobileTitleBtn.setAttribute("aria-pressed", on ? "true" : "false");
   mobileTitleBtn.textContent = on ? "Mobile On" : "Mobile";
+  // Mobile Mode now changes the HOME screen immediately too, not only after Play.
+  document.body.classList.toggle("mobile-home-layout", on);
 }
 if (mobileModeCheckbox) {
   let savedMobileChoice = "";
@@ -8283,6 +8702,9 @@ if (mobileTitleBtn && mobileModeCheckbox) {
     syncMobileTitleButton();
     try { localStorage.setItem("cubeMobileControls", mobileModeCheckbox.checked ? "on" : "off"); } catch (_) {}
   });
+}
+if (mobileModeCheckbox) {
+  mobileModeCheckbox.addEventListener("change", syncMobileTitleButton);
 }
 
 // ---------- audio ----------
@@ -10695,7 +11117,7 @@ const player = {
   x: WORLD_W / 2 + 145, y: WORLD_H / 2, angle: 0,
   health: 100, maxHealth: 100,
   wood: 0, stone: 0, gold: 0, berries: 0,
-  tool: "Fist", heldSpecial: null, owned: { Fist: true, Axe: false, Pickaxe: false, Sword: false, Bow: false },
+  tool: "Fist", lastWeaponTool: "Fist", heldSpecial: null, owned: { Fist: true, Axe: false, Pickaxe: false, Sword: false, Bow: false },
   attackCd: 0, shootCd: 0, punchTimer: 0, punchSide: 1, swingWeapon: "Fist",
   hurtFlash: 0, dead: false, splitT: 0,
   color: COLORS[0], username: "Cube",
@@ -11381,15 +11803,18 @@ function handleHotkey(key) {
   if (item.tool) {
     if (player.owned[item.tool]) {
       player.tool = item.tool;
+      player.lastWeaponTool = item.tool;
       player.heldSpecial = null;
     }
   } else if (item.special === "Berry" || item.label === "Berry") {
     selectBerry();
   } else if (item.special === "Saddle" || item.label === "Saddle") {
+    player.heldSpecial = null;
     toggleRide();
   } else if (item.label === "Wall") {
-    placeWall();
+    selectWall();
   } else if (item.label === "Tower" || item.special === "Tower") {
+    player.heldSpecial = null;
     const cost = { wood: 12, stone: 6 };
     if (!canAfford(cost)) { banner(`Need ${costText(cost)} for tower`, true); return; }
     pay(cost);
@@ -11401,13 +11826,24 @@ function handleHotkey(key) {
   syncHotbar();
 }
 
+function selectWall() {
+  player.heldSpecial = "Wall";
+  if (TOOLS[player.tool] && player.owned[player.tool]) player.lastWeaponTool = player.tool;
+  banner("Wall equipped — click or press Place to build");
+  syncHotbar();
+  syncMobilePrimaryButton();
+}
+
 function placeWall() {
-  if (!canAfford(WALL_COST)) { banner(`Need ${costText(WALL_COST)} for wall`, true); return; }
+  if (!canAfford(WALL_COST)) { banner(`Need ${costText(WALL_COST)} for wall`, true); return false; }
   pay(WALL_COST);
   const a = player.angle;
   if (net.room) { try { net.room.send("build", { kind:"wall", angle:a }); } catch (_) {} }
   else walls.push({ x: player.x + Math.cos(a) * 48, y: player.y + Math.sin(a) * 48, ttl: -1, r: 20, hp:72, maxHp:72, kind:"wood", spiked:false, ownerId:"local" });
   sfx.craft();
+  syncHud();
+  syncHotbar();
+  return true;
 }
 
 let bannerTimer = 0;
@@ -11542,6 +11978,12 @@ function meleeAttack() {
   if (player.heldSpecial === "Berry") {
     if (player.attackCd > 0) return;
     eatBerry();
+    return;
+  }
+  if (player.heldSpecial === "Wall") {
+    if (player.attackCd > 0) return;
+    player.attackCd = 0.24;
+    placeWall();
     return;
   }
   const t = TOOLS[player.tool];
@@ -11844,18 +12286,27 @@ function eatBush(r) {
   syncHud();
   syncHotbar();
 }
+function restoreLastWeaponAfterSpecial() {
+  const wanted = player.lastWeaponTool;
+  player.tool = (wanted && TOOLS[wanted] && player.owned[wanted]) ? wanted : "Fist";
+  player.lastWeaponTool = player.tool;
+  player.heldSpecial = null;
+  player.swingWeapon = player.tool;
+}
 function selectBerry() {
   if ((player.berries || 0) < 1) { banner("No berries to hold!", true); return; }
+  if (TOOLS[player.tool] && player.owned[player.tool]) player.lastWeaponTool = player.tool;
   player.heldSpecial = "Berry";
-  player.tool = "Fist";
-  banner("Berry equipped — click to eat");
+  banner("Berry equipped — Eat will use one berry");
   syncHotbar();
+  syncMobilePrimaryButton();
 }
 function eatBerry() {
   if ((player.berries || 0) < 1) {
-    player.heldSpecial = null;
+    restoreLastWeaponAfterSpecial();
     banner("No berries!", true);
     syncHotbar();
+    syncMobilePrimaryButton();
     return;
   }
   player.berries--;
@@ -11866,16 +12317,16 @@ function eatBerry() {
   player.swingWeapon = "Fist";
   floatText(player.x, player.y - 28, "+22", "#7be08a");
   sfx.eat();
-  if (player.berries <= 0) {
-    player.heldSpecial = null;
-    banner("Last berry eaten");
-  }
+  const wasLast = player.berries <= 0;
+  restoreLastWeaponAfterSpecial();
+  banner(wasLast ? "Last berry eaten" : `Berry eaten — ${player.tool} re-equipped`);
   syncHud();
   syncHotbar();
+  syncMobilePrimaryButton();
 }
 
 function fireBow() {
-  if (game.over || !game.started || player.tool !== "Bow" || player.shootCd > 0 || player.wood < 1) return;
+  if (game.over || !game.started || player.heldSpecial || player.tool !== "Bow" || player.shootCd > 0 || player.wood < 1) return;
   player.wood -= 1; player.shootCd = 0.45;
   player.punchTimer = 0.18; player.swingWeapon = "Bow";
   const a = player.angle;
@@ -14192,7 +14643,10 @@ function updatePlayer(dt) {
   }
 
   const wx = mouse.sx + game.camX, wy = mouse.sy + game.camY;
-  if (!(mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10)) {
+  if (mobileMode) {
+    // Phones face where the joystick points, and keep that last direction after release.
+    player.angle = mobileFacingAngle;
+  } else {
     player.angle = angTo(player.x, player.y, wx, wy);
   }
 
@@ -14206,10 +14660,12 @@ function updatePlayer(dt) {
     lastMovementInputAt = performance.now();
     const len = Math.hypot(dx, dy) || 1;
     if (mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10) {
-      player.angle = Math.atan2(dy, dx);
+      mobileFacingAngle = Math.atan2(dy, dx);
+      player.angle = mobileFacingAngle;
     }
     let speed = 148;
     if (player.riding) speed = player.riding.speed || animalSpeed(player.riding.type, player.riding.stage, true);
+    if (player.heldSpecial === "Wall") speed *= 0.64;
     player.x += (dx / len) * speed * dt;
     player.y += (dy / len) * speed * dt;
   }
@@ -14407,7 +14863,8 @@ function syncHotbar() {
     if (!s) return;
     const isTool = !!item.tool;
     const berryActive = item.special === "Berry" && player.heldSpecial === "Berry";
-    s.classList.toggle("active", (isTool && item.tool === player.tool && !player.heldSpecial) || berryActive);
+    const wallActive = item.label === "Wall" && player.heldSpecial === "Wall";
+    s.classList.toggle("active", (isTool && item.tool === player.tool && !player.heldSpecial) || berryActive || wallActive);
     s.classList.toggle("locked", false);
     if (item.special === "Berry") {
       const q = s.querySelector(".qty");
@@ -14415,6 +14872,7 @@ function syncHotbar() {
       s.title = `Berry ×${player.berries || 0} — select it, then click to eat`;
     }
   });
+  syncMobilePrimaryButton();
 }
 
 const ELEM_GLOW = {
@@ -14709,12 +15167,12 @@ function doCraft(c) {
   if (!canAfford(c.cost)) { banner("Not enough resources", true); return; }
   if (c.id in TOOLS) {
     if (player.owned[c.id]) { banner("Already own " + c.name); return; }
-    pay(c.cost); player.owned[c.id] = true; player.tool = c.id;
+    pay(c.cost); player.owned[c.id] = true; player.tool = c.id; player.lastWeaponTool = c.id; player.heldSpecial = null;
     sfx.craft(); banner("Crafted " + c.name + "! Added to hotbar");
     buildHotbar();
   } else if (c.id === "Wall") {
     player.owned.Wall = true;
-    placeWall();
+    selectWall();
     buildHotbar();
   } else if (c.id === "Tower") {
     player.owned.Tower = true;
@@ -16413,6 +16871,27 @@ function drawHeldBerry(color, eatT) {
   ctx.restore();
 }
 
+function drawHeldWall(color) {
+  // Carry the unplaced wall in front of the player with both hands visible.
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(7, -10); ctx.lineTo(22, -12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(7, 10); ctx.lineTo(22, 12); ctx.stroke();
+  ctx.save();
+  ctx.translate(31, 0);
+  ctx.fillStyle = "#a9744f";
+  ctx.strokeStyle = "#5c3a22";
+  ctx.lineWidth = 2.3;
+  roundRect(-9, -18, 18, 36, 3); ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-9, -6); ctx.lineTo(9, -6);
+  ctx.moveTo(-9, 6); ctx.lineTo(9, 6);
+  ctx.moveTo(0, -18); ctx.lineTo(0, 18);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawPlayer() {
   const p = player;
   ctx.save();
@@ -16492,6 +16971,11 @@ function drawPlayer() {
     ctx.save();
     ctx.translate(0, armWalk * 0.35);
     drawHeldBerry(armFill, swingEase);
+    ctx.restore();
+  } else if (holding === "Wall") {
+    ctx.save();
+    ctx.translate(0, armWalk * 0.22);
+    drawHeldWall(armFill);
     ctx.restore();
   } else if (holding === "Fist") {
     drawArm(1, p.punchSide === 1 ? swingEase : 0, armFill, null, false, -armWalk);
@@ -17354,9 +17838,11 @@ function resetGame() {
   player.gold = meta.ownedStarters.gold5 ? 5 : 0;
   player.berries = 0;
   player.tool = "Fist";
+  player.lastWeaponTool = "Fist";
   player.heldSpecial = null;
   player.owned = { Fist: true, Axe: !!meta.ownedStarters.startAxe, Pickaxe: false, Sword: false, Bow: false };
-  if (meta.ownedStarters.startAxe) player.tool = "Axe";
+  if (meta.ownedStarters.startAxe) { player.tool = "Axe"; player.lastWeaponTool = "Axe"; }
+  mobileFacingAngle = player.angle;
   player.attackCd = 0; player.shootCd = 0; player.punchTimer = 0; player.punchSide = 1;
   player.hurtFlash = 0; player.dead = false; player.splitT = 0;
   player.color = meta.color;
@@ -17410,6 +17896,7 @@ function resetGame() {
   player.x = spawn.x;
   player.y = spawn.y;
   player.angle = rand(-Math.PI, Math.PI);
+  if (mobileMode) mobileFacingAngle = player.angle;
   for (let i = 0; i < player.pets.length; i++) {
     const pet = player.pets[i];
     const a = i * 0.9 + 0.35;
@@ -18149,8 +18636,10 @@ el("playBtn").addEventListener("click", async () => {
   meta.username = (el("username").value || "Cube").slice(0, 14);
   saveMeta();
   mobileMode = el("mobileMode").checked;
+  if (mobileMode) mobileFacingAngle = player.angle;
   try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}
   document.getElementById("mobileControls").classList.toggle("on", mobileMode);
+  syncMobilePrimaryButton();
   document.body.classList.toggle("mobile-performance", mobileMode);
   if (!mobileMode) resetMobilePointers();
   setHomeControlsEnabled(false);
