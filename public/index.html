@@ -1896,8 +1896,15 @@
 
   /* ---------- 344 home theme effects ---------- */
   #homeThemeFx{
-    position:absolute;
-    inset:0;
+    /* Keep the large theme backdrop centered on the VIEWPORT, not the
+       scrollable/padded home container. The equal overscan on every side
+       prevents the color wash from leaving a thin uncovered strip at the
+       right edge on scrollbar/sub-pixel viewport sizes. */
+    position:fixed;
+    inset:-64px;
+    width:auto;
+    height:auto;
+    box-sizing:border-box;
     overflow:hidden;
     pointer-events:none;
     z-index:1;
@@ -4721,6 +4728,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
+const CUBE_SHARED_RULES_VERSION = "510";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -8183,6 +8191,7 @@ async function connectMultiplayer() {
       // Run-only starter gold must begin at the same value on the authoritative server.
       startGold: Math.max(0, Math.min(5, Math.floor(Number(player.gold) || 0))),
       petStatUpgrades: JSON.stringify(meta.petStatUpgrades || {}),
+      rulesVersion: CUBE_SHARED_RULES_VERSION,
     });
     const timeoutPromise = new Promise((_, reject) => {
       joinTimeoutId = setTimeout(() => reject(new Error("Multiplayer connection timed out")), 12000);
@@ -8193,12 +8202,31 @@ async function connectMultiplayer() {
     net.client = client;
     net.room = room;
     net.sessionId = room.sessionId;
+    const serverRulesVersion = String(room.state?.rulesVersion || "");
+    if (serverRulesVersion && serverRulesVersion !== CUBE_SHARED_RULES_VERSION) {
+      try { room.leave(); } catch (_) {}
+      throw new Error(`Gameplay rules mismatch: game ${CUBE_SHARED_RULES_VERSION}, server ${serverRulesVersion}`);
+    }
     net.sendAccum = 0;
     net.fullSyncAccum = 0;
     net.remoteVisuals.clear();
     net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
     net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.lastPhaseIdx = -1;
+    room.onMessage("rulesMismatch", (data={}) => {
+      const sv = String(data.serverRulesVersion || "unknown");
+      setNetStatus(`Rules mismatch • server ${sv}`, "bad");
+      banner("Multiplayer server is running different gameplay rules. Update the server.", true);
+      try { room.leave(); } catch (_) {}
+    });
+    room.onMessage("serverReady", (data={}) => {
+      const sv = String(data.rulesVersion || "");
+      if (sv && sv !== CUBE_SHARED_RULES_VERSION) {
+        setNetStatus(`Rules mismatch • server ${sv}`, "bad");
+        banner("Multiplayer server is out of date for this game build.", true);
+        try { room.leave(); } catch (_) {}
+      }
+    });
     room.onMessage("resourceReward", applyNetworkHarvestReward);
     room.onMessage("goldBalance", data => {
       applyConfirmedNetworkGold(data?.balance, data?.delta);
@@ -8430,8 +8458,12 @@ function sendNetworkInput(dt) {
       moveX: mv.x,
       moveY: mv.y,
       moving,
+      // Send both names so current and older authoritative servers read the
+      // exact same locally simulated position. Server 447+ prefers clientX/clientY.
       clientX: player.x,
       clientY: player.y,
+      x: player.x,
+      y: player.y,
       angle: player.angle,
       color: player.color,
       tool: player.tool || "Fist",
@@ -15107,7 +15139,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 508;
+const RESET_CORE_BUILD = 510;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -15147,6 +15179,7 @@ function moveOwnedPetSwept(p, speed, dt) {
 
 window.getCubeResetCoreInfo = () => ({
   build: RESET_CORE_BUILD,
+  rulesVersion: CUBE_SHARED_RULES_VERSION,
   simulationHz: 60,
   worldAiHz: 30,
   sweptPlayerCollision: true,

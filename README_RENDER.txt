@@ -806,7 +806,7 @@ SERVER 442 / GAME 505 NATURAL CONTINUOUS PET ROAMING:
 - Explicit orders, combat, riding, sleeping wildlife, abilities, progression, collisions, death/respawn, and multiplayer authority remain unchanged.
 
 SERVER 443 / GAME 506 WEIGHT → SPEED → ROAMING PHYSICS:
-- public/index.html updated to Game 507.
+- public/index.html updated to Game 506.
 - Animal mass now modifies actual movement speed; light animals preserve more speed while heavy animals are slower.
 - Pet Weight card upgrades now have a tradeoff: more mass makes the pet harder to shove but modestly reduces movement speed.
 - Speed upgrades increase both movement speed and the natural roaming range around the owner.
@@ -819,4 +819,20 @@ SERVER 445 / GAME 508 MULTIPLAYER RIDER LAYERING:
 - Remote pets render before remote players, so another player's sprite is always visible above their pets.
 - This includes mounted players: the mount draws first and the rider draws after it.
 - The local player keeps the same mount rule: ridden pet first, player second.
-- Game 508 keeps the Fox Theme and speed-based head/tail animation from Game 507.
+- Game 509 keeps the Fox Theme and speed-based head/tail animation from Game 507.
+
+
+SERVER 447 / GAME 510 OFFLINE ↔ ONLINE GAMEPLAY PARITY:
+- Game and server now share gameplay rules version 510; mismatched versions are rejected instead of silently running different balance.
+- Multiplayer input accepts the same current client coordinates (clientX/clientY) and keeps x/y compatibility for older servers.
+- Sabertooth physical/body hitboxes use the same smaller geometry online and offline.
+- Animal weight, speed, knockback resistance, pet roaming range, attack cooldowns, and pet tail timing use matching formulas.
+- Server pet combat uses the same head-contact bite rule and Combat chase speeds as offline.
+- Combat-order pets use the same independent hunt/roam behavior instead of returning to the owner when no target is nearby.
+- Player/animal pushing uses the same weight-split displacement and escape rule in both modes.
+- Server static collision uses the same animal multi-circle bodies and the same special tree/log/gold/chest shapes used offline.
+- Wildlife AI now matches offline ranges and movement: 170 bear / 190 normal natural aggro, 0.90 ambient hostile chase, 1.05 locked-target chase, 1.15 hit-flee, 1.24 baby flee, and the same friendly nearby roaming.
+- Skittish wildlife remembers the actual attacker and uses the same flee-first / low-health-fight-back rule online.
+- Wild Stone, Sound, Fire, Lightning, Ice, Water, and Plant abilities now run authoritatively online with the same cooldown multiplier, cast range, damage, and push distances as offline.
+- Wild Dog stone walls can hurt players online just like offline; pet-owned stone walls still do not hurt players.
+- Wildlife-vs-wildlife bite/ability damage follows the same raw-damage path used offline.
