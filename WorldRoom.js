@@ -850,10 +850,18 @@ function typeHp(type, stage) {
 function typeDmg(type, stage) {
   return animalBalance(type).attack*(ANIMAL_STAGE_ATTACK[stage]??1);
 }
-function animalSpeed(type, stage, owned=false) {
+function animalWeightSpeedFactor(weight){
+  const w=Math.max(.45,Number(weight)||1);
+  return clamp(Math.pow(1.45/w,.18),.62,1.15);
+}
+function animalKnockbackScale(a){
+  return clamp(animalPushMobility(a)*1.22,.10,1);
+}
+function animalSpeed(type, stage, owned=false, extraWeightMul=1) {
   const base=PET_TYPES[type]?.baseSpeed||60; let m=1.08;
   if(stage==="adult")m=.95; else if(stage==="boss")m=.72; else if(stage==="superboss")m=.62; else if(stage==="bigmomma")m=.72;
-  return base*m*(owned?1.55:1);
+  const effectiveWeight=animalWeight(type,stage)*Math.max(.55,Number(extraWeightMul)||1);
+  return base*m*(owned?1.55:1)*animalWeightSpeedFactor(effectiveWeight);
 }
 
 function animalAttackCooldown(type, stage, owned=false){
@@ -883,6 +891,19 @@ const PET_KILL_SPECIES_XP={rabbit:.85,dog:1,cat:1,fox:1.05,deer:1.08,dragon:1.12
 function petKillXpForAnimal(a){return Math.max(2,Math.round((PET_KILL_STAGE_XP[a?.stage]??14)*(PET_KILL_SPECIES_XP[a?.type]??1)));}
 function petKillXpForEnemy(en){return en?.strong?26:14;}
 
+function petFollowRangeFor(p){
+  // Actual movement speed sets roaming freedom: fast/light pets range farther,
+  // while slow/heavy pets naturally stay closer to their owner.
+  const bodyR=Math.max(10,Number(p?.r)||18);
+  const moveSpeed=Math.max(24,Number(p?.speed)||60);
+  const stop=clamp(PLAYER_R+bodyR*.60+18,54,104);
+  const roamBand=clamp(24+moveSpeed*.50,34,128);
+  const start=stop+roamBand;
+  const run=start+clamp(80+moveSpeed*.48,105,190);
+  const sprint=run+clamp(120+moveSpeed*.62,145,270);
+  return{stop,start,run,sprint,wanderMax:start};
+}
+
 
 export class WorldRoom extends Room {
   maxClients=12;
@@ -895,6 +916,9 @@ export class WorldRoom extends Room {
     this.resourceRespawns=new Map(); this.harvestCredits=new Map(); this.goldHandCredits=new Map();
     this.playerAttackCd=new Map(); this.playerShootCd=new Map(); this.enemyAggro=new Map(); this.animalAggro=new Map();
     this.petFocusTargets=new Map();
+    // Server-only idle-wander/follow state. Keeping this out of the Colyseus
+    // schema avoids sending wander targets and stuck timers over the network.
+    this.petFollowState=new Map();
     this.playerRunShop=new Map(); this.tamePendingPlayers=new Set();
     this.playerCarryUntil=new Map(); this.playerCarryAnimal=new Map();
     this.wallSpikeNext=new Map(); this.wallEnemyNext=new Map();
@@ -1092,7 +1116,7 @@ export class WorldRoom extends Room {
   addPet(ownerId,type,stage,x,y,opts={}) {
     const info=PET_TYPES[type];if(!info)return null;const p=new PetState();const r=animalRadius(type,stage);this.applyPetUpgradeFields(p,ownerId,type);
     const baseHp=typeHp(type,stage),hp=Math.max(12,Math.round(baseHp*petUpgradeMultiplier(p,"health")));const coat=opts.coat||pick(info.coats||[info.color]);
-    const speed=animalSpeed(type,stage,true)*petUpgradeMultiplier(p,"speed");
+    const speed=animalSpeed(type,stage,true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");
     Object.assign(p,{ownerId,type,stage,x,y,angle:opts.angle||0,r,hp:opts.hp!=null?Math.min(hp,opts.hp):hp,maxHp:hp,coat,spotCol:opts.spotCol||shadeHex(coat,-30),spotsJson:opts.spotsJson||"[]",speed,sleeping:false,tailPhase:rand(0,TAU),abilityCd:0,atkCd:0,combat:0,level:opts.level||1,exp:opts.exp||0,petName:String(opts.petName||type).slice(0,14),orderMode:"follow",targetX:-1,targetY:-1,dead:false});
     const id=`p${this.nextPetId++}`;this.state.pets.set(id,p);return id;
   }
@@ -1319,7 +1343,7 @@ export class WorldRoom extends Room {
     }
   }
   handleHeal(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const amount=clamp(+data.amount||0,0,40);p.health=clamp(p.health+amount,0,p.maxHealth);}
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   ensureStarterPetFor(client,type,stage){
     if(!client||!PET_TYPES[type])return null;
@@ -1446,6 +1470,7 @@ export class WorldRoom extends Room {
   handlePetOrder(client,data){
     const id=String(data.id||""),p=this.ownedPet(client,id);if(!p||p.dead)return;
     const mode=String(data.mode||"follow");
+    this.petFollowState.delete(id);
 
     if(mode==="focus"){
       const kind=String(data.targetKind||"");
@@ -1466,11 +1491,11 @@ export class WorldRoom extends Room {
     }else if(mode!=="set"){p.targetX=-1;p.targetY=-1;}
   }
   handlePetRename(client,data){const p=this.ownedPet(client,data.id);if(!p)return;const name=String(data.name||"").replace(/[<>]/g,"").trim().slice(0,14);if(name)p.petName=name;}
-  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
+  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);this.petFollowState.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
 
   handlePetAbility(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p||p.dead||p.abilityCd>0)return;const info=PET_TYPES[p.type];p.abilityCd=info.abilityCd;const owner=this.state.players.get(client.sessionId);const angle=owner?.angle||p.angle;const elem=info.elem;this.broadcast("abilityEvent",{petId:id,ownerId:client.sessionId,elem,x:p.x,y:p.y,r:p.r});
     const areaKinds=new Set(["enemy","animal"]);
-    const area=(damage,range,knock=0)=>{for(const rec of this.nearbyDynamic(p.x,p.y,range+120,areaKinds)){const o=rec.obj;if(!o)continue;const d=dist(p.x,p.y,o.x,o.y);if(d>range)continue;if(rec.kind==="enemy"){this.hitEnemy(rec.id,o,damage,client.sessionId,false);if(knock&&this.state.enemies.has(rec.id)){const a=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(a)*knock;o.y+=Math.sin(a)*knock;}}else{this.hitWild(rec.id,o,damage,client.sessionId,false);if(this.state.animals.has(rec.id))this.animalAggro.set(rec.id,{kind:"pet",id});if(knock&&this.state.animals.has(rec.id)){const q=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(q)*knock;o.y+=Math.sin(q)*knock;}}}};
+    const area=(damage,range,knock=0)=>{for(const rec of this.nearbyDynamic(p.x,p.y,range+120,areaKinds)){const o=rec.obj;if(!o)continue;const d=dist(p.x,p.y,o.x,o.y);if(d>range)continue;if(rec.kind==="enemy"){this.hitEnemy(rec.id,o,damage,client.sessionId,false);if(knock&&this.state.enemies.has(rec.id)){const a=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(a)*knock;o.y+=Math.sin(a)*knock;}}else{this.hitWild(rec.id,o,damage,client.sessionId,false);if(this.state.animals.has(rec.id))this.animalAggro.set(rec.id,{kind:"pet",id});if(knock&&this.state.animals.has(rec.id)){const q=angTo(p.x,p.y,o.x,o.y),push=knock*animalKnockbackScale(o);o.x+=Math.cos(q)*push;o.y+=Math.sin(q)*push;this.resolveStatic(o,(o.r||18)*.68);}}}};
     if(elem==="Stone"){const ws=dogWallStats(p.stage);this.addWall(p.x+Math.cos(angle)*44,p.y+Math.sin(angle)*44,27,34,client.sessionId,{hp:ws.hp,kind:"stoneSpike",spiked:true,spikeDmg:ws.spikeDmg,sourcePetId:id});}
     else if(elem==="Sound")area(10,p.r+90,20);
     else if(elem==="Fire")area(18,p.r+92,0);
@@ -1973,7 +1998,7 @@ export class WorldRoom extends Room {
     return false;
   }
 
-  givePetExp(id,p,amount){if(!p||p.dead||p.stage==="bigmomma")return;amount=Math.max(0,Number(amount)||0)*this.runPerks(p.ownerId).petXpMul;p.exp+=amount;const need=expNeed(p.stage,p.level);if(p.exp<need)return;p.exp-=need;p.level++;let next=null;if(p.stage==="baby"&&p.level>=4)next="adult";else if(p.stage==="adult"&&p.level>=5)next="boss";else if(p.stage==="boss"&&p.level>=6)next="superboss";if(next){p.stage=next;p.r=animalRadius(p.type,next);p.maxHp=Math.max(12,Math.round(typeHp(p.type,next)*petUpgradeMultiplier(p,"health")));p.hp=p.maxHp;p.speed=animalSpeed(p.type,next,true)*petUpgradeMultiplier(p,"speed");p.level=1;const c=this.clientById(p.ownerId);if(c)c.send("petGrew",{id,stage:next,type:p.type});}}
+  givePetExp(id,p,amount){if(!p||p.dead||p.stage==="bigmomma")return;amount=Math.max(0,Number(amount)||0)*this.runPerks(p.ownerId).petXpMul;p.exp+=amount;const need=expNeed(p.stage,p.level);if(p.exp<need)return;p.exp-=need;p.level++;let next=null;if(p.stage==="baby"&&p.level>=4)next="adult";else if(p.stage==="adult"&&p.level>=5)next="boss";else if(p.stage==="boss"&&p.level>=6)next="superboss";if(next){p.stage=next;p.r=animalRadius(p.type,next);p.maxHp=Math.max(12,Math.round(typeHp(p.type,next)*petUpgradeMultiplier(p,"health")));p.hp=p.maxHp;p.speed=animalSpeed(p.type,next,true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");p.level=1;const c=this.clientById(p.ownerId);if(c)c.send("petGrew",{id,stage:next,type:p.type});}}
 
   resolveCreaturePairPhysical(a,b){
     if(!a||!b||a===b||a.dead||b.dead||a.hp<=0||b.hp<=0)return false;
@@ -2154,85 +2179,126 @@ export class WorldRoom extends Room {
           p.targetX=-1;p.targetY=-1;p.orderMode="follow";
         }
       }else{
-        const d=dist(p.x,p.y,owner.x,owner.y);
-        const ownerMoving=!!owner.moving;
+        const ownerDistance=dist(p.x,p.y,owner.x,owner.y);
+        const followRange=petFollowRangeFor(p);
+        const inputMag=clamp(Math.hypot(owner.moveX||0,owner.moveY||0),0,1);
+        let ownerMoveSpeed=148*inputMag;
+        if(owner.ridingPetId){
+          const mount=this.state.pets.get(owner.ridingPetId);
+          if(mount&&!mount.dead)ownerMoveSpeed=Math.max(24,mount.speed||148)*inputMag;
+        }
+        if(owner.heldSpecial==="Wall")ownerMoveSpeed*=.64;
+        const ownerMoving=!!owner.moving||ownerMoveSpeed>2.5;
 
-        if(ownerMoving){
-          // Continuous stable formation instead of hard stop/start follow distance.
-          p.wanderT=Math.min(p.wanderT,.18);
-          if(!Number.isFinite(p.followSlotSide)){
-            let seed=7;for(const ch of String(id))seed=((seed*31)+ch.charCodeAt(0))|0;
-            p.followSlotSide=((Math.abs(seed)%5)-2)*.52;
-            p.followSlotDepth=.78+(Math.abs(seed>>3)%4)*.14;
+        let fs=this.petFollowState.get(id);
+        if(!fs){
+          let seed=7;for(const ch of String(id))seed=((seed*31)+ch.charCodeAt(0))|0;
+          fs={returning:false,roamA:Number.isFinite(p.angle)?p.angle:rand(0,TAU),roamT:rand(.35,1.05),stuckT:0,avoidSide:(Math.abs(seed)&1)?1:-1};
+          this.petFollowState.set(id,fs);
+        }
+
+        // Stable leash hysteresis. Inside the leash there is no idle/stop state:
+        // awake pets continuously roam until they genuinely drift too far away.
+        if(!fs.returning&&ownerDistance>followRange.start){
+          fs.returning=true;fs.roamT=rand(.30,.75);
+        }
+        if(fs.returning&&ownerDistance<=followRange.stop){
+          fs.returning=false;
+          // Carry the return direction into the next roaming curve so the animal
+          // never visibly stops and resets its path.
+          fs.roamA=(Number(p.angle)||0)+rand(-.62,.62);
+          fs.roamT=rand(.35,.95);
+        }
+
+        if(fs.returning){
+          const targetAngle=angTo(p.x,p.y,owner.x,owner.y);
+          const turnRate=ownerDistance>=followRange.sprint?6.4:ownerDistance>=followRange.run?5.8:4.8;
+          smoothTurn(p,targetAngle,dt,turnRate);
+
+          let followSpeed=Math.max(24,Number(p.speed)||60)*.92; // walk
+          if(ownerDistance>=followRange.sprint){
+            followSpeed=Math.max((Number(p.speed)||60)*2.30,ownerMoveSpeed*1.45+28); // sprint
+          }else if(ownerDistance>=followRange.run){
+            followSpeed=Math.max((Number(p.speed)||60)*1.62,ownerMoveSpeed*1.12+12); // run
+          }else if(!ownerMoving){
+            followSpeed=Math.max(34,(Number(p.speed)||60)*.78);
           }
-          const speedT=clamp(((p.speed||60)-45)/145,0,1);
-          let trail=48+speedT*70;if(p.type==="rabbit")trail+=22;
-          trail=Math.max(trail,p.r*.75+PLAYER_R+14);
 
-          const side=trail*p.followSlotSide,back=trail*p.followSlotDepth;
+          const sx=p.x,sy=p.y;
+          p.x+=Math.cos(p.angle)*followSpeed*dt;
+          p.y+=Math.sin(p.angle)*followSpeed*dt;
+          p.x=clamp(p.x,20,WORLD_W-20);p.y=clamp(p.y,20,WORLD_H-20);
+          this.resolveStatic(p,p.r*.72);
+          const moved=dist(sx,sy,p.x,p.y),expected=followSpeed*dt;
 
-          // Formation follows movement direction, not aim direction.
-          const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
-          const dirX=ml>.05?(owner.moveX||0)/ml:Math.cos(owner.angle||0);
-          const dirY=ml>.05?(owner.moveY||0)/ml:Math.sin(owner.angle||0);
-          const desiredX=owner.x-dirX*back-dirY*side;
-          const desiredY=owner.y-dirY*back+dirX*side;
+          // Small obstacle slide only after real physical sticking. The target is
+          // still the owner, so this cannot turn into the old wandering formation.
+          if(ownerDistance>followRange.run&&moved<Math.max(.20,expected*.18)){
+            fs.stuckT+=dt;
+            if(fs.stuckT>.12){
+              const direct=angTo(p.x,p.y,owner.x,owner.y);
+              p.angle=direct+fs.avoidSide*.72;
+              const ax=p.x,ay=p.y;
+              p.x+=Math.cos(p.angle)*followSpeed*.88*dt;
+              p.y+=Math.sin(p.angle)*followSpeed*.88*dt;
+              p.x=clamp(p.x,20,WORLD_W-20);p.y=clamp(p.y,20,WORLD_H-20);
+              this.resolveStatic(p,p.r*.72);
+              if(dist(ax,ay,p.x,p.y)<.18)fs.avoidSide*=-1;
+            }
+          }else fs.stuckT=Math.max(0,fs.stuckT-dt*3);
 
-          // Safe follow-point scans walk nearby solids and walls. Recompute at
-          // ~11 Hz per moving pet instead of every 20 Hz simulation tick; the
-          // formation target is smoothed between scans, so movement stays fluid
-          // without creating a server CPU spike whenever a player holds WASD.
-          if(!Number.isFinite(p.followSafeX)||!Number.isFinite(p.followSafeY)||
-             !Number.isFinite(p.followSafeAt)||this.state.worldTime>=p.followSafeAt){
-            const safe=this.safePetFollowPoint(p,desiredX,desiredY);
-            p.followSafeX=safe.x;p.followSafeY=safe.y;
-            p.followSafeAt=this.state.worldTime+.09;
-          }else{
-            const drift=Math.min(1,dt*8);
-            p.followSafeX+=(desiredX-p.followSafeX)*drift;
-            p.followSafeY+=(desiredY-p.followSafeY)*drift;
-          }
-          const safe={x:p.followSafeX,y:p.followSafeY};
-          const tf=1-Math.exp(-6.2*dt);
-          p.followTargetX=Number.isFinite(p.followTargetX)?p.followTargetX+(safe.x-p.followTargetX)*tf:safe.x;
-          p.followTargetY=Number.isFinite(p.followTargetY)?p.followTargetY+(safe.y-p.followTargetY)*tf:safe.y;
-          const dd=dist(p.x,p.y,p.followTargetX,p.followTargetY);
-
-          if(dd>5){
-            const a=angTo(p.x,p.y,p.followTargetX,p.followTargetY);
-            smoothTurn(p,a,dt,7.2);
-            const speedMul=clamp(.24+dd/Math.max(62,trail*.78),.24,1.58);
-            p.x+=Math.cos(p.angle)*p.speed*speedMul*dt;
-            p.y+=Math.sin(p.angle)*p.speed*speedMul*dt;
-            // Static collision is resolved once at the end of this pet update.
+          // Last-resort rescue only for an extremely distant pet that has been
+          // genuinely wedged for nearly a second. Normal catch-up never teleports.
+          if(ownerDistance>followRange.sprint+900&&fs.stuckT>.90){
+            const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
+            const backA=ml>.05?Math.atan2(owner.moveY||0,owner.moveX||0):(owner.angle||0);
+            const rescue=this.safePetFollowPoint(p,
+              owner.x-Math.cos(backA)*(followRange.stop+18),
+              owner.y-Math.sin(backA)*(followRange.stop+18));
+            p.x=rescue.x;p.y=rescue.y;p.angle=angTo(p.x,p.y,owner.x,owner.y);fs.stuckT=0;
           }
         }else{
-          // While the owner stands still, pets wander naturally nearby.
-          const speedT=clamp(((p.speed||60)-45)/145,0,1);
-          let roam=72+speedT*205;
-          if(p.type==="rabbit")roam+=42;
-          if(p.type==="bear")roam-=18;
-          if(p.type==="dragon")roam-=10;
-          roam=clamp(roam,64,300);
-          const returnDist=roam+Math.max(42,roam*.28);
+          // Continuous natural roaming. No destination-arrival pause and no
+          // mechanical orbit point: the heading bends every so often while the
+          // owner's distance softly changes the odds of moving out or back in.
+          fs.stuckT=0;
+          if(!Number.isFinite(fs.roamA))fs.roamA=Number.isFinite(p.angle)?p.angle:rand(0,TAU);
+          if(!Number.isFinite(fs.roamT))fs.roamT=rand(.35,1.05);
+          fs.roamT-=dt;
+          const roamRatio=ownerDistance/Math.max(1,followRange.start);
 
-          if(d>returnDist){
-            const a=angTo(p.x,p.y,owner.x,owner.y);
-            smoothTurn(p,a,dt,4.8);
-            p.x+=Math.cos(p.angle)*p.speed*.92*dt;
-            p.y+=Math.sin(p.angle)*p.speed*.92*dt;
-          }else{
-            p.wanderT-=dt;
-            if(p.wanderT<=0){
-              p.wanderA=rand(0,TAU);
-              p.wanderT=rand(1.1,3.2);
+          if(fs.roamT<=0){
+            const toOwnerA=ownerDistance>5?angTo(p.x,p.y,owner.x,owner.y):rand(0,TAU);
+            const awayA=toOwnerA+Math.PI;
+            const roll=Math.random();
+            if(roamRatio>.78){
+              fs.roamA=toOwnerA+rand(-.72,.72);
+            }else if(roamRatio<.40&&roll<.46){
+              fs.roamA=awayA+rand(-.92,.92);
+            }else if(roll<.30){
+              fs.roamA=toOwnerA+rand(-1.05,1.05);
+            }else if(roll<.58){
+              fs.roamA=awayA+rand(-1.12,1.12);
+            }else{
+              fs.roamA=(Number(p.angle)||0)+rand(-1.18,1.18);
             }
+            fs.roamT=rand(.65,1.85);
+          }
 
-            // Near the edge of the pet's roaming area, wander back toward the owner.
-            const wa=d>roam?angTo(p.x,p.y,owner.x,owner.y):p.wanderA;
-            smoothTurn(p,wa,dt,3.0);
-            p.x+=Math.cos(p.angle)*p.speed*.30*dt;
-            p.y+=Math.sin(p.angle)*p.speed*.30*dt;
+          smoothTurn(p,fs.roamA,dt,roamRatio>.78?2.85:2.15);
+          const roamSpeed=Math.max(18,(Number(p.speed)||60)*.40);
+          const rx=p.x,ry=p.y;
+          p.x+=Math.cos(p.angle)*roamSpeed*dt;
+          p.y+=Math.sin(p.angle)*roamSpeed*dt;
+          p.x=clamp(p.x,20,WORLD_W-20);p.y=clamp(p.y,20,WORLD_H-20);
+          this.resolveStatic(p,p.r*.72);
+
+          // A blocked pet turns around the obstacle immediately instead of
+          // waiting in place for its next random steering update.
+          if(dist(rx,ry,p.x,p.y)<Math.max(.16,roamSpeed*dt*.20)){
+            fs.roamA=(Number(p.angle)||0)+fs.avoidSide*rand(.72,1.12);
+            fs.roamT=rand(.18,.46);
+            fs.avoidSide*=-1;
           }
         }
       }
@@ -2244,7 +2310,7 @@ export class WorldRoom extends Room {
 
     for(const[id,left]of Array.from(this.petDeathTimers.entries())){
       const n=left-dt;
-      if(n<=0){this.state.pets.delete(id);this.petDeathTimers.delete(id);}
+      if(n<=0){this.petFollowState.delete(id);this.state.pets.delete(id);this.petDeathTimers.delete(id);}
       else this.petDeathTimers.set(id,n);
     }
   }
@@ -2323,7 +2389,7 @@ export class WorldRoom extends Room {
         else if(best.type==="enemy"){this.hitEnemy(best.eid,best.en,p.dmg,p.ownerId);if(p.knock&&this.state.enemies.has(best.eid)){const a=Math.atan2(p.vy,p.vx);best.en.x+=Math.cos(a)*p.knock;best.en.y+=Math.sin(a)*p.knock;}}
         else if(best.type==="wild"){
           if(p.hostile){const a=best.a,dmg=animalDamageTaken(a.type,a.stage,p.dmg);a.hp=Math.max(0,a.hp-dmg);a.flash=.12;a.recentHit=4;a.sleeping=false;a.enraged=true;a.combat=8;if(a.hp<=0){this.broadcastSpectateKill("animal",best.aid,"projectile",p.ownerId);this.state.animals.delete(best.aid);this.animalAggro.delete(best.aid);}}
-          else{this.hitWild(best.aid,best.a,p.dmg,p.ownerId);if(p.knock&&this.state.animals.has(best.aid)){const q=Math.atan2(p.vy,p.vx);best.a.x+=Math.cos(q)*p.knock;best.a.y+=Math.sin(q)*p.knock;}}
+          else{this.hitWild(best.aid,best.a,p.dmg,p.ownerId);if(p.knock&&this.state.animals.has(best.aid)){const q=Math.atan2(p.vy,p.vx),push=p.knock*animalKnockbackScale(best.a);best.a.x+=Math.cos(q)*push;best.a.y+=Math.sin(q)*push;this.resolveStatic(best.a,(best.a.r||18)*.68);}}
         }
         this.state.projectiles.delete(id);
       }
@@ -2363,5 +2429,5 @@ this.updateTime(dt);for(const[id,p]of this.state.players){p.animalCarryT=Math.ma
     this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.state.players.set(client.sessionId,p);
     const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage);client.send("serverReady",{fullWorld:true});
   }
-  onLeave(client){this.state.players.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){this.state.players.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
 }

@@ -2516,7 +2516,7 @@
     background:radial-gradient(circle at 38% 35%,#E27B7B,#B93A3A 44%,rgba(185,58,58,.14) 72%,transparent 74%);
   }
 
-  /* Kemono */
+  /* Fox */
   .fx-special-paw{
     font-size:42px;
     color:rgba(240,201,135,.42);
@@ -4887,7 +4887,7 @@ const HOME_THEMES = {
   },
 
   kemonoCamp: {
-    name:"Kemono Camp", desc:"Warm woodland browns, fox orange and soft cream.",
+    name:"Fox Theme", desc:"Warm woodland fox orange, soft cream, and cozy den browns.",
     bg:"#2C241E", panel:"#44352B", panel2:"#352920",
     primary:"#E58A3A", primary2:"#B96326",
     secondary:"#7A5D46", secondary2:"#594333",
@@ -5257,7 +5257,7 @@ const HOME_THEME_EFFECTS = {
   waterElement: {mode:"fall",   count:31, glyphs:["○","│","●"], colors:["#4CC9F0","#8BE9FD","#296A8A"], special:"rainWave", size:[16,29]},
   blossomCandy: {mode:"fall",   count:26, glyphs:["♥","♡","✿","✦"], colors:["#FF9EC4","#FFD7A8","#DDA0DD"], special:"petalBurst", size:[22,40]},
   moonPetal:    {mode:"float",  count:23, glyphs:["☾","✦","✿","·"], colors:["#C7D7FF","#DDA0DD","#F1B9D8"], special:"moonOrb", size:[20,36]},
-  kemonoCamp:   {mode:"fall",   count:21, glyphs:["🐾","🍂","✦"], colors:["#E58A3A","#F0C987","#D96D44"], special:"pawTrail", size:[24,42]},
+  kemonoCamp:   {mode:"fall",   count:21, glyphs:["🦊","🍂","✦"], colors:["#E58A3A","#F0C987","#D96D44"], special:"pawTrail", size:[24,42]},
   cyberCircuit: {mode:"drift",  count:29, glyphs:["0","1","+","□","▦"], colors:["#37E6D0","#B7F34A","#55E6FF"], special:"dataRain", size:[18,32], tech:true},
   voidObsidian: {mode:"float",  count:25, glyphs:["✦","✧","◆","●"], colors:["#A68CFF","#C6B7FF","#6C55A3"], special:"voidPulse", size:[19,35]},
   bloodMoon:    {mode:"rise",   count:23, glyphs:["●","✦","◆"], colors:["#B93A3A","#D9B56D","#7D2A2A"], special:"bloodMoon", size:[18,34]},
@@ -6319,9 +6319,9 @@ const PET_STAT_UPGRADE_INFO = {
   health:  { name:"Health",  icon:"❤", desc:"More maximum health.", per:0.08 },
   defense: { name:"Defense", icon:"🛡", desc:"Takes less damage from attacks.", per:0.045 },
   attack:  { name:"Attack",  icon:"⚔", desc:"Stronger normal attacks.", per:0.075 },
-  weight:  { name:"Weight",  icon:"◆", desc:"Harder for players and animals to push around.", per:0.12 },
+  weight:  { name:"Weight",  icon:"◆", desc:"More mass: harder to push, but a little slower.", per:0.12 },
   regen:   { name:"Regen",   icon:"✚", desc:"Recovers health faster over time.", per:0.12 },
-  speed:   { name:"Speed",   icon:"➜", desc:"Moves and follows you faster.", per:0.04 },
+  speed:   { name:"Speed",   icon:"➜", desc:"Moves faster and naturally roams farther from you.", per:0.04 },
 };
 function ensurePetStatUpgrades(type) {
   if (!meta.petStatUpgrades) meta.petStatUpgrades = {};
@@ -6345,7 +6345,7 @@ function petUpgradeMultiplier(type, stat) {
   return 1 + info.per * level;
 }
 function upgradedPetMaxHp(type, stage) { return Math.max(12, Math.round(typeHp(type, stage) * petUpgradeMultiplier(type, "health"))); }
-function upgradedPetSpeed(type, stage) { return animalSpeed(type, stage, true) * petUpgradeMultiplier(type, "speed"); }
+function upgradedPetSpeed(type, stage) { return animalSpeed(type, stage, true, petUpgradeMultiplier(type, "weight")) * petUpgradeMultiplier(type, "speed"); }
 function upgradedPetDamageTaken(p, rawDamage) { return animalDamageTaken(p.type, p.stage, rawDamage) * petUpgradeMultiplier(p.type, "defense"); }
 function applyOwnedPetCardStats(p, refillHealth = false) {
   if (!p || !p.type) return p;
@@ -6548,7 +6548,8 @@ function animalHitboxFit(type, stage) {
     rabbit: { len: 1.02, body: 1.00, head: 1.08 },
     snake:  { len: 1.08, body: 0.98, head: 1.08 },
     boar:   { len: 1.03, body: 1.04, head: 1.06 },
-    saber:  { len: 1.03, body: 1.04, head: 1.06 },
+    // Sabertooth collision is intentionally tighter than its large-looking art.
+    saber:  { len: 0.88, body: 0.88, head: 0.90 },
     deer:   { len: 0.98, body: 0.88, head: 0.90 },
     owl:    { len: 1.00, body: 1.02, head: 1.05 }
   }[type] || { len: 1.02, body: 1.02, head: 1.05 };
@@ -6587,15 +6588,29 @@ function typeDmg(type, stage) {
   const stageMul = ANIMAL_STAGE_ATTACK[stage] ?? 1;
   return b.attack * stageMul;
 }
-function animalSpeed(type, stage, owned) {
+function animalWeightSpeedFactor(weight) {
+  // Light animals keep more of their natural quickness; heavy animals lose some
+  // acceleration/top speed. The curve is deliberately gentle so species identity
+  // still matters more than mass alone.
+  const w = Math.max(0.45, Number(weight) || 1);
+  return clamp(Math.pow(1.45 / w, 0.18), 0.62, 1.15);
+}
+function animalKnockbackScale(a) {
+  // Reuse the same real mass model for explosions / ability shoves.
+  // Light animals can take almost the full shove; very heavy animals barely budge.
+  return clamp(animalPushMobility(a) * 1.22, 0.10, 1.00);
+}
+function animalSpeed(type, stage, owned = false, extraWeightMul = 1) {
   const base = (PET_TYPES[type] && PET_TYPES[type].baseSpeed) || 60;
   let stageMul = 1.08;
   if (stage === "adult") stageMul = 0.95;
   else if (stage === "boss") stageMul = 0.72;
   else if (stage === "superboss") stageMul = 0.62;
   else if (stage === "bigmomma") stageMul = 0.72;
+
   const followBoost = owned ? 1.55 : 1;
-  return base * stageMul * followBoost;
+  const effectiveWeight = animalWeight(type, stage) * Math.max(0.55, Number(extraWeightMul) || 1);
+  return base * stageMul * followBoost * animalWeightSpeedFactor(effectiveWeight);
 }
 
 function animalAttackCooldown(type, stage, owned = false) {
@@ -6625,7 +6640,8 @@ function animalHeadHitbox(a) {
   else if (a.type === "wolf" || a.type === "dog") { forward = 1.20; radiusMul = 0.44; }
   else if (a.type === "owl") { forward = 1.05; radiusMul = 0.49; }
   else if (a.type === "deer") { forward = 1.18; radiusMul = 0.40; }
-  else if (a.type === "boar" || a.type === "saber") { forward = 1.18; radiusMul = 0.45; }
+  else if (a.type === "boar") { forward = 1.18; radiusMul = 0.45; }
+  else if (a.type === "saber") { forward = 1.00; radiusMul = 0.34; }
   else if (a.type === "snake") { forward = 1.26; radiusMul = 0.29; }
   else if (a.type === "dragon") { forward = 1.22; radiusMul = 0.40; }
 
@@ -7307,6 +7323,9 @@ const net = {
   lastStaticChestCount: -1,
   lastAnimalPushAt: 0,
   lastHurtFxAt: 0,
+  // Holds the newest confirmed multiplayer gold balance so an older state patch
+  // cannot snap earned gold back to zero.
+  goldFloor: 0,
 };
 
 function setNetStatus(text, cls = "") {
@@ -7630,16 +7649,16 @@ function updateNetworkAnimalInterpolation(dt) {
     const animFollow = 1 - Math.exp(-4.2 * dt);
     a._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
     a._netAnimPhase = (Number(a._netAnimPhase) || Number(a.tailPhase) || 0) +
-      dt * (1.45 + a._netAnimMoveRatio * 5.2);
+      dt * (0.82 + a._netAnimMoveRatio * 2.45);
 
     // Tail timing gets its own slower-smoothed rate. Network velocity can jump
     // between patches; letting those jumps directly change tail frequency is
     // what caused the high-speed twitch.
-    const tailTargetRate = 1.35 + a._netAnimMoveRatio * 5.0;
+    const tailTargetRate = 0.76 + a._netAnimMoveRatio * 2.30;
     let tailRate = Number.isFinite(a._netTailRate) ? a._netTailRate : tailTargetRate;
     const tailRateFollow = 1 - Math.exp(-2.35 * dt);
     let tailRateStep = (tailTargetRate - tailRate) * tailRateFollow;
-    const maxTailRateStep = 4.2 * dt;
+    const maxTailRateStep = 2.2 * dt;
     tailRateStep = clamp(tailRateStep, -maxTailRateStep, maxTailRateStep);
     tailRate += tailRateStep;
     a._netTailRate = tailRate;
@@ -7665,9 +7684,27 @@ function updateNetworkPetInterpolation(dt) {
       continue;
     }
 
-    const targetVX = Number(p._netVX) || 0;
-    const targetVY = Number(p._netVY) || 0;
+    let targetVX = Number(p._netVX) || 0;
+    let targetVY = Number(p._netVY) || 0;
     const ownPet = p.ownerId === net.sessionId;
+
+    // If an own-pet snapshot briefly reports no motion, use the same simple
+    // distance leash as offline play so it keeps visually following between patches.
+    const ownerVisualDistance = ownPet ? Math.hypot(player.x - p.x, player.y - p.y) : 0;
+    const visualFollowRange = ownPet ? petFollowRangeFor(p) : null;
+    const urgentVisualCatch = !!(ownPet && p.follow && visualFollowRange && ownerVisualDistance >= visualFollowRange.run);
+    if (ownPet && p.follow && movementInputActive() && visualFollowRange &&
+        ownerVisualDistance > visualFollowRange.start && Math.hypot(targetVX, targetVY) < 2.5) {
+      const ownerVisualSpeed = Math.hypot(Number(player._actualMoveVX)||0, Number(player._actualMoveVY)||0);
+      let catchSpeed = Math.max(24, Number(p.speed)||60) * 0.92;
+      if (ownerVisualDistance >= visualFollowRange.sprint) {
+        catchSpeed = Math.max((Number(p.speed)||60)*2.30, ownerVisualSpeed*1.45+28);
+      } else if (ownerVisualDistance >= visualFollowRange.run) {
+        catchSpeed = Math.max((Number(p.speed)||60)*1.62, ownerVisualSpeed*1.12+12);
+      }
+      targetVX = (player.x-p.x) / Math.max(1,ownerVisualDistance) * catchSpeed;
+      targetVY = (player.y-p.y) / Math.max(1,ownerVisualDistance) * catchSpeed;
+    }
 
     // Smooth velocity itself, not only position. This is the important part for
     // following pets because the visual keeps moving between network patches.
@@ -7693,7 +7730,8 @@ function updateNetworkPetInterpolation(dt) {
 
     // Own pets correct a little quicker, but still gradually enough to avoid
     // rubber-band stepping while they follow the player.
-    const correction = 1 - Math.exp(-(ownPet ? 8.5 : 6.5) * dt);
+    const correctionRate = ownPet ? (urgentVisualCatch && Math.hypot(Number(p._netVX)||0, Number(p._netVY)||0) < 2.5 ? 3.2 : 8.5) : 6.5;
+    const correction = 1 - Math.exp(-correctionRate * dt);
     p.x += dx * correction;
     p.y += dy * correction;
 
@@ -7702,6 +7740,11 @@ function updateNetworkPetInterpolation(dt) {
     const angleFollow = 1 - Math.exp(-12 * dt);
     p.angle = (p.angle || 0) + da * angleFollow;
 
+    // Network snapshots are legal server positions, but a straight visual lerp
+    // between two legal points can cut through a tree/wall. Resolve the visual
+    // pet against the same local solids so it never appears to ghost through.
+    if (inView(p.x, p.y, 520) || ownPet) resolveAnimalWorld(p);
+
     // Local continuous pet animation instead of server snapshot phase.
     const renderSpeed = Math.hypot(p._renderVX, p._renderVY);
     const measuredRatio = Math.max(0, Math.min(1.5, renderSpeed / Math.max(1, p.speed || 1)));
@@ -7709,13 +7752,13 @@ function updateNetworkPetInterpolation(dt) {
     const animFollow = 1 - Math.exp(-4.4 * dt);
     p._netAnimMoveRatio = oldAnimRatio + (measuredRatio - oldAnimRatio) * animFollow;
     p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) +
-      dt * (1.5 + p._netAnimMoveRatio * 5.4);
+      dt * (0.84 + p._netAnimMoveRatio * 2.50);
 
-    const tailTargetRate = 1.4 + p._netAnimMoveRatio * 5.1;
+    const tailTargetRate = 0.78 + p._netAnimMoveRatio * 2.35;
     let tailRate = Number.isFinite(p._netTailRate) ? p._netTailRate : tailTargetRate;
     const tailRateFollow = 1 - Math.exp(-2.45 * dt);
     let tailRateStep = (tailTargetRate - tailRate) * tailRateFollow;
-    const maxTailRateStep = 4.4 * dt;
+    const maxTailRateStep = 2.25 * dt;
     tailRateStep = clamp(tailRateStep, -maxTailRateStep, maxTailRateStep);
     tailRate += tailRateStep;
     p._netTailRate = tailRate;
@@ -7827,15 +7870,55 @@ function updateNetworkEnemyInterpolation(dt) {
   }
 }
 
+function applyConfirmedNetworkGold(balance, delta = 0) {
+  const b = Number(balance);
+  const d = Math.max(0, Number(delta) || 0);
+  if (Number.isFinite(b)) {
+    net.goldFloor = Math.max(Number(net.goldFloor) || 0, b);
+    player.gold = Math.max(Number(player.gold) || 0, b);
+  } else if (d > 0) {
+    const next = Math.max(0, Number(player.gold) || 0) + d;
+    net.goldFloor = Math.max(Number(net.goldFloor) || 0, next);
+    player.gold = next;
+  }
+}
+
+function applyServerGoldSnapshot(balance) {
+  const b = Number(balance);
+  if (!Number.isFinite(b)) return;
+  const floor = Math.max(0, Number(net.goldFloor) || 0);
+  if (b >= floor) {
+    net.goldFloor = b;
+    player.gold = b;
+  } else {
+    player.gold = floor;
+  }
+}
+
 function syncNetworkFullWorld(force = false) {
   if (!net.room || !net.room.state) return false;
   const state = net.room.state;
 
   const own = state.players && typeof state.players.get === "function" ? state.players.get(net.sessionId) : null;
   if (own) {
+    const serverX = Number(own.x), serverY = Number(own.y);
     if (!net.initialPositionApplied || force) {
-      player.x = Number(own.x) || player.x; player.y = Number(own.y) || player.y;
+      if (Number.isFinite(serverX)) player.x = serverX;
+      if (Number.isFinite(serverY)) player.y = serverY;
       net.initialPositionApplied = true;
+    } else if (Number.isFinite(serverX) && Number.isFinite(serverY)) {
+      // Reset Core: the server now moves the player from input. The client still
+      // predicts immediately, then converges gently to the authoritative result.
+      const dx = serverX - player.x, dy = serverY - player.y;
+      const error = Math.hypot(dx, dy);
+      if (error > 220) {
+        player.x = serverX; player.y = serverY;
+      } else if (error > 1.25) {
+        const correction = movementInputActive() ? 0.13 : 0.24;
+        player.x += dx * correction;
+        player.y += dy * correction;
+        resolveSolidCollisions();
+      }
     }
 
     // While an animal's moving body is carrying the player, the server owns
@@ -7861,7 +7944,7 @@ function syncNetworkFullWorld(force = false) {
       player.health = newHp; player.maxHealth = maxHp;
     }
     const serverGold = Number(own.gold);
-    if (Number.isFinite(serverGold)) player.gold = Math.max(0, serverGold);
+    if (Number.isFinite(serverGold)) applyServerGoldSnapshot(serverGold);
     if (!!own.dead && !player.dead) { player.dead = true; player.splitT = 0; if (!game.deathCamTarget && game.deathCamTargetId) game.deathCamTarget = resolveNetworkDeathCamTarget(game.deathCamTargetKind, game.deathCamTargetId); sfx.die(); }
     if (!own.dead && player.dead && !game.over) { player.dead = false; player.splitT = 0; }
   }
@@ -7955,8 +8038,8 @@ function applyWorldReward(data={}) {
   const reward = { kind:data.kind, resource:data.resource, species:data.species, amount:Math.max(0,Number(data.amount)||0) };
   if (!reward.amount) return;
   if (reward.kind === "resource" && ["wood","stone","gold","berries"].includes(reward.resource)) {
-    if (reward.resource === "gold" && Number.isFinite(Number(data.balance))) {
-      player.gold = Math.max(0, Number(data.balance));
+    if (reward.resource === "gold") {
+      applyConfirmedNetworkGold(data.balance, reward.amount);
     } else {
       player[reward.resource] = (player[reward.resource]||0) + reward.amount;
     }
@@ -8042,8 +8125,8 @@ function applyNetworkHarvestReward(data = {}) {
 
   if (kind === "wood" || kind === "stone" || kind === "berries" || kind === "gold") {
     if (amount > 0) {
-      if (kind === "gold" && Number.isFinite(Number(data.balance))) {
-        player.gold = Math.max(0, Number(data.balance));
+      if (kind === "gold") {
+        applyConfirmedNetworkGold(data.balance, amount);
       } else {
         player[kind] = (player[kind] || 0) + amount;
       }
@@ -8097,6 +8180,8 @@ async function connectMultiplayer() {
       color: meta.color || COLORS[0],
       startPet: game.startPet || "",
       startPetStage: game.startPet ? starterStageFor(game.startPet) : "baby",
+      // Run-only starter gold must begin at the same value on the authoritative server.
+      startGold: Math.max(0, Math.min(5, Math.floor(Number(player.gold) || 0))),
       petStatUpgrades: JSON.stringify(meta.petStatUpgrades || {}),
     });
     const timeoutPromise = new Promise((_, reject) => {
@@ -8115,6 +8200,10 @@ async function connectMultiplayer() {
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
     net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.lastPhaseIdx = -1;
     room.onMessage("resourceReward", applyNetworkHarvestReward);
+    room.onMessage("goldBalance", data => {
+      applyConfirmedNetworkGold(data?.balance, data?.delta);
+      syncHud(); syncHotbar();
+    });
     room.onMessage("worldReward", applyWorldReward);
     room.onMessage("chestReward", applyChestNetworkReward);
     room.onMessage("tameResult", applyTameNetworkResult);
@@ -8233,6 +8322,7 @@ async function connectMultiplayer() {
       net.room = null;
       net.client = null;
       net.sessionId = null;
+      net.goldFloor = 0;
       net.remoteVisuals.clear();
       setNetStatus(net.enabled ? "Disconnected" : "Offline", net.enabled ? "bad" : "");
     });
@@ -8252,6 +8342,7 @@ async function connectMultiplayer() {
     net.room = null;
     net.client = null;
     net.sessionId = null;
+    net.goldFloor = 0;
     return false;
   } finally {
     if (joinTimeoutId) clearTimeout(joinTimeoutId);
@@ -8264,6 +8355,7 @@ function disconnectMultiplayer() {
   net.room = null;
   net.client = null;
   net.sessionId = null;
+  net.goldFloor = 0;
   net.remoteVisuals.clear();
   net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
   net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
@@ -8325,16 +8417,21 @@ function localPlayerEscapingAnyAnimal() {
 function sendNetworkInput(dt) {
   if (!net.room || !game.started || game.over) return;
   net.sendAccum += dt;
-  if (net.sendAccum < 1 / 20) return;
-  net.sendAccum = 0;
   const mv = currentMoveVector();
+  const moving = Math.hypot(mv.x, mv.y) > 0.05;
+  const active = moving || !!mouse.down || !!player.heldSpecial || !!player.riding;
+  const step = active ? 1 / 30 : 1 / 10;
+  if (net.sendAccum < step) return;
+  net.sendAccum %= step;
+  net.inputSeq = (Number(net.inputSeq) || 0) + 1;
   try {
     net.room.send("input", {
+      seq: net.inputSeq,
       moveX: mv.x,
       moveY: mv.y,
-      moving: Math.hypot(mv.x, mv.y) > 0.05,
-      x: player.x,
-      y: player.y,
+      moving,
+      clientX: player.x,
+      clientY: player.y,
       angle: player.angle,
       color: player.color,
       tool: player.tool || "Fist",
@@ -8342,7 +8439,7 @@ function sendNetworkInput(dt) {
       ridingPetId: player.riding && player.riding.netId ? player.riding.netId : "",
       attacking: !!mouse.down,
     });
-  } catch (e) {}
+  } catch (_) {}
 }
 
 function updateRemotePlayers(dt) {
@@ -9252,6 +9349,15 @@ function getDogFullBodyReferenceImage(stage, sleeping) {
   return CUSTOM_SLEEP_PET_IMAGES?.dog?.[stage] || null;
 }
 
+function smoothCreatureVisual(a, key, target, dt, rate=4.2){
+  const safeTarget=Number.isFinite(target)?target:0;
+  const prev=Number.isFinite(a?.[key])?a[key]:safeTarget;
+  const t=1-Math.exp(-Math.max(0,Math.min(0.05,Number(dt)||0))*Math.max(0.1,rate));
+  const next=prev+(safeTarget-prev)*t;
+  if(a)a[key]=next;
+  return next;
+}
+
 function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
   if (!img || !img.complete || !img.naturalWidth || !img.naturalHeight || !box) return false;
 
@@ -9350,29 +9456,33 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
   const sleepTailTuck = a.sleeping ? (type === "cat" ? 0.18 : type === "fox" ? 0.14 : type === "dog" ? 0.12 : 0.10) : 0;
   const sleepTailShift = a.sleeping ? r * (type === "cat" ? 0.14 : type === "fox" ? 0.12 : 0.10) : 0;
 
-  const tailFrequency = (a.sleeping ? 1.2 : 1.9) + rawMoveRatio * 6.2;
+  const livelyMove = a.sleeping ? 0 : Math.max(0, Math.min(1.8, rawMoveRatio));
+  const tailFrequency = (a.sleeping ? 0.72 : 1.18) + rawMoveRatio * 3.55;
   const stablePhase = (net.room && Number.isFinite(a._netTailPhase))
     ? a._netTailPhase
     : motionTime * tailFrequency + (a.tailPhase || 0);
   const tailSwing = Math.sin(stablePhase);
-  const tailLift = Math.cos(stablePhase * 0.72 + 0.35);
-  const tailAngle = (tunedMeta.tailRotBase ?? -0.04) + sleepTailTuck +
-    tailSwing * (tunedMeta.tailRotAmp ?? 0.24) * (a.sleeping ? 0.14 : (0.24 + moveRatio * 0.58));
-  const tailDy = a.sleeping ? 0 : tailLift * r * (0.006 + moveRatio * 0.011);
+  const tailLift = Math.cos(stablePhase * 0.74 + 0.35);
+  const targetTailAngle = (tunedMeta.tailRotBase ?? -0.04) + sleepTailTuck +
+    tailSwing * (tunedMeta.tailRotAmp ?? 0.24) * (a.sleeping ? 0.14 : (0.30 + moveRatio * 0.86 + livelyMove * 0.12));
+  const tailAngle = smoothCreatureVisual(a,"_cuteTailAngle",targetTailAngle,visualDt,a.sleeping?2.2:4.6);
+  const targetTailDy = a.sleeping ? 0 : tailLift * r * (0.006 + moveRatio * 0.014 + livelyMove * 0.002);
+  const tailDy = smoothCreatureVisual(a,"_cuteTailDy",targetTailDy,visualDt,4.4);
 
-  const headFrequency = (a.sleeping ? 1.0 : 1.55) + rawMoveRatio * 3.0;
+  const headFrequency = (a.sleeping ? 0.56 : 0.92) + rawMoveRatio * 1.75;
   const headPhase = (net.room && Number.isFinite(a._netAnimPhase))
-    ? a._netAnimPhase * 0.72 + 0.8
+    ? a._netAnimPhase * 0.76 + 0.8
     : motionTime * headFrequency + (a.x || 0) * 0.009 + (a.tailPhase || 0) * 0.30;
-  const headTurn = Math.sin(headPhase) *
-    (tunedMeta.headRotAmp ?? 0.09) * (a.sleeping ? 0.12 : (0.26 + moveRatio * 0.56));
-  const headNod = Math.cos(headPhase * 0.82 + 0.45) *
-    r * (a.sleeping ? 0.005 : (0.010 + moveRatio * 0.016));
-  const headLift = Math.sin(headPhase * 0.92 + 0.8) *
-    r * (a.sleeping ? 0.004 : (0.006 + moveRatio * 0.011));
+  const targetHeadTurn = Math.sin(headPhase) *
+    (tunedMeta.headRotAmp ?? 0.09) * (a.sleeping ? 0.10 : (0.30 + moveRatio * 0.92 + livelyMove * 0.10));
+  const headTurn = smoothCreatureVisual(a,"_cuteHeadTurn",targetHeadTurn,visualDt,a.sleeping?2.0:4.0);
+  const headNod = Math.cos(headPhase * 0.84 + 0.45) *
+    r * (a.sleeping ? 0.003 : (0.009 + moveRatio * 0.017 + livelyMove * 0.002));
+  const headLift = Math.sin(headPhase * 0.96 + 0.8) *
+    r * (a.sleeping ? 0.003 : (0.006 + moveRatio * 0.011 + livelyMove * 0.0015));
   const headAngle = headTurn + bite * (tunedMeta.headRotAmp ?? 0.07) * 0.95;
   const headTx = bite * (tunedMeta.headPush ?? 0.18) * r;
-  const headTy = headNod - headLift;
+  const headTy = smoothCreatureVisual(a,"_cuteHeadTy",headNod-headLift,visualDt,3.8);
 
   function drawStatic(part) {
     ctx.drawImage(
@@ -9788,27 +9898,33 @@ function drawReassembledDeerPartsSkin(a, stage, sleeping) {
   const moveRatio = (net.room && Number.isFinite(a._netAnimMoveRatio))
     ? Math.max(0, Math.min(1.25, a._netAnimMoveRatio))
     : measuredMoveRatio;
+  const lastDeerVisualAt = Number(a._deerVisualAt) || nowMs;
+  const deerVisualDt = Math.max(0, Math.min(0.05, (nowMs-lastDeerVisualAt)/1000));
+  a._deerVisualAt = nowMs;
   const deerMotionT = nowMs * 0.001;
   const deerPhase = (net.room && Number.isFinite(a._netAnimPhase))
     ? a._netAnimPhase
-    : deerMotionT * (2.4 + moveRatio * 6.2) + (a.tailPhase || 0);
+    : deerMotionT * (1.22 + moveRatio * 3.05) + (a.tailPhase || 0);
   const deerTailPhase = (net.room && Number.isFinite(a._netTailPhase))
     ? a._netTailPhase
     : deerPhase;
 
   const bodyBob = Math.sin(deerPhase * 0.42 + 0.25) *
-    r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.006));
-  const tailAngle = Math.sin(deerTailPhase) *
-    (a.sleeping ? 0.045 : (0.10 + moveRatio * 0.20));
-  const tailLift = Math.cos(deerTailPhase * 0.72 + 0.4) *
-    r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.008));
+    r * (a.sleeping ? 0.002 : (0.004 + moveRatio * 0.007));
+  const tailAngle = smoothCreatureVisual(a,"_deerTailAngle",
+    Math.sin(deerTailPhase) * (a.sleeping ? 0.035 : (0.095 + moveRatio * 0.20)),
+    deerVisualDt,a.sleeping?2.0:4.1);
+  const tailLift = smoothCreatureVisual(a,"_deerTailLift",
+    Math.cos(deerTailPhase * 0.76 + 0.4) * r * (a.sleeping ? 0.0015 : (0.004 + moveRatio * 0.008)),
+    deerVisualDt,4.0);
   // Deer look-around: rotate the full head/antler piece around the neck.
   // Keep this separate from the gait so it reads as an actual left/right turn,
   // not a side-to-side wobble or vertical bob.
-  const headTurnPhase = deerMotionT * (a.sleeping ? 0.55 : (0.78 + moveRatio * 0.38))
-    + 0.8 + (a.tailPhase || 0) * 0.18;
-  const headAngle = Math.sin(headTurnPhase) *
-    (a.sleeping ? 0.025 : (0.18 + moveRatio * 0.10));
+  const headTurnPhase = deerMotionT * (a.sleeping ? 0.34 : (0.56 + moveRatio * 0.34))
+    + 0.8 + (a.tailPhase || 0) * 0.10;
+  const headAngle = smoothCreatureVisual(a,"_deerHeadAngle",
+    Math.sin(headTurnPhase) * (a.sleeping ? 0.020 : (0.17 + moveRatio * 0.11)),
+    deerVisualDt,a.sleeping?1.8:3.4);
   const headBob = 0;
   // The separated pieces are reference-aligned at their zero-motion pose.
   const headPush = 0;
@@ -9986,15 +10102,20 @@ function drawSeparatedDeerBabySkin(a) {
   const actualMoveSpeed = (!a.sleeping && recentlyMoved) ? Math.max(0, Number(a._visualMoveSpeed) || 0) : 0;
   const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed("deer", "baby", !!a.owned) || 1);
   const moveRatio = Math.max(0, Math.min(1.25, actualMoveSpeed / normalMoveSpeed));
+  const lastDeerBabyVisualAt = Number(a._deerBabyVisualAt) || nowMs;
+  const deerBabyVisualDt = Math.max(0, Math.min(0.05, (nowMs-lastDeerBabyVisualAt)/1000));
+  a._deerBabyVisualAt = nowMs;
   const deerMotionT = nowMs * 0.001;
   const deerBabyTailPhase = (net.room && Number.isFinite(a._netTailPhase))
     ? a._netTailPhase
-    : deerMotionT * (2.4 + moveRatio * 6.0) + (a.tailPhase || 0);
-  const deerTailAngle = Math.sin(deerBabyTailPhase) *
-    (a.sleeping ? 0.035 : (0.08 + moveRatio * 0.18));
-  const deerHeadTurnPhase = deerMotionT * (0.82 + moveRatio * 0.36)
-    + 0.8 + (a.tailPhase || 0) * 0.18;
-  const deerHeadAngle = Math.sin(deerHeadTurnPhase) * (0.18 + moveRatio * 0.09);
+    : deerMotionT * (1.10 + moveRatio * 2.35) + (a.tailPhase || 0);
+  const deerTailAngle = smoothCreatureVisual(a,"_deerBabyTailAngle",
+    Math.sin(deerBabyTailPhase) * (a.sleeping ? 0.030 : (0.065 + moveRatio * 0.125)),
+    deerBabyVisualDt,a.sleeping?2.0:3.8);
+  const deerHeadTurnPhase = deerMotionT * (0.50 + moveRatio * 0.18)
+    + 0.8 + (a.tailPhase || 0) * 0.10;
+  const deerHeadAngle = smoothCreatureVisual(a,"_deerBabyHeadAngle",
+    Math.sin(deerHeadTurnPhase) * (0.14 + moveRatio * 0.05),deerBabyVisualDt,3.1);
   const deerHeadBob = 0;
 
   // Draw the three truly separate connected components back into the exact
@@ -10364,7 +10485,7 @@ function drawSeparatedViperSkin(a, selected, cfg, stage) {
 
   const follow = 1 - Math.exp(-visualDt * (targetMotion > (a._viperMotion || 0) ? 5.8 : 3.6));
   a._viperMotion = (a._viperMotion || 0) + (targetMotion - (a._viperMotion || 0)) * follow;
-  a._viperPhase = (a._viperPhase || 0) + visualDt * (1.95 + rawRatio * 4.10);
+  a._viperPhase = (a._viperPhase || 0) + visualDt * (1.15 + rawRatio * 2.25);
 
   const motion = Math.max(0, Math.min(1, a._viperMotion || 0));
   const phase = a._viperPhase || 0;
@@ -10628,13 +10749,19 @@ function drawReassembledRabbitPartsSkin(a, stage, sleeping) {
   const actualMoveSpeed = (!a.sleeping && recentlyMoved) ? Math.max(0, Number(a._visualMoveSpeed) || 0) : 0;
   const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed("rabbit", stage, !!a.owned) || 1);
   const moveRatio = Math.max(0, Math.min(1.4, actualMoveSpeed / normalMoveSpeed));
+  const lastRabbitVisualAt = Number(a._rabbitVisualAt) || nowMs;
+  const rabbitVisualDt = Math.max(0, Math.min(0.05, (nowMs-lastRabbitVisualAt)/1000));
+  a._rabbitVisualAt = nowMs;
   const phase = (net.room && Number.isFinite(a._netAnimPhase))
     ? a._netAnimPhase
-    : nowMs * 0.001 * (2.4 + moveRatio * 6.0) + (a.tailPhase || 0);
+    : nowMs * 0.001 * (1.18 + moveRatio * 3.10) + (a.tailPhase || 0);
   const tailPhase = (net.room && Number.isFinite(a._netTailPhase)) ? a._netTailPhase : phase;
-  const tailAngle = Math.sin(tailPhase) * (a.sleeping ? 0.025 : (0.08 + moveRatio * 0.17));
-  const headAngle = Math.sin(phase * 0.65 + 0.6) * (a.sleeping ? 0.018 : (0.045 + moveRatio * 0.09));
-  const headBob = Math.cos(phase * 0.72 + 0.3) * r * (a.sleeping ? 0.002 : (0.006 + moveRatio * 0.010));
+  const tailAngle = smoothCreatureVisual(a,"_rabbitTailAngle",
+    Math.sin(tailPhase) * (a.sleeping ? 0.020 : (0.080 + moveRatio * 0.16)),rabbitVisualDt,4.4);
+  const headAngle = smoothCreatureVisual(a,"_rabbitHeadAngle",
+    Math.sin(phase * 0.62 + 0.6) * (a.sleeping ? 0.014 : (0.050 + moveRatio * 0.090)),rabbitVisualDt,3.8);
+  const headBob = smoothCreatureVisual(a,"_rabbitHeadBob",
+    Math.cos(phase * 0.68 + 0.3) * r * (a.sleeping ? 0.0015 : (0.006 + moveRatio * 0.010)),rabbitVisualDt,3.8);
 
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.15)";
@@ -10828,8 +10955,8 @@ function drawUploadedAnimalSkin(a) {
     ? Math.max(0, Math.min(1.9, a._netAnimMoveRatio))
     : measuredSpeedRatio;
 
-  const tailFrequency = 2.2 + speedRatio * 8.6;
-  const headFrequency = 1.7 + speedRatio * 4.1;
+  const tailFrequency = 2.6 + speedRatio * 10.4;
+  const headFrequency = 1.9 + speedRatio * 5.0;
   const motionTime = nowMs * 0.001;
   const genericPhase = (net.room && Number.isFinite(a._netTailPhase))
     ? a._netTailPhase
@@ -10837,7 +10964,7 @@ function drawUploadedAnimalSkin(a) {
 
   const tailAngle = a.sleeping ? 0 :
     Math.sin(genericPhase) *
-    (0.025 + speedRatio * 0.095);
+    (0.035 + speedRatio * 0.13);
 
   // Source costumes face horizontally. Build the animal as true visual layers:
   // 1) tail layer UNDER the torso
@@ -10857,15 +10984,15 @@ function drawUploadedAnimalSkin(a) {
   // HEAD MOTION: intentionally more visible than before.
   const strongerHeadAngle = a.sleeping ? 0 :
     Math.sin((net.room && Number.isFinite(a._netAnimPhase))
-      ? a._netAnimPhase * 0.66 + 0.7
+      ? a._netAnimPhase * 0.70 + 0.7
       : motionTime * headFrequency + (a.x || 0) * 0.007) *
-    (0.030 + speedRatio * 0.090);
+    (0.042 + speedRatio * 0.125);
 
   const strongerHeadBob = a.sleeping ? 0 :
     Math.sin((net.room && Number.isFinite(a._netAnimPhase))
-      ? a._netAnimPhase * 0.84 + 0.35
-      : motionTime * headFrequency * 1.28 + (a.y || 0) * 0.006) *
-    drawH * (0.010 + speedRatio * 0.020);
+      ? a._netAnimPhase * 0.88 + 0.35
+      : motionTime * headFrequency * 1.34 + (a.y || 0) * 0.006) *
+    drawH * (0.014 + speedRatio * 0.026);
 
   // ---- Layer 1: copied tail UNDER the body ----
   ctx.save();
@@ -11324,15 +11451,17 @@ function petKillXpForAnimal(a){
 }
 function petKillXpForEnemy(en){return en?.strong?26:14;}
 function petFollowRangeFor(p){
-  const speed=Math.max(35,Number(p?.speed)||60);
-  const speedT=clamp((speed-45)/145,0,1);
-  let start=78+speedT*175;
-  if(p?.type==="rabbit")start+=42;
-  if(p?.type==="bear")start-=18;
-  if(p?.type==="dragon")start-=10;
-  start=clamp(start,68,305);
-  const stop=clamp(start*.46,44,112);
-  return {start,stop,wanderMax:clamp(start*.82,64,300)};
+  // Roaming freedom is driven mainly by actual movement speed.
+  // Fast/light animals are comfortable ranging farther; slow/heavy animals
+  // naturally stay closer. Body size only supplies the minimum personal space.
+  const bodyR=Math.max(10,Number(p?.r)||18);
+  const moveSpeed=Math.max(24,Number(p?.speed)||60);
+  const stop=clamp(PLAYER_R + bodyR*0.60 + 18,54,104);
+  const roamBand=clamp(24 + moveSpeed*0.50,34,128);
+  const start=stop + roamBand;
+  const run=start + clamp(80 + moveSpeed*0.48,105,190);
+  const sprint=run + clamp(120 + moveSpeed*0.62,145,270);
+  return {stop,start,run,sprint,wanderMax:start};
 }
 
 const player = {
@@ -11466,8 +11595,10 @@ function animalBodyHitboxes(a) {
 
   if (a.type === "snake") {
     parts = [[-1.00,0,0.31],[-0.76,0,0.41],[-0.24,0,0.49],[0.32,0,0.47],[0.80,0,0.41],[1.16,0,0.33],[1.42,0,0.24]];
-  } else if (a.type === "boar" || a.type === "saber") {
+  } else if (a.type === "boar") {
     parts = [[-0.74,0,0.53],[-0.48,0,0.73],[0.08,0,0.83],[0.68,0,0.68],[1.08,0,0.50],[1.42,0,0.39],[1.66,0,0.28]];
+  } else if (a.type === "saber") {
+    parts = [[-0.58,0,0.42],[-0.34,0,0.56],[0.08,0,0.64],[0.48,0,0.53],[0.80,0,0.40],[1.04,0,0.30],[1.22,0,0.21]];
   } else if (a.type === "deer") {
     parts = [[-0.68,0,0.38],[-0.40,0,0.54],[0.06,0,0.61],[0.54,0,0.46],[0.90,0,0.34],[1.18,0,0.25],[1.38,0,0.18]];
   } else if (a.type === "rabbit") {
@@ -12901,6 +13032,9 @@ function wildAttackConnects(attacker, target) {
   if (!attacker || !target || !combatTargetAlive(target)) return false;
   if (animalHeadTouchesTarget(attacker, target)) return true;
 
+  // Sabertooth must make real face contact; no extra invisible grace range.
+  if (attacker.type === "saber") return false;
+
   // Physical animal-vs-animal resolution can keep two creatures a few pixels
   // apart even while they are clearly face-to-face. Give bites a small,
   // shape-aware grace range so combat doesn't stall forever.
@@ -13257,6 +13391,11 @@ function updatePetBlasts(dt) {
       }else if(best.type==="wild"){
         const wa=best.obj,dealt=animalDamageTaken(wa.type,wa.stage,b.dmg);wa.hp-=dealt;wa.flash=.12;
         if(b.sourcePet&&!b.sourcePet.dead)wildlifeHitByPet(wa,b.sourcePet);else{markCreatureHit(wa,4);wa.sleeping=false;wa.enraged=true;}
+        if(b.knock&&wa.hp>0){
+          const q=Math.atan2(b.vy,b.vx),push=b.knock*animalKnockbackScale(wa);
+          wa.x+=Math.cos(q)*push;wa.y+=Math.sin(q)*push;
+          resolveAnimalWorld(wa);
+        }
         if(wa.hp<=0){setKilledBy(wa,(b.sourcePet&&!b.sourcePet.dead)?b.sourcePet:player);wa.dead=true;}
       }
       spark(b.x,b.y,b.color,6,80);b.dead=true;
@@ -13885,7 +14024,8 @@ function wildUseAbility(a) {
       if (target === player) {
         player.x += Math.cos(ang) * 22; player.y += Math.sin(ang) * 22;
       } else {
-        target.x += Math.cos(ang) * 22; target.y += Math.sin(ang) * 22;
+        const push=22*animalKnockbackScale(target);
+        target.x += Math.cos(ang) * push; target.y += Math.sin(ang) * push;
       }
     }
   } else if (info.elem === "Fire") {
@@ -13908,7 +14048,8 @@ function wildUseAbility(a) {
       if (target === player) {
         player.x += Math.cos(ang) * 28; player.y += Math.sin(ang) * 28;
       } else {
-        target.x += Math.cos(ang) * 28; target.y += Math.sin(ang) * 28;
+        const push=28*animalKnockbackScale(target);
+        target.x += Math.cos(ang) * push; target.y += Math.sin(ang) * push;
       }
     }
   } else if (info.elem === "Plant") {
@@ -14353,7 +14494,7 @@ function updateAnimals(dt) {
     if (p.atkCd > 0) p.atkCd -= dt;
     if (p.combat > 0) p.combat -= dt;
     updateCreatureRecovery(p, dt, Math.max(1.2, p.maxHp * 0.024) * petUpgradeMultiplier(p.type, "regen"));
-    p.tailPhase = (p.tailPhase || 0) + dt * (2.8 + p.speed * 0.02);
+    p.tailPhase = (p.tailPhase || 0) + dt * (0.34 + Math.min(0.55, Math.max(0, Number(p.speed)||0) * 0.003));
 
     if (player.riding === p) {
       p.x = player.x; p.y = player.y;
@@ -14392,7 +14533,7 @@ function updateAnimals(dt) {
       smoothTurn(p, a, dt, 4.8);
       const headOnTarget = animalHeadTouchesTarget(p, targetEn);
       if (!headOnTarget) {
-        moveFacing(p, p.speed * 1.25, dt);
+        moveOwnedPetSwept(p, p.speed * 1.25, dt);
       } else if (p.atkCd <= 0) {
         const rawDmg = petAtkDmg(p);
         const dmg = targetIsAnimal ? animalDamageTaken(targetEn.type, targetEn.stage, rawDmg) : rawDmg;
@@ -14441,115 +14582,140 @@ function updateAnimals(dt) {
       if (d > 12) {
         const a = angTo(p.x, p.y, p.targetX, p.targetY);
         smoothTurn(p, a, dt, 4.6);
-        moveFacing(p, p.speed * 1.3, dt);
+        moveOwnedPetSwept(p, p.speed * 1.3, dt);
       } else {
         p.targetX = null; p.targetY = null;
         p.follow = true;
         p.followReturning = false;
       }
     } else if (p.follow) {
-      const ownerMoving = keys.has("w") || keys.has("a") || keys.has("s") || keys.has("d") ||
-        keys.has("arrowup") || keys.has("arrowdown") || keys.has("arrowleft") || keys.has("arrowright") ||
-        (mobileMode && typeof joyActive !== "undefined" && joyActive);
+      const ownerMoveVX = Number(player._actualMoveVX) || 0;
+      const ownerMoveVY = Number(player._actualMoveVY) || 0;
+      const ownerMoveSpeed = Math.hypot(ownerMoveVX, ownerMoveVY);
+      const ownerMoving = !!player._actualMoving || ownerMoveSpeed > 2.5 || movementInputActive();
       const followRange = petFollowRangeFor(p);
+      const ownerDistance = dist(p.x, p.y, player.x, player.y);
 
-      if (ownerMoving) {
-        // Continuous formation following removes the old stop/sprint/stop cycle.
-        if (!Number.isFinite(p._followSlotSide)) {
-          const key = String(p.id || p.netId || p.type || "pet");
-          let seed = 7;
-          for (const ch of key) seed = ((seed * 31) + ch.charCodeAt(0)) | 0;
-          p._followSlotSide = ((Math.abs(seed) % 5) - 2) * 0.52;
-          p._followSlotDepth = 0.78 + (Math.abs(seed >> 3) % 4) * 0.14;
+      // Hysteresis keeps the leash stable. Close pets never enter a stop/idle
+      // state: they continuously roam until they genuinely drift too far out.
+      if (!p.followReturning && ownerDistance > followRange.start) {
+        p.followReturning = true;
+        p._roamTurnT = rand(0.30, 0.75);
+      }
+      if (p.followReturning && ownerDistance <= followRange.stop) {
+        p.followReturning = false;
+        // Keep some of the return momentum so the transition back into roaming
+        // looks like one continuous animal path instead of a reset.
+        p._roamHeading = (Number(p.angle) || 0) + rand(-0.62, 0.62);
+        p._roamTurnT = rand(0.35, 0.95);
+      }
+
+      if (p.followReturning) {
+        const targetAngle = angTo(p.x, p.y, player.x, player.y);
+        const turnRate = ownerDistance >= followRange.sprint ? 6.4 : ownerDistance >= followRange.run ? 5.8 : 4.8;
+        smoothTurn(p, targetAngle, dt, turnRate);
+
+        let followSpeed = Math.max(24, Number(p.speed) || 60) * 0.92; // walk
+        if (ownerDistance >= followRange.sprint) {
+          followSpeed = Math.max((Number(p.speed) || 60) * 2.30, ownerMoveSpeed * 1.45 + 28); // sprint
+        } else if (ownerDistance >= followRange.run) {
+          followSpeed = Math.max((Number(p.speed) || 60) * 1.62, ownerMoveSpeed * 1.12 + 12); // run
+        } else if (!ownerMoving) {
+          followSpeed = Math.max(34, (Number(p.speed) || 60) * 0.78);
         }
 
-        const speedT = clamp((Math.max(35, Number(p.speed) || 60) - 45) / 145, 0, 1);
-        let trail = 48 + speedT * 70;
-        if (p.type === "rabbit") trail += 22;
-        trail = Math.max(trail, p.r * 0.75 + PLAYER_R + 14);
+        const moveStartX = p.x, moveStartY = p.y;
+        moveOwnedPetSwept(p, followSpeed, dt);
+        const moved = dist(moveStartX, moveStartY, p.x, p.y);
+        const expected = followSpeed * dt;
 
-        const side = trail * p._followSlotSide;
-        const back = trail * p._followSlotDepth;
-
-        // Follow the player's TRAVEL direction, not aim/facing direction.
-        // This prevents the formation from whipping around when the mouse turns.
-        const move = currentMoveVector();
-        const ml = Math.hypot(move.x, move.y);
-        const dirX = ml > 0.05 ? move.x / ml : Math.cos(player.angle || 0);
-        const dirY = ml > 0.05 ? move.y / ml : Math.sin(player.angle || 0);
-        const desiredX = player.x - dirX * back - dirY * side;
-        const desiredY = player.y - dirY * back + dirX * side;
-
-        // Obstacle-safe formation points are relatively expensive to calculate.
-        // Reuse one briefly instead of scanning resources/gold/chests twice for
-        // every pet on every single frame while WASD is held.
-        const followNow = performance.now();
-        if (!Number.isFinite(p._followSafeX) || !Number.isFinite(p._followSafeY) ||
-            !Number.isFinite(p._followSafeAt) || followNow >= p._followSafeAt) {
-          const safe = safePetFollowPoint(p, desiredX, desiredY);
-          p._followSafeX = safe.x;
-          p._followSafeY = safe.y;
-          p._followSafeAt = followNow + 90;
+        // Tiny obstacle assist only when the pet is genuinely stuck. It does not
+        // change the follow target; it simply lets the pet slide around a solid.
+        if (ownerDistance > followRange.run && moved < Math.max(0.20, expected * 0.18)) {
+          p._followStuckT = (Number(p._followStuckT) || 0) + dt;
+          if (p._followStuckT > 0.12) {
+            if (!Number.isFinite(p._followAvoidSide)) {
+              const key = String(p.id || p.netId || p.type || "pet");
+              p._followAvoidSide = (key.length & 1) ? 1 : -1;
+            }
+            const direct = angTo(p.x, p.y, player.x, player.y);
+            p.angle = direct + p._followAvoidSide * 0.72;
+            const sx = p.x, sy = p.y;
+            moveOwnedPetSwept(p, followSpeed * 0.88, dt);
+            if (dist(sx, sy, p.x, p.y) < 0.18) p._followAvoidSide *= -1;
+          }
         } else {
-          // Let the cached point drift with the owner between collision scans.
-          const drift = Math.min(1, dt * 8.0);
-          p._followSafeX = lerp(p._followSafeX, desiredX, drift);
-          p._followSafeY = lerp(p._followSafeY, desiredY, drift);
-        }
-        const safe = { x:p._followSafeX, y:p._followSafeY };
-
-        const targetFollow = 1 - Math.exp(-6.2 * dt);
-        p._followTargetX = Number.isFinite(p._followTargetX)
-          ? lerp(p._followTargetX, safe.x, targetFollow) : safe.x;
-        p._followTargetY = Number.isFinite(p._followTargetY)
-          ? lerp(p._followTargetY, safe.y, targetFollow) : safe.y;
-
-        const dd = dist(p.x, p.y, p._followTargetX, p._followTargetY);
-        if (dd > 5) {
-          const a = angTo(p.x, p.y, p._followTargetX, p._followTargetY);
-          smoothTurn(p, a, dt, 7.2);
-          const speedMul = clamp(0.24 + dd / Math.max(62, trail * 0.78), 0.24, 1.58);
-          moveFacing(p, p.speed * speedMul, dt);
-          // Static collision is resolved once at the end of this pet update.
+          p._followStuckT = Math.max(0, (Number(p._followStuckT) || 0) - dt * 3.0);
         }
 
-        p.followReturning = dd > 16;
-        p.idleWanderT = 0;
-        p.idleTX = null; p.idleTY = null;
+        // Only rescue a pet that is extremely far AND has been physically stuck.
+        if (ownerDistance > followRange.sprint + 900 && (Number(p._followStuckT) || 0) > 0.90) {
+          const backA = ownerMoveSpeed > 2.5 ? Math.atan2(ownerMoveVY, ownerMoveVX) : (player.angle || 0);
+          const rescue = safePetFollowPoint(p,
+            player.x - Math.cos(backA) * (followRange.stop + 18),
+            player.y - Math.sin(backA) * (followRange.stop + 18));
+          p.x = rescue.x; p.y = rescue.y;
+          p.angle = angTo(p.x, p.y, player.x, player.y);
+          p._followStuckT = 0;
+        }
       } else {
-        const d = dist(p.x, p.y, player.x, player.y);
-        p.idleWanderT = (p.idleWanderT || 0) - dt;
-        const wanderMax = followRange.wanderMax;
-        const wanderMin = clamp(wanderMax * 0.38, 48, 78);
+        // Awake pets near their owner are almost always moving. Instead of
+        // walking to one orbit point and pausing, they continuously steer along
+        // a loose roaming path: sometimes outward, sometimes across the owner,
+        // sometimes back inward. Crossing followRange.start still hands control
+        // to the stronger return leash above.
+        p._followStuckT = 0;
+        if (!Number.isFinite(p._roamHeading)) p._roamHeading = Number.isFinite(p.angle) ? p.angle : rand(0, TAU);
+        if (!Number.isFinite(p._roamTurnT)) p._roamTurnT = rand(0.35, 1.05);
 
-        if (d > wanderMax + 42) {
-          const a = angTo(p.x, p.y, player.x, player.y);
-          smoothTurn(p, a, dt, 5.3);
-          moveFacing(p, p.speed * clamp(0.45 + (d - wanderMax) / 160, 0.45, 1.12), dt);
-          p.idleTX = null; p.idleTY = null;
-        } else {
-          const targetBad = p.idleTX == null || p.idleTY == null ||
-            dist(player.x, player.y, p.idleTX, p.idleTY) > wanderMax + 18;
-          if (p.idleWanderT <= 0 || targetBad) {
-            const ang = rand(0, TAU);
-            const rad = rand(wanderMin, wanderMax);
-            p.idleTX = player.x + Math.cos(ang) * rad;
-            p.idleTY = player.y + Math.sin(ang) * rad;
-            p.idleWanderT = rand(2.4, 5.0);
-          }
+        p._roamTurnT -= dt;
+        const roamRatio = ownerDistance / Math.max(1, followRange.start);
+        if (p._roamTurnT <= 0) {
+          const toOwnerA = ownerDistance > 5 ? angTo(p.x, p.y, player.x, player.y) : rand(0, TAU);
+          const awayA = toOwnerA + Math.PI;
+          const roll = Math.random();
 
-          const dd = dist(p.x, p.y, p.idleTX, p.idleTY);
-          if (dd < 18) {
-            p.idleWanderT = rand(0.35, 0.8);
-            p.idleTX = null; p.idleTY = null;
+          if (roamRatio > 0.78) {
+            // Near the leash edge, naturally arc back rather than making a hard
+            // U-turn or completing a visible circle around the player.
+            p._roamHeading = toOwnerA + rand(-0.72, 0.72);
+          } else if (roamRatio < 0.40 && roll < 0.46) {
+            // When very close, it is common to wander away for a while.
+            p._roamHeading = awayA + rand(-0.92, 0.92);
+          } else if (roll < 0.30) {
+            p._roamHeading = toOwnerA + rand(-1.05, 1.05);
+          } else if (roll < 0.58) {
+            p._roamHeading = awayA + rand(-1.12, 1.12);
           } else {
-            const a = angTo(p.x, p.y, p.idleTX, p.idleTY);
-            smoothTurn(p, a, dt, 3.9);
-            const cruise = clamp(0.26 + dd / 250, 0.30, 0.68);
-            moveFacing(p, p.speed * cruise, dt);
+            // Preserve the current flow and bend it instead of selecting a fresh
+            // point, which prevents mechanical orbiting.
+            p._roamHeading = (Number(p.angle) || 0) + rand(-1.18, 1.18);
           }
+          p._roamTurnT = rand(0.65, 1.85);
+        }
+
+        const roamTurnRate = roamRatio > 0.78 ? 2.85 : 2.15;
+        smoothTurn(p, p._roamHeading, dt, roamTurnRate);
+        const roamSpeed = Math.max(18, (Number(p.speed) || 60) * 0.40);
+        const roamStartX = p.x, roamStartY = p.y;
+        moveOwnedPetSwept(p, roamSpeed, dt);
+
+        // If a rock/tree blocks the current path, immediately bend around it
+        // rather than standing still waiting for the next roam decision.
+        const roamMoved = dist(roamStartX, roamStartY, p.x, p.y);
+        if (roamMoved < Math.max(0.16, roamSpeed * dt * 0.20)) {
+          if (!Number.isFinite(p._followAvoidSide)) {
+            const key = String(p.id || p.netId || p.type || "pet");
+            p._followAvoidSide = (key.length & 1) ? 1 : -1;
+          }
+          p._roamHeading = (Number(p.angle) || 0) + p._followAvoidSide * rand(0.72, 1.12);
+          p._roamTurnT = rand(0.18, 0.46);
+          p._followAvoidSide *= -1;
         }
       }
+
+      p._farFollow = false;
+      p._followSafeX = p._followSafeY = p._followTargetX = p._followTargetY = null;
     }
     p.x = clamp(p.x, 20, WORLD_W - 20);
     p.y = clamp(p.y, 20, WORLD_H - 20);
@@ -14937,6 +15103,57 @@ function deathCameraFocus() {
   return validDeathCamTarget(game.deathCamTarget) ? game.deathCamTarget : player;
 }
 
+// ---------- RESET CORE 502: unified movement / collision ----------
+// The reset build keeps the existing game content, but all local movement uses
+// bounded sub-steps so a slow frame can never tunnel a player or owned pet
+// through a tree, rock, chest, gold chunk, or wall.
+const RESET_CORE_BUILD = 508;
+const RESET_SIM_STEP = 1 / 60;
+const RESET_WORLD_STEP = 1 / 30;
+const RESET_MAX_STEPS_PER_FRAME = 4;
+const RESET_PLAYER_COLLISION_STEP = 5.5;
+const RESET_PET_COLLISION_STEP = 5.5;
+
+function movePlayerSwept(dx, dy) {
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 0.0001) return;
+  const steps = Math.max(1, Math.min(16, Math.ceil(distance / RESET_PLAYER_COLLISION_STEP)));
+  const sx = dx / steps, sy = dy / steps;
+  for (let i = 0; i < steps; i++) {
+    player.x = clamp(player.x + sx, PLAYER_R, WORLD_W - PLAYER_R);
+    player.y = clamp(player.y + sy, PLAYER_R, WORLD_H - PLAYER_R);
+    resolveSolidCollisions();
+  }
+}
+
+function moveOwnedPetSwept(p, speed, dt) {
+  if (!p || p.dead || !Number.isFinite(speed) || !Number.isFinite(dt) || dt <= 0) return;
+  const dx = Math.cos(Number(p.angle) || 0) * speed * dt;
+  const dy = Math.sin(Number(p.angle) || 0) * speed * dt;
+  const distance = Math.hypot(dx, dy);
+  if (distance <= 0.0001) return;
+  const steps = Math.max(1, Math.min(12, Math.ceil(distance / RESET_PET_COLLISION_STEP)));
+  const sx = dx / steps, sy = dy / steps;
+  for (let i = 0; i < steps; i++) {
+    p.x = clamp(p.x + sx, 20, WORLD_W - 20);
+    p.y = clamp(p.y + sy, 20, WORLD_H - 20);
+    resolveAnimalWorld(p);
+  }
+  const movedSpeed = distance / Math.max(0.001, dt);
+  p._visualMoveSpeed = movedSpeed;
+  if (movedSpeed > 0.3) p._visualMoveAt = performance.now();
+}
+
+window.getCubeResetCoreInfo = () => ({
+  build: RESET_CORE_BUILD,
+  simulationHz: 60,
+  worldAiHz: 30,
+  sweptPlayerCollision: true,
+  sweptPetCollision: true,
+  serverAuthoritativeOnlineMovement: true,
+});
+
 // ---------- player update ----------
 function updatePlayer(dt) {
   if (player.attackCd > 0) player.attackCd -= dt;
@@ -14956,21 +15173,17 @@ function updatePlayer(dt) {
 
   const wx = mouse.sx + game.camX, wy = mouse.sy + game.camY;
   if (mobileMode) {
-    // Phones face where the joystick points, and keep that last direction after release.
     player.angle = mobileFacingAngle;
   } else {
     player.angle = angTo(player.x, player.y, wx, wy);
   }
 
-  let dx = 0, dy = 0;
-  if (keys.has("w") || keys.has("arrowup")) dy -= 1;
-  if (keys.has("s") || keys.has("arrowdown")) dy += 1;
-  if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
-  if (keys.has("d") || keys.has("arrowright")) dx += 1;
-  if (mobileMode && joyActive) { dx += joyDX; dy += joyDY; }
-  if (dx || dy) {
+  const moveStartX = player.x, moveStartY = player.y;
+  const mv = currentMoveVector();
+  let dx = mv.x, dy = mv.y;
+  const len = Math.hypot(dx, dy);
+  if (len > 0.001) {
     lastMovementInputAt = performance.now();
-    const len = Math.hypot(dx, dy) || 1;
     if (mobileMode && joyActive && Math.hypot(joyDX, joyDY) > 0.10) {
       mobileFacingAngle = Math.atan2(dy, dx);
       player.angle = mobileFacingAngle;
@@ -14978,13 +15191,19 @@ function updatePlayer(dt) {
     let speed = 148;
     if (player.riding) speed = player.riding.speed || animalSpeed(player.riding.type, player.riding.stage, true);
     if (player.heldSpecial === "Wall") speed *= 0.64;
-    player.x += (dx / len) * speed * dt;
-    player.y += (dy / len) * speed * dt;
+    movePlayerSwept((dx / len) * speed * dt, (dy / len) * speed * dt);
+  } else {
+    // Still resolve once while idle so a dynamic push can never leave the player
+    // embedded in a solid until the next key press.
+    resolveSolidCollisions();
   }
-  player.x = clamp(player.x, PLAYER_R, WORLD_W - PLAYER_R);
-  player.y = clamp(player.y, PLAYER_R, WORLD_H - PLAYER_R);
 
-  resolveSolidCollisions();
+  // Track actual post-collision motion. Pet following uses this instead of
+  // trusting only key state, which can disagree with real movement online.
+  const moveDt = Math.max(0.001, Number(dt) || RESET_SIM_STEP);
+  player._actualMoveVX = (player.x - moveStartX) / moveDt;
+  player._actualMoveVY = (player.y - moveStartY) / moveDt;
+  player._actualMoving = Math.hypot(player._actualMoveVX, player._actualMoveVY) > 2.5;
 
   if (mouse.down) {
     if (player.tool === "Bow" && !player.heldSpecial) fireBow();
@@ -14992,7 +15211,6 @@ function updatePlayer(dt) {
   }
   if (keys.has("f")) fireBow();
 
-  // ride toggle (R)
   if (keys.has("r")) {
     keys.delete("r");
     if (player.hasSaddle) toggleRide();
@@ -15029,7 +15247,10 @@ function toggleRunShop(force){
 function applyRunShopPurchase(itemId,goldValue){
   const item=RUN_SHOP_BY_ID[itemId];if(!item)return;
   runShop.purchased.add(itemId);runShop[item.cat]=itemId;
-  if(Number.isFinite(Number(goldValue)))player.gold=Math.max(0,Number(goldValue));
+  if(Number.isFinite(Number(goldValue))){
+    player.gold=Math.max(0,Number(goldValue));
+    if(net.room)net.goldFloor=player.gold;
+  }
   buildRunShop();syncHud();banner(`${item.name} equipped`);
 }
 function buyRunShopItem(itemId){
@@ -16198,7 +16419,16 @@ function drawCustomDesignedPet(a) {
   }
 
   const r = a.r;
-  const wag = Math.sin(a.tailPhase || 0) * (a.sleeping ? 0.06 : 1.0);
+  const nowMs = performance.now();
+  const recentlyMoved = (nowMs - (a._visualMoveAt || 0)) < 180;
+  const actualMoveSpeed = (!a.sleeping && recentlyMoved) ? Math.max(0, Number(a._visualMoveSpeed) || 0) : 0;
+  const normalMoveSpeed = Math.max(1, Number(a.speed) || animalSpeed(a.type, a.stage, !!a.owned) || 1);
+  const moveRatio = Math.max(0, Math.min(1.8, actualMoveSpeed / normalMoveSpeed));
+  const tailRate = (a.sleeping ? 0.8 : 1.4) + moveRatio * 3.8;
+  const motionPhase = (a.tailPhase || 0) + nowMs * 0.001 * tailRate;
+  const wag = Math.sin(motionPhase) * (a.sleeping ? 0.06 : (0.38 + moveRatio * 0.82));
+  const headWobble = Math.sin(motionPhase * 0.74 + 0.45) * (a.sleeping ? 0.012 : (0.045 + moveRatio * 0.095));
+  const headBob = Math.cos(motionPhase * 0.92 + 0.22) * (a.sleeping ? r * 0.004 : r * (0.010 + moveRatio * 0.014));
   const sleepTailTuck = a.sleeping ? (a.type === "cat" ? 0.28 : a.type === "fox" ? 0.24 : a.type === "dog" ? 0.20 : 0.16) : 0;
   const sleepTailShift = a.sleeping ? r * (a.type === "cat" ? 0.20 : a.type === "fox" ? 0.18 : 0.15) : 0;
   const attackT = Math.max(0, Math.min(1, a.attackAnim || 0));
@@ -16299,7 +16529,7 @@ function drawCustomDesignedPet(a) {
 
   drawRotated(tailPart, meta.tailRotBase + sleepTailTuck + wag * meta.tailRotAmp, sleepTailShift, 0);
   drawStatic(bodyPart);
-  drawRotated(headPart, bite * meta.headRotAmp, bite * meta.headPush * r, 0);
+  drawRotated(headPart, headWobble + bite * meta.headRotAmp, bite * meta.headPush * r, headBob);
 
   if (a.sleeping && !preferSleepArt) {
     // Fallback only if a custom sleeping-eye stage image is missing.
@@ -18163,7 +18393,9 @@ function draw(menuMode = false) {
     safeCanvasDrawCall("ability fx", drawAbilityFx);
     safeCanvasDrawCall("player", drawPlayer);
   }
-  if (!menuMode) safeCanvasDrawCall("remote players", drawRemotePlayers);
+  // Remote players are drawn later, after every pet. This guarantees another
+  // player's body/rider always appears above their pet instead of being hidden
+  // underneath the animal sprite.
 
   // Taller world objects still sit over an on-foot player.
   for (const r of viewResources) {
@@ -18184,6 +18416,10 @@ function draw(menuMode = false) {
   for (const a of animals) if (!a.owned && renderInView(a.x, a.y, Math.max(135, (Number(a.r) || 18) * 3.5))) safeCanvasEntityDraw("wild animal", a, drawAnimal);
   for (const p of player.pets) if (renderInView(p.x, p.y, Math.max(135, (Number(p.r) || 18) * 3.5))) safeCanvasEntityDraw("pet", p, drawAnimal);
   if (!menuMode) safeCanvasDrawCall("remote pets", drawRemotePets);
+  // Multiplayer layering rule: pets first, people second. This applies whether
+  // the remote player is merely standing beside a pet or actively riding it.
+  // It prevents any remote pet sprite from covering its owner/rider.
+  if (!menuMode) safeCanvasDrawCall("remote players", drawRemotePlayers);
   for (const en of enemies) if (!en.dead && renderInView(en.x, en.y, 130)) safeCanvasEntityDraw("enemy", en, drawEnemy);
   for (const p of projectiles) if (inView(p.x, p.y, 30)) safeCanvasEntityDraw("projectile", p, drawProjectile);
   for (const b of petBlasts) {
@@ -18211,6 +18447,8 @@ function draw(menuMode = false) {
     ctx.restore();
   }
   if (!menuMode && player.riding) {
+    // Local mount layering rule: the ridden pet has already been drawn above,
+    // so draw the player now to guarantee the rider is always on top of it.
     safeCanvasDrawCall("ability fx", drawAbilityFx);
     safeCanvasDrawCall("player", drawPlayer);
   }
@@ -18290,6 +18528,7 @@ function resetGame() {
   player.wood = meta.ownedStarters.wood50 ? 50 : 0;
   player.stone = meta.ownedStarters.stone20 ? 20 : 0;
   player.gold = meta.ownedStarters.gold5 ? 5 : 0;
+  net.goldFloor = Math.max(0, Number(player.gold) || 0);
   player.berries = 0;
   player.tool = "Fist";
   player.lastWeaponTool = "Fist";
@@ -18331,6 +18570,7 @@ function resetGame() {
   }
 
   game.time = 0; game.survivalTime = 0; game.kills = 0; game.wave = 0; game.waveTimer = 4;
+  resetSimAccumulator = 0; resetWorldAccumulator = 0;
   el("finalTime").childNodes[0].nodeValue = "0:00";
   game.over = false; game.camX = 0; game.camY = 0; game.shake = 0;
   game.deathCamTarget = null; game.deathCamTargetKind = ""; game.deathCamTargetId = "";
@@ -18419,9 +18659,47 @@ function triggerPerformanceRelief(now, gapMs = 0) {
 // Kept available for debugging without adding an always-visible debug panel.
 window.getCubeFreezeDiagnostics = () => ({...freezeDiagnostics, reliefActive: performanceReliefActive()});
 
+let resetSimAccumulator = 0;
+let resetWorldAccumulator = 0;
+let resetNetworkVisualDt = 1 / 60;
+
+function runResetSimulationStep(step) {
+  if (!game.started) return;
+  if (!player.dead && !game.over) game.survivalTime += step;
+
+  if (net.room) {
+    // Online: predict only the local player/actions. Wildlife, pets, enemies,
+    // walls and projectiles come from the authoritative server.
+    updatePlayer(step);
+    updateResources(step);
+    updateAbilityFx(step);
+    sendNetworkInput(step);
+    return;
+  }
+
+  // Offline: player/combat/projectiles stay 60 Hz; heavier AI/world work runs
+  // at 30 Hz with an exact accumulated dt. This is smoother and much cheaper
+  // than tying all simulation work directly to display FPS.
+  game.time += step;
+  updatePlayer(step);
+  updateProjectiles(step);
+  updatePetBlasts(step);
+  updateTowers(step);
+  updateWalls(step);
+  updateAbilityFx(step);
+  updateTime(step);
+
+  resetWorldAccumulator += step;
+  if (resetWorldAccumulator + 1e-9 >= RESET_WORLD_STEP) {
+    const worldDt = resetWorldAccumulator;
+    resetWorldAccumulator = 0;
+    updateEnemies(worldDt);
+    updateResources(worldDt);
+    updateAnimals(worldDt);
+  }
+}
+
 function frame(now) {
-  // Schedule FIRST. If anything below throws, one bad frame cannot permanently
-  // stop requestAnimationFrame and freeze the whole game.
   requestAnimationFrame(frame);
 
   const rawGapMs = Math.max(0, now - previousRawFrameAt);
@@ -18429,87 +18707,89 @@ function frame(now) {
   if (game.started && rawGapMs > 180) triggerPerformanceRelief(now, rawGapMs);
   const frameWorkStart = performance.now();
 
-  let dt = (now - last) / 1000;
+  let renderDt = (now - last) / 1000;
   last = now;
-
-  // Ignore background-tab / debugger / device stalls instead of simulating a huge catch-up.
-  if (!Number.isFinite(dt) || dt < 0) dt = 0;
-  dt = Math.min(dt, 1 / 24);
+  if (!Number.isFinite(renderDt) || renderDt < 0) renderDt = 0;
+  renderDt = Math.min(renderDt, 0.10);
+  resetNetworkVisualDt = Math.min(0.05, Math.max(0, renderDt));
 
   try {
     trimRuntimeLists();
 
     if (game.started) {
-      // Death only disables the player's actions. The world keeps simulating so
-      // the transparent death screen can show the live killer-follow camera.
-      if (!player.dead && !game.over) game.survivalTime += dt;
-
       if (net.room) {
-        net.fullSyncAccum += dt;
+        // Network snapshots and interpolation are render-time work, not game
+        // simulation work. This keeps animation smooth even if a frame is late.
+        net.fullSyncAccum += renderDt;
         const movingNow = movementInputActive();
         const relief = performanceReliefActive();
         const fullSyncStep = relief
-          ? (mobileMode ? 1 / 4 : 1 / 5)
+          ? (mobileMode ? 1 / 7 : 1 / 8)
           : mobileMode
-            ? (movingNow ? 1 / 5 : 1 / 6)
-            : (movingNow ? 1 / 6 : 1 / 8);
+            ? (movingNow ? 1 / 9 : 1 / 8)
+            : (movingNow ? 1 / 12 : 1 / 10);
         if (net.fullSyncAccum >= fullSyncStep) {
           net.fullSyncAccum %= fullSyncStep;
           syncNetworkFullWorld();
         }
 
-        updateNetworkAnimalInterpolation(dt);
-        updateNetworkPetInterpolation(dt);
-        updateNetworkEnemyInterpolation(dt);
-        updateNetworkProjectileMotion(dt);
-        updatePlayer(dt);
+        updateNetworkAnimalInterpolation(resetNetworkVisualDt);
+        updateNetworkPetInterpolation(resetNetworkVisualDt);
+        updateNetworkEnemyInterpolation(resetNetworkVisualDt);
+        updateNetworkProjectileMotion(resetNetworkVisualDt);
         applyNetworkWildlifeMovementCarry();
-        updateResources(dt);
-        updateAbilityFx(dt);
-        sendNetworkInput(dt);
-        updateRemotePlayers(dt);
-      } else {
-        game.time += dt;
-        updatePlayer(dt);
-        updateEnemies(dt);
-        updateProjectiles(dt);
-        updatePetBlasts(dt);
-        updateTowers(dt);
-        updateResources(dt);
-        updateWalls(dt);
-        updateAnimals(dt);
-        updateAbilityFx(dt);
-        updateTime(dt);
-        updateRemotePlayers(dt);
+        updateRemotePlayers(resetNetworkVisualDt);
       }
+
+      resetSimAccumulator = Math.min(resetSimAccumulator + renderDt, RESET_SIM_STEP * RESET_MAX_STEPS_PER_FRAME);
+      let steps = 0;
+      while (resetSimAccumulator + 1e-9 >= RESET_SIM_STEP && steps < RESET_MAX_STEPS_PER_FRAME) {
+        runResetSimulationStep(RESET_SIM_STEP);
+        resetSimAccumulator -= RESET_SIM_STEP;
+        steps++;
+      }
+      // Never "catch up" a long browser stall by simulating seconds of movement.
+      if (steps >= RESET_MAX_STEPS_PER_FRAME && resetSimAccumulator >= RESET_SIM_STEP) resetSimAccumulator = 0;
+    } else {
+      resetSimAccumulator = 0;
+      resetWorldAccumulator = 0;
+      updateHomeCamera(renderDt);
+      updateHomeAnimals(renderDt);
     }
 
-    updateFx(dt);
+    updateFx(renderDt);
 
     if (game.started) {
       const cameraTarget = player.dead ? deathCameraFocus() : player;
       const targetX = Number(cameraTarget && cameraTarget.x);
       const targetY = Number(cameraTarget && cameraTarget.y);
+      const maxCamX = Math.max(0, WORLD_W - W), maxCamY = Math.max(0, WORLD_H - H);
       if (Number.isFinite(targetX) && Number.isFinite(targetY)) {
-        game.camX = clamp(targetX - W / 2, 0, Math.max(0, WORLD_W - W));
-        game.camY = clamp(targetY - H / 2, 0, Math.max(0, WORLD_H - H));
+        const tx = clamp(targetX - W / 2, 0, maxCamX);
+        const ty = clamp(targetY - H / 2, 0, maxCamY);
+        if (!Number.isFinite(game.camX) || !Number.isFinite(game.camY)) {
+          game.camX = tx; game.camY = ty;
+        } else {
+          // A small exponential follow removes camera jitter without changing
+          // gameplay coordinates or adding input latency.
+          const follow = 1 - Math.exp(-(mobileMode ? 12 : 14) * Math.max(0.001, renderDt));
+          game.camX += (tx - game.camX) * follow;
+          game.camY += (ty - game.camY) * follow;
+        }
       } else {
-        game.camX = clamp(Number(game.camX) || 0, 0, Math.max(0, WORLD_W - W));
-        game.camY = clamp(Number(game.camY) || 0, 0, Math.max(0, WORLD_H - H));
+        game.camX = clamp(Number(game.camX) || 0, 0, maxCamX);
+        game.camY = clamp(Number(game.camY) || 0, 0, maxCamY);
       }
-      draw(false);
 
-      // DOM HUD work doesn't need to run 60 times per second.
-      hudSyncAccum += dt;
+      draw(false);
+      hudSyncAccum += renderDt;
       const hudStep = mobileMode ? 0.12 : 0.08;
       if (hudSyncAccum >= hudStep) {
-        hudSyncAccum = 0;
+        hudSyncAccum %= hudStep;
         syncHud();
         updateTameBtn();
       }
     } else {
-      updateHomeCamera(dt);
-      updateHomeAnimals(dt);
       draw(true);
     }
 
@@ -18520,18 +18800,13 @@ function frame(now) {
       triggerPerformanceRelief(performance.now(), Math.max(rawGapMs, frameWorkMs));
     }
   } catch (err) {
-    // Keep the game alive even if one entity/effect produces a bad frame.
     const t = performance.now();
     if (t - frameErrorWindowAt > 5000) { frameErrorWindowAt = t; recentFrameErrorCount = 0; }
     recentFrameErrorCount++;
     if (t - lastFrameErrorLogAt > 2000) {
       lastFrameErrorLogAt = t;
-      console.error("Cube Survival recovered from a frame error:", err);
+      console.error("Cube Survival Reset Core recovered from a frame error:", err);
     }
-
-    // Do not paste the old Home-screen backup over gameplay after a render fault.
-    // The next scheduled frame starts from a fully clean canvas state and redraws
-    // the live world immediately.
     try {
       ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       ctx.globalAlpha = 1;
@@ -18539,14 +18814,13 @@ function frame(now) {
       ctx.filter = "none";
       ctx.shadowBlur = 0;
     } catch (_) {}
-
-    // Clear the most disposable runtime effects, which are common sources of
-    // malformed temporary objects, without deleting player progress/world state.
     particles.length = 0;
     floaters.length = 0;
     abilityFx.length = 0;
     projectiles = projectiles.filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
     petBlasts = petBlasts.filter(p => p && Number.isFinite(p.x) && Number.isFinite(p.y));
+    resetSimAccumulator = 0;
+    resetWorldAccumulator = 0;
   }
 }
 
@@ -18706,6 +18980,15 @@ function petStatBonusText(type, stat) {
   const level = petStatLevel(type, stat);
   if (!level) return "Base";
   if (stat === "defense") return `${Math.round((1 - petUpgradeMultiplier(type, stat)) * 100)}% less damage`;
+  if (stat === "weight") {
+    const massPct=Math.round((petUpgradeMultiplier(type, stat)-1)*100);
+    const stage=starterStageFor(type);
+    const base=animalSpeed(type,stage,true,1);
+    const heavy=animalSpeed(type,stage,true,petUpgradeMultiplier(type,"weight"));
+    const slowPct=Math.max(0,Math.round((1-heavy/Math.max(1,base))*100));
+    return `+${massPct}% mass · about ${slowPct}% slower`;
+  }
+  if (stat === "speed") return `+${Math.round((petUpgradeMultiplier(type, stat) - 1) * 100)}% speed · farther roaming`;
   return `+${Math.round((petUpgradeMultiplier(type, stat) - 1) * 100)}%`;
 }
 function buildPetUpgradePage(type) {

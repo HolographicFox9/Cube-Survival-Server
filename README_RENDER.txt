@@ -1,4 +1,4 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 386 / GAME 413
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 445 / GAME 508
 
 WHAT THIS PACKAGE DOES
 - Runs the full Colyseus Cube Survival multiplayer world.
@@ -783,3 +783,40 @@ SERVER 430 / GAME 458:
 - Minimap rendering is throttled to ~12.5 Hz.
 - Player/gold collision now queries nearby spatial buckets only.
 - Multiplayer dynamic full-world resync drops from 8 Hz to 6 Hz while moving (5 Hz mobile) while interpolation remains per-frame.
+
+SERVER 441 / GAME 504 PET FOLLOW + IDLE WANDER:
+- public/index.html updated to the current Game 504 client.
+- Removed the old server-side moving formation-point pet follow system.
+- Online pets now use the same simple distance leash as offline play: close/idle, walk, run, sprint.
+- Pets near their owner occasionally wander to nearby points instead of freezing in place.
+- Some idle strolls intentionally move away from the owner; crossing the leash threshold cancels the stroll and makes the pet return.
+- Close-range wandering is allowed even while the owner is moving, as long as the pet remains inside the leash.
+- Added server-side hysteresis so pets do not rapidly toggle between idle and follow at one exact distance.
+- Added a small stuck-only obstacle slide and an extreme-distance stuck rescue without restoring the old formation targeting.
+- Combat, Defend/Combat/Set orders, riding, abilities, collisions, death/respawn, and pet progression remain server-authoritative.
+
+SERVER 442 / GAME 505 NATURAL CONTINUOUS PET ROAMING:
+- public/index.html updated to Game 505.
+- Removed the close-range pet pause/linger cycle. Awake following pets now keep moving continuously.
+- Removed point-to-point idle orbit behavior; pets steer along loose changing paths instead of completing obvious circles.
+- Close pets can naturally move away, cross beside/behind the owner, bend back inward, and continue moving without a reset pause.
+- Near the leash edge, roaming direction becomes more likely to arc inward; crossing the leash still activates walk/run/sprint catch-up.
+- Returning to close range flows directly back into roaming on the same update instead of stopping first.
+- Blocked roaming pets immediately change heading around obstacles instead of waiting in place.
+- Explicit orders, combat, riding, sleeping wildlife, abilities, progression, collisions, death/respawn, and multiplayer authority remain unchanged.
+
+SERVER 443 / GAME 506 WEIGHT → SPEED → ROAMING PHYSICS:
+- public/index.html updated to Game 507.
+- Animal mass now modifies actual movement speed; light animals preserve more speed while heavy animals are slower.
+- Pet Weight card upgrades now have a tradeoff: more mass makes the pet harder to shove but modestly reduces movement speed.
+- Speed upgrades increase both movement speed and the natural roaming range around the owner.
+- Follow leash distance is calculated from the pet's current actual speed, so fast pets range farther and slow pets stay closer.
+- Player/body pushing and creature-vs-creature separation continue to split displacement by real animal mass.
+- Pet ability / projectile knockback against wildlife now scales by animal mass instead of using one flat shove distance.
+- Server and client use matching speed, weight, leash, and knockback formulas.
+
+SERVER 445 / GAME 508 MULTIPLAYER RIDER LAYERING:
+- Remote pets render before remote players, so another player's sprite is always visible above their pets.
+- This includes mounted players: the mount draws first and the rider draws after it.
+- The local player keeps the same mount rule: ridden pet first, player second.
+- Game 508 keeps the Fox Theme and speed-based head/tail animation from Game 507.
