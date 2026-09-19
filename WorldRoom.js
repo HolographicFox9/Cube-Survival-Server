@@ -11,7 +11,7 @@ const WORLD_H = 14400;
 const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
-const CUBE_SHARED_RULES_VERSION = "542";
+const CUBE_SHARED_RULES_VERSION = "544";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -1000,6 +1000,11 @@ function petFollowRangeFor(p){
 }
 
 
+const ACTIVE_CUBE_PLAYER_KEYS = new Set();
+export function getCubeServerStats() {
+  return { playersOnline: ACTIVE_CUBE_PLAYER_KEYS.size };
+}
+
 export class WorldRoom extends Room {
   maxClients=12;
 
@@ -1024,6 +1029,7 @@ export class WorldRoom extends Room {
     this.enemyPetByEnemy=new Map(); this.enemyOwnerByPet=new Map(); this.ownerThreat=new Map();
     this.firstLightReadyPlayers=new Set(); this.midnightMarkSpawned=false; this.petXpContrib=new Map();
     this.wildMateTargets=new Map(); this.wildLastBreedDay=new Map();
+    this.populationKeys=new Map();
     this.fxQueue=[]; this.fxFlushAccum=0; this.pendingPlayerHits=new Map(); this.hitFlushAccum=0;
     this.pendingAnimalPushes=new Map(); this.pushFlushAccum=0;
     this.petDeathTimers=new Map(); this.solidGrid=new Map(); this.dynamicGrid=new Map(); this.chestRewards=new Map(); this.chatLastSent=new Map(); this.waveTimer=4;
@@ -3028,6 +3034,8 @@ export class WorldRoom extends Room {
   }
 
   onJoin(client,options={}){
+    const populationKey=`${this.roomId||"world"}:${client.sessionId}`;
+    this.populationKeys.set(client.sessionId,populationKey);ACTIVE_CUBE_PLAYER_KEYS.add(populationKey);
     const s=this.safeSpawn(),p=new PlayerState();p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
     let upgrades={};try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}
     this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.state.players.set(client.sessionId,p);
@@ -3036,5 +3044,7 @@ export class WorldRoom extends Room {
     const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
   }
 
-  onLeave(client){this.state.players.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onDispose(){for(const key of this.populationKeys.values())ACTIVE_CUBE_PLAYER_KEYS.delete(key);this.populationKeys.clear();}
+
 }

@@ -452,6 +452,9 @@
   #serverUrl{width:210px;max-width:58vw;padding:8px 10px;border-radius:10px;border:1px solid rgba(240,230,200,0.16);
     background:rgba(5,10,7,0.55);color:#f2ead6;font:12px inherit;outline:none;}
   #serverUrl:focus{border-color:#f4c65f;}
+  #serverPopulation{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;border:1px solid rgba(240,230,200,0.14);background:rgba(0,0,0,0.16);font-size:11px;font-weight:800;white-space:nowrap;color:#dcebdc;}
+  #serverPopulation.good{border-color:rgba(102,214,139,0.35);color:#aef0be;}
+  #serverPopulation.bad{border-color:rgba(224,108,90,0.35);color:#ffc2b7;}
   #netStatus{font-size:11px;opacity:0.72;min-width:78px;}
   #netStatus.good{color:#8ee69c;opacity:1;}
   #netStatus.bad{color:#ff9a85;opacity:1;}
@@ -4562,6 +4565,7 @@
             <button type="button" class="online-mode-btn selected" id="offlineModeBtn">Offline</button>
             <button type="button" class="online-mode-btn" id="onlineModeBtn">Online</button>
             <input type="text" id="serverUrl" value="ws://localhost:2567" placeholder="Saved automatically" spellcheck="false" aria-label="Multiplayer server address" title="Saved automatically after you connect once">
+            <span id="serverPopulation" title="Players currently connected to this multiplayer server">Players Online: —</span>
             <span id="netStatus">Offline</span>
           </div>
 
@@ -4681,6 +4685,42 @@ function saveMultiplayerServerInput() {
   return normalized;
 }
 
+function multiplayerHttpBase(wsUrl) {
+  const normalized = normalizeMultiplayerServerUrl(wsUrl || "");
+  if (!normalized) return "";
+  if (normalized.startsWith("wss://")) return "https://" + normalized.slice(6);
+  if (normalized.startsWith("ws://")) return "http://" + normalized.slice(5);
+  return "";
+}
+let homePopulationRequestId = 0;
+async function refreshHomePlayerCount() {
+  const node = document.getElementById("serverPopulation");
+  if (!node) return;
+  const requestId = ++homePopulationRequestId;
+  const base = multiplayerHttpBase(document.getElementById("serverUrl")?.value || preferredMultiplayerServerUrl());
+  if (!base) { node.textContent = "Players Online: —"; node.className = ""; return; }
+  try {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeout = controller ? setTimeout(() => controller.abort(), 3500) : 0;
+    const response = await fetch(base + "/status", { cache:"no-store", mode:"cors", signal:controller?.signal });
+    if (timeout) clearTimeout(timeout);
+    if (!response.ok) throw new Error("status " + response.status);
+    const data = await response.json();
+    if (requestId !== homePopulationRequestId) return;
+    const count = Math.max(0, Math.floor(Number(data.playersOnline) || 0));
+    node.textContent = `Players Online: ${count}`;
+    node.className = "good";
+  } catch (_) {
+    if (requestId !== homePopulationRequestId) return;
+    node.textContent = "Players Online: —";
+    node.className = "bad";
+  }
+}
+setInterval(() => {
+  const home = document.getElementById("home");
+  if (home && home.style.display !== "none") refreshHomePlayerCount();
+}, 7000);
+
 // ---------- setup ----------
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -4790,7 +4830,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "542";
+const CUBE_SHARED_RULES_VERSION = "544";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -6919,6 +6959,9 @@ function loadMeta() {
       if (!m.ownedStarters) m.ownedStarters = {};
       if (!m.petStages) m.petStages = {};
       if (!m.petStatUpgrades) m.petStatUpgrades = {};
+      if (typeof m.starterPetType !== "string") m.starterPetType = "";
+      if (typeof m.starterPetName !== "string") m.starterPetName = "";
+      m.starterPetGender = m.starterPetGender === "Female" ? "Female" : "Male";
       for (const k of Object.keys(PET_TYPES)) {
         if (m.speciesCards[k] == null) m.speciesCards[k] = 0;
         if (!PET_CARD_STAGE_ORDER.includes(m.petStages[k])) m.petStages[k] = "baby";
@@ -6937,6 +6980,7 @@ function loadMeta() {
     speciesCards: { dog: 0, cat: 0, dragon: 0, fox: 0, wolf: 0, bear: 0, rabbit: 0 },
     petStages: {},
     petStatUpgrades: {},
+    starterPetType: "", starterPetName: "", starterPetGender: "Male",
     lastDaily: null,
   };
 }
@@ -7626,6 +7670,68 @@ function findNetHarvestTarget(id) {
   return net.resourceVisuals.get(id) || net.goldVisuals.get(id) || null;
 }
 
+function syncNetworkSharedResourceState() {
+  if (!net.room || !net.room.state) return false;
+  let topologyChanged = false;
+
+  const resourceSeen = new Set();
+  eachNetworkCollection("resources", (s, id) => {
+    resourceSeen.add(id);
+    let r = net.resourceVisuals.get(id);
+    if (!r) {
+      r = { netId:id, pulse:0, gatherCredit:0, respawnAt:0 };
+      net.resourceVisuals.set(id, r);
+      topologyChanged = true;
+    }
+    const oldX = Number(r.x), oldY = Number(r.y), oldSolid = Number(r.solidR);
+    r.netState = s;
+    r.type = s.type || "rock";
+    r.x = Number(s.x) || 0;
+    r.y = Number(s.y) || 0;
+    r.hp = Math.max(0, Number(s.hp) || 0);
+    r.maxHp = Math.max(1, Number(s.maxHp) || 1);
+    r.alive = s.alive !== false && r.hp > 0;
+    r.solidR = Number(s.solidR) || 12;
+    r.canopyR = Number(s.canopyR) || 0;
+    r.scale = Number(s.scale) || 1;
+    r.rot = Number(s.rot) || 0;
+    if (Number.isFinite(oldX) && (oldX !== r.x || oldY !== r.y || oldSolid !== r.solidR)) topologyChanged = true;
+  });
+  for (const id of Array.from(net.resourceVisuals.keys())) {
+    if (!resourceSeen.has(id)) { net.resourceVisuals.delete(id); topologyChanged = true; }
+  }
+  resources = Array.from(net.resourceVisuals.values());
+
+  const goldSeen = new Set();
+  eachNetworkCollection("gold", (s, id) => {
+    goldSeen.add(id);
+    let g = net.goldVisuals.get(id);
+    if (!g) {
+      g = { netId:id, pulse:0, handGatherCredit:0 };
+      net.goldVisuals.set(id, g);
+      topologyChanged = true;
+    }
+    const oldX = Number(g.x), oldY = Number(g.y), oldR = Number(g.r);
+    const infinite = !!s.infinite;
+    g.netState = s;
+    g.x = Number(s.x) || 0;
+    g.y = Number(s.y) || 0;
+    g.size = s.size || "small";
+    g.r = Number(s.r) || 16;
+    g.goldLeft = infinite ? Infinity : Math.max(0, Number(s.goldLeft) || 0);
+    g.infinite = infinite;
+    g.pure = !!s.pure;
+    if (Number.isFinite(oldX) && (oldX !== g.x || oldY !== g.y || oldR !== g.r)) topologyChanged = true;
+  });
+  for (const id of Array.from(net.goldVisuals.keys())) {
+    if (!goldSeen.has(id)) { net.goldVisuals.delete(id); topologyChanged = true; }
+  }
+  goldChunks = Array.from(net.goldVisuals.values());
+
+  if (topologyChanged) rebuildStaticCollisionGrid();
+  return resourceSeen.size > 0 || goldSeen.size > 0;
+}
+
 function parseNetSpots(s) {
   const raw = (s && s.spotsJson) || "[]";
   try { return JSON.parse(raw); } catch (_) { return []; }
@@ -8054,6 +8160,11 @@ function syncNetworkFullWorld(force = false) {
     if (!!own.dead && !player.dead) { player.dead = true; player.splitT = 0; if (!game.deathCamTarget && game.deathCamTargetId) game.deathCamTarget = resolveNetworkDeathCamTarget(game.deathCamTargetKind, game.deathCamTargetId); sfx.die(); }
     if (!own.dead && player.dead && !game.over) { player.dead = false; player.splitT = 0; }
   }
+
+  // Keep server-authoritative scenery authoritative for every player, not just at join.
+  // HP, alive/respawn state, and remaining gold are copied from the shared room state
+  // on every world snapshot so one player's harvesting is visible to everyone.
+  syncNetworkSharedResourceState();
 
   const chestSeen = new Set();
   eachNetworkCollection("chests", (s, id) => {
@@ -20448,6 +20559,7 @@ function buildPetShop() {
         e.stopPropagation();
         game.startPet = game.startPet === type ? null : type;
         updateSelectedStarterPetLabel();
+        persistStarterPetPreference();
         setupHome();
         buildPetShop();
       });
@@ -20674,6 +20786,7 @@ function setupHome() {
   const preferredServer = preferredMultiplayerServerUrl();
   if (el("serverUrl")) el("serverUrl").value = preferredServer;
   updateOnlineModeUI();
+  refreshHomePlayerCount();
   drawHomePreview();
   if (!meta.ownedStarters) meta.ownedStarters = {};
   if (!meta.speciesCards) meta.speciesCards = {};
@@ -20682,6 +20795,7 @@ function setupHome() {
     if (meta.speciesCards[k] == null) meta.speciesCards[k] = 0;
     if (!PET_CARD_STAGE_ORDER.includes(meta.petStages[k])) meta.petStages[k] = "baby";
   }
+  restoreStarterPetPreference();
   buildCardInventory();
 
   // daily +5 servs
@@ -20739,6 +20853,28 @@ function setupHome() {
   });
 
   updateSelectedStarterPetLabel();
+}
+
+function persistStarterPetPreference() {
+  const valid = !!(game.startPet && PET_TYPES[game.startPet] && isPetUnlocked(game.startPet));
+  meta.starterPetType = valid ? game.startPet : "";
+  meta.starterPetName = valid ? starterPetNameValue() : "";
+  meta.starterPetGender = valid ? starterPetGenderValue() : "Male";
+  saveMeta();
+}
+function restoreStarterPetPreference() {
+  const type = String(meta.starterPetType || "");
+  if (type && PET_TYPES[type] && isPetUnlocked(type)) {
+    game.startPet = type;
+    game.startPetName = String(meta.starterPetName || PET_TYPES[type].name || type).trim().slice(0,14);
+    game.startPetGender = meta.starterPetGender === "Female" ? "Female" : "Male";
+    game.startPetCustomizationType = type;
+  } else {
+    game.startPet = null;
+    game.startPetName = "";
+    game.startPetGender = "Male";
+    game.startPetCustomizationType = "";
+  }
 }
 
 function starterPetNameValue() {
@@ -20815,6 +20951,7 @@ function buildOwnedStarterPetList() {
     btn.addEventListener("click", () => {
       game.startPet = type;
       updateSelectedStarterPetLabel();
+      persistStarterPetPreference();
       buildOwnedStarterPetList();
       setTimeout(closeChooseStarterPet, 90);
     });
@@ -20945,7 +21082,7 @@ el("username").addEventListener("change", () => {
     game.startPetName = String(el("starterPetName")?.value || game.startPetName || "").trim().slice(0,14);
     game.startPetGender = el("starterPetGender")?.value === "Female" ? "Female" : "Male";
   }
-  saveMeta();
+  persistStarterPetPreference();
 });
 
 el("offlineModeBtn").addEventListener("click", () => {
@@ -20959,9 +21096,10 @@ el("onlineModeBtn").addEventListener("click", () => {
   localStorage.setItem("cubeOnlineMode", "online");
   saveMultiplayerServerInput();
   updateOnlineModeUI();
+  refreshHomePlayerCount();
 });
-el("serverUrl").addEventListener("change", saveMultiplayerServerInput);
-el("serverUrl").addEventListener("blur", saveMultiplayerServerInput);
+el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
+el("serverUrl").addEventListener("blur", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
 net.enabled = localStorage.getItem("cubeOnlineMode") === "online";
 updateOnlineModeUI();
 
@@ -20969,11 +21107,13 @@ const starterPetNameInput = el("starterPetName");
 if (starterPetNameInput) starterPetNameInput.addEventListener("input", () => {
   game.startPetName = String(starterPetNameInput.value || "").slice(0,14);
   updateSelectedStarterPetLabel();
+  persistStarterPetPreference();
 });
 const starterPetGenderSelect = el("starterPetGender");
 if (starterPetGenderSelect) starterPetGenderSelect.addEventListener("change", () => {
   game.startPetGender = starterPetGenderSelect.value === "Female" ? "Female" : "Male";
   updateSelectedStarterPetLabel();
+  persistStarterPetPreference();
 });
 
 el("playBtn").addEventListener("click", async () => {
@@ -20987,7 +21127,7 @@ el("playBtn").addEventListener("click", async () => {
   closeHomeThemes();
   el("petShopOverlay").classList.remove("show");
   meta.username = (el("username").value || "Cube").slice(0, 14);
-  saveMeta();
+  persistStarterPetPreference();
   mobileMode = el("mobileMode").checked;
   if (mobileMode) mobileFacingAngle = player.angle;
   try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}

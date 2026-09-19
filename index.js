@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { WorldRoom } from "./WorldRoom.js";
+import { WorldRoom, getCubeServerStats } from "./WorldRoom.js";
 
 const port = Number(process.env.PORT) || 2567;
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +16,15 @@ app.disable("x-powered-by");
 
 // Render health check. This also gives you a quick way to verify the server is awake.
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 477, gameBuild: 543, rulesVersion: "542", chat: true });
+  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 479, gameBuild: 545, rulesVersion: "544", chat: true, ...getCubeServerStats() });
+});
+
+// Home-screen population check. CORS is intentionally open because players may
+// run the downloadable HTML from a different origin while using this server.
+app.get("/status", (_req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 479, gameBuild: 545 });
 });
 
 // Visiting the Render URL opens the game and tells the client to use this same server.

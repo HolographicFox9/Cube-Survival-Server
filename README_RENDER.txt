@@ -1,11 +1,18 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 477 / GAME 543
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 545
 
-CURRENT BUILD 543 CHANGES
+Current additions:
+- Home screen shows live Players Online using /status.
+- Starter pet species/name/gender persist in browser save data.
+- Shared resource topology sync from Game 544 remains active: new server resource/gold IDs, HP, depletion, and respawns are synchronized to all clients.
 
-- Home screen now lets the player name the selected starter pet before Play.
-- Home screen now lets the player choose the starter pet gender: Male or Female.
-- Offline and multiplayer both create the starter pet with that exact chosen name and gender.
-- Client/server gameplay Rules version: 542.
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 545
+
+CURRENT BUILD 544 CHANGES
+
+- Fixed multiplayer trees, rocks, logs, berry bushes, and gold not updating for every player after the world first loaded.
+- Resource HP, broken/alive state, respawns, and remaining gold now continuously mirror the authoritative server state.
+- If one player breaks or depletes a shared world resource, every connected player sees the same result.
+- Client/server gameplay Rules version: 544.
 
 WHAT THIS PACKAGE DOES
 - Runs the full Colyseus Cube Survival multiplayer world.
