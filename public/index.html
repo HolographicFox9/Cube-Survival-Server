@@ -405,6 +405,32 @@
     background:rgba(247,218,116,0.12);border:1px solid rgba(244,198,95,0.3);color:#ffe28f;font-size:14px;font-weight:800;}
   .home-cubits-pill .label{font-size:11px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.8;font-weight:700;}
   .home-cubits-pill b{font-size:18px;color:#ffd86e;}
+  .home-achievements-btn{display:flex;align-items:center;gap:8px;padding:10px 13px;border-radius:14px;border:1px solid rgba(142,208,255,.30);background:rgba(72,145,194,.12);color:#dff3ff;font:800 12px inherit;cursor:pointer;white-space:nowrap;}
+  .home-achievements-btn:hover{background:rgba(72,145,194,.20);border-color:rgba(142,208,255,.55);}
+  .home-achievements-btn .trophy{font-size:17px;line-height:1;}
+  .home-achievements-btn b{color:#fff2a8;font-size:13px;}
+  #achievementOverlay{position:fixed;inset:0;z-index:92;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,8,6,.76);backdrop-filter:blur(5px);box-sizing:border-box;}
+  #achievementOverlay.show{display:flex;}
+  #achievementOverlay .achievement-card{width:min(850px,96vw);max-height:min(82vh,760px);overflow:auto;padding:22px;border-radius:20px;background:linear-gradient(180deg,#18251e,#101913);border:1px solid rgba(244,198,95,.26);box-shadow:0 22px 70px rgba(0,0,0,.48);box-sizing:border-box;color:#efe6d2;}
+  .achievement-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;}
+  .achievement-head h2{margin:2px 0 4px;font-size:27px;color:#ffe29a;}
+  .achievement-head p{margin:0;opacity:.72;font-size:13px;}
+  .achievement-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+  .achievement-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px;border-radius:14px;border:1px solid rgba(240,230,200,.11);background:rgba(255,255,255,.035);}
+  .achievement-row.unlocked{border-color:rgba(244,198,95,.34);background:rgba(244,198,95,.075);}
+  .achievement-row .ach-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:rgba(0,0,0,.20);font-size:21px;}
+  .achievement-row .ach-copy{min-width:0;}
+  .achievement-row .ach-name{font-weight:900;font-size:13px;color:#f5ead0;}
+  .achievement-row.unlocked .ach-name{color:#ffe29a;}
+  .achievement-row .ach-desc{font-size:11px;line-height:1.3;opacity:.72;margin-top:2px;}
+  .achievement-row .ach-reward{font-size:10px;font-weight:800;color:#b9ddff;text-align:right;max-width:120px;}
+  .achievement-row.unlocked .ach-reward{color:#bff0ae;}
+  .achievement-progress{font-size:12px;font-weight:900;color:#d8e9ff;margin-top:5px;}
+  .achievement-toast{position:fixed;left:50%;top:88px;transform:translate(-50%,-12px);z-index:120;opacity:0;pointer-events:none;transition:opacity .18s ease,transform .18s ease;min-width:min(420px,88vw);max-width:88vw;padding:12px 16px;border-radius:15px;background:linear-gradient(180deg,rgba(40,53,43,.98),rgba(22,31,25,.98));border:1px solid rgba(244,198,95,.50);box-shadow:0 12px 38px rgba(0,0,0,.42);text-align:center;color:#f5ead0;font-weight:800;}
+  .achievement-toast.show{opacity:1;transform:translate(-50%,0);}
+  .achievement-toast b{color:#ffe27f;}
+  .achievement-toast small{display:block;margin-top:3px;color:#bfe5ff;font-weight:700;}
+  @media(max-width:700px){.achievement-grid{grid-template-columns:1fr}.home-achievements-btn{padding:9px 10px}.home-achievements-btn .ach-word{display:none}#achievementOverlay .achievement-card{padding:15px}.achievement-row{grid-template-columns:38px minmax(0,1fr);}.achievement-row .ach-reward{grid-column:2;text-align:left;max-width:none;}}
   #home .home-card{backdrop-filter: blur(5px);
     width:100%;padding:10px 0 0;border-radius:0;background:transparent;
     border:none;color:var(--parchment);text-align:left;box-sizing:border-box;
@@ -3566,6 +3592,77 @@
     animation:fxStarTwinkle 3.2s ease-in-out infinite;
   }
 
+  .fx-castoria-dome{
+    width:310px;height:188px;border-radius:54% 54% 42% 42%;
+    background:radial-gradient(circle at 48% 42%,rgba(225,251,255,.72),rgba(175,232,243,.78) 38%,rgba(117,111,220,.56) 72%,rgba(58,50,145,.32));
+    border:2px solid rgba(225,251,255,.38);
+    box-shadow:0 0 34px rgba(175,232,243,.22),inset 0 -22px 35px rgba(117,111,220,.24);
+    opacity:.44;animation:fxCastoriaDome 6.8s ease-in-out infinite alternate;
+  }
+  .fx-castoria-cloud{
+    width:220px;height:58px;border-radius:50%;
+    background:radial-gradient(ellipse at 20% 55%,rgba(210,196,255,.76),transparent 42%),radial-gradient(ellipse at 50% 48%,rgba(183,169,239,.76),transparent 49%),radial-gradient(ellipse at 78% 57%,rgba(149,142,218,.70),transparent 43%);
+    filter:blur(2px);opacity:.42;animation:fxCastoriaCloud var(--sp-dur,8s) ease-in-out infinite alternate;
+  }
+  .fx-castoria-door{
+    width:188px;height:254px;border-radius:48% 48% 10px 10px;
+    background:linear-gradient(145deg,rgba(119,109,72,.86),rgba(92,83,55,.74) 58%,rgba(49,41,31,.78));
+    border:3px solid rgba(27,22,34,.78);
+    box-shadow:inset 0 0 0 11px rgba(44,37,30,.14),0 0 24px rgba(138,125,80,.18);
+    opacity:.52;animation:fxCastoriaDoor 7.2s ease-in-out infinite alternate;
+  }
+  .fx-castoria-chain{
+    width:310px;height:18px;
+    background:radial-gradient(ellipse at center,transparent 43%,currentColor 46% 58%,transparent 61%) 0 50%/22px 13px repeat-x;
+    filter:drop-shadow(0 0 4px rgba(125,145,175,.55));
+    opacity:.55;transform:rotate(var(--castoria-chain-r,-13deg));
+    animation:fxCastoriaChain var(--sp-dur,5.6s) ease-in-out infinite alternate;
+  }
+  .fx-castoria-palace{
+    width:205px;height:260px;border-radius:48% 48% 8px 8px;
+    background:linear-gradient(180deg,rgba(231,105,245,.80),rgba(242,166,231,.74) 36%,rgba(226,207,232,.72) 70%,rgba(121,105,200,.68));
+    border:2px solid rgba(245,219,255,.34);
+    box-shadow:0 0 30px rgba(241,165,232,.28);opacity:.46;
+    animation:fxCastoriaPalace 6.4s ease-in-out infinite alternate;
+  }
+  .fx-castoria-palace::after{
+    content:"";position:absolute;left:38%;bottom:0;width:25%;height:58%;
+    background:linear-gradient(180deg,rgba(36,31,47,.25),rgba(13,12,21,.82));
+    border-radius:48% 48% 0 0;
+  }
+  .fx-castoria-clock{
+    width:104px;height:104px;border-radius:50%;
+    background:radial-gradient(circle,rgba(222,220,229,.92) 0 58%,rgba(183,181,196,.92) 59% 72%,rgba(120,117,136,.86) 73% 100%);
+    border:3px solid rgba(67,65,78,.76);
+    box-shadow:0 0 18px rgba(241,165,232,.22);opacity:.64;
+    animation:fxCastoriaClock 6s ease-in-out infinite alternate;
+  }
+  .fx-castoria-clock::before,.fx-castoria-clock::after{
+    content:"";position:absolute;left:50%;top:50%;transform-origin:0 50%;height:3px;border-radius:3px;background:rgba(42,40,52,.86);
+  }
+  .fx-castoria-clock::before{width:31px;transform:rotate(-100deg)}
+  .fx-castoria-clock::after{width:24px;transform:rotate(-23deg)}
+  .fx-castoria-star{
+    width:5px;height:5px;border-radius:50%;background:currentColor;box-shadow:0 0 9px currentColor;opacity:.42;
+    animation:fxStarTwinkle var(--sp-dur,3.4s) ease-in-out infinite;
+  }
+
+  .fx-extra-castoria-bars{
+    inset:-4%;
+    background:repeating-linear-gradient(90deg,transparent 0 8%,rgba(5,7,15,.58) 8% 10%,transparent 10% 18%);
+    opacity:.42;
+    filter:drop-shadow(0 0 12px rgba(0,0,0,.55));
+    animation:fxCastoriaBars 6.2s ease-in-out infinite alternate;
+  }
+  .fx-extra-castoria-fracture{
+    width:var(--castoria-w,180px);height:3px;
+    background:linear-gradient(90deg,transparent,currentColor 18%,rgba(255,255,255,.88) 46%,currentColor 70%,transparent);
+    box-shadow:0 0 12px currentColor;
+    transform:rotate(var(--castoria-r,-18deg));
+    opacity:.15;
+    animation:fxCastoriaFracture var(--sp-dur,4.8s) ease-in-out infinite;
+  }
+
   @keyframes fxSilverSweep{
     0%,14%{transform:translateX(0);opacity:0}
     18%{opacity:.92}
@@ -3592,6 +3689,14 @@
   @keyframes fxVoidStreak{0%,18%{transform:translate(-35vw,24vh) rotate(-28deg);opacity:0}28%{opacity:.66}64%{transform:translate(85vw,-38vh) rotate(-28deg);opacity:.34}72%,100%{opacity:0}}
   @keyframes fxEclipseRing{from{transform:scale(.95);opacity:.18}to{transform:scale(1.28);opacity:.48}}
   @keyframes fxStarTwinkle{0%,100%{transform:scale(.45);opacity:.15}45%{transform:scale(1.55);opacity:.95}55%{transform:scale(.8);opacity:.42}}
+  @keyframes fxCastoriaDome{from{transform:translateY(3px) scale(.97);opacity:.34}to{transform:translateY(-7px) scale(1.03);opacity:.52}}
+  @keyframes fxCastoriaCloud{from{transform:translateX(-18px) scale(.92);opacity:.24}to{transform:translateX(30px) scale(1.06);opacity:.52}}
+  @keyframes fxCastoriaDoor{from{transform:translateY(5px) scale(.98);opacity:.43}to{transform:translateY(-4px) scale(1.015);opacity:.60}}
+  @keyframes fxCastoriaChain{from{transform:translateX(-10px) rotate(var(--castoria-chain-r,-13deg));opacity:.38}to{transform:translateX(14px) rotate(var(--castoria-chain-r,-13deg));opacity:.68}}
+  @keyframes fxCastoriaPalace{from{transform:translateY(4px);filter:saturate(.88)}to{transform:translateY(-6px);filter:saturate(1.15)}}
+  @keyframes fxCastoriaClock{from{transform:rotate(-2deg) scale(.96)}to{transform:rotate(2deg) scale(1.04)}}
+  @keyframes fxCastoriaBars{from{transform:translateX(-1.6%);opacity:.30}to{transform:translateX(1.6%);opacity:.52}}
+  @keyframes fxCastoriaFracture{0%,100%{transform:rotate(var(--castoria-r,-18deg)) scaleX(.68);opacity:.08}45%{transform:rotate(var(--castoria-r,-18deg)) scaleX(1.15);opacity:.58}58%{opacity:.18}}
 
 
   /* ---------- 352 grouped Element themes ---------- */
@@ -3721,6 +3826,7 @@
   .theme-badge-cool{background:rgba(97,217,255,.15)!important;border-color:rgba(125,235,255,.28)!important;}
   .theme-badge-epic{background:rgba(230,184,76,.17)!important;border-color:rgba(255,211,106,.30)!important;}
   .theme-badge-relax{background:rgba(155,203,122,.15)!important;border-color:rgba(232,222,255,.24)!important;}
+  .theme-badge-classic{background:rgba(214,180,112,.16)!important;border-color:rgba(237,210,153,.28)!important;}
 
   .fx-354-strawberry{font-size:34px;filter:drop-shadow(0 0 12px rgba(255,127,168,.48));animation:fx354Strawberry var(--sp-dur,6s) ease-in-out infinite alternate;}
   .fx-354-milk-bubble{width:120px;height:120px;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.24),rgba(255,231,237,.08) 58%,transparent 70%);animation:fx354SoftBubble 5.5s ease-in-out infinite alternate;}
@@ -4428,6 +4534,17 @@
   </div>
 </div>
 
+<div id="achievementOverlay" aria-hidden="true">
+  <div class="achievement-card game-scroll">
+    <div class="achievement-head">
+      <div><div class="home-section-label">Progress</div><h2>Achievements</h2><p>Guests can unlock achievements for the current session. Log in to save them and claim rewards once per account.</p><div class="achievement-progress" id="achievementProgressText">0 / 0 unlocked</div></div>
+      <button class="btn secondary" id="closeAchievementOverlay" type="button">Close</button>
+    </div>
+    <div class="achievement-grid" id="achievementGrid"></div>
+  </div>
+</div>
+<div id="achievementToast" class="achievement-toast" role="status" aria-live="polite"></div>
+
 <div id="starterShopOverlay">
   <div class="card game-scroll">
     <button class="btn secondary modal-close" id="closeStarterShop">Close</button>
@@ -4516,6 +4633,7 @@
         </div>
       </div>
       <div class="home-top-actions">
+        <button type="button" id="homeAchievementsBtn" class="home-achievements-btn" title="Achievements"><span class="trophy">🏆</span><span class="ach-word">Achievements</span><b id="homeAchievementCount">0/0</b></button>
         <div class="home-cubits-pill" title="Gold Cubits">
           <span class="cubit-token"></span>
           <div>
@@ -5346,6 +5464,120 @@ const HOME_THEMES = {
     primary:"#D64141", primary2:"#9E2B2B",
     secondary:"#6E788D", secondary2:"#50596B",
     accent:"#F1F6FF", text:"#FFF6F6", muted:"#CABFC2", special:"#FF9A72"
+  },
+
+  auroraVale: {
+    name:"Aurora Vale", desc:"Deep northern-night blue with flowing mint, violet and icy aurora light.",
+    bg:"#0D1D27", panel:"#17313D", panel2:"#112630",
+    primary:"#65E6C4", primary2:"#3AB495",
+    secondary:"#8A76E8", secondary2:"#6254B0",
+    accent:"#C9F7FF", text:"#F5FEFF", muted:"#B8D4D9", special:"#9FEFFF"
+  },
+  prismTech: {
+    name:"Prism Tech", desc:"Dark glass panels with rainbow cyan, violet and hot-pink digital edges.",
+    bg:"#0D101A", panel:"#171C2B", panel2:"#111521",
+    primary:"#59E7FF", primary2:"#2DB3D1",
+    secondary:"#9E69FF", secondary2:"#7147C2",
+    accent:"#FF72C8", text:"#F8FAFF", muted:"#BDC3D8", special:"#A4FFF1"
+  },
+  oceanAbyss: {
+    name:"Ocean Abyss", desc:"Very deep ocean navy with bioluminescent teal and electric blue glow.",
+    bg:"#071922", panel:"#0D2A36", panel2:"#09212B",
+    primary:"#38D5C8", primary2:"#249C94",
+    secondary:"#2678C8", secondary2:"#1B5794",
+    accent:"#9AF6E9", text:"#F1FFFF", muted:"#A8CDD0", special:"#56EAFB"
+  },
+  candyComet: {
+    name:"Candy Comet", desc:"Sweet pink, blueberry purple and bright candy stars streaking through space.",
+    bg:"#2C2039", panel:"#44305B", panel2:"#362647",
+    primary:"#FF83C8", primary2:"#D2549A",
+    secondary:"#8F74F1", secondary2:"#6650B8",
+    accent:"#FFE19A", text:"#FFF8FF", muted:"#DECBE4", special:"#8DE9FF"
+  },
+  roseQuartz: {
+    name:"Rose Quartz", desc:"Soft rose crystal pink, pearl white and a tiny shimmer of lavender.",
+    bg:"#342830", panel:"#4D3945", panel2:"#3E2F38",
+    primary:"#F1A2BE", primary2:"#C97492",
+    secondary:"#B08AC7", secondary2:"#826798",
+    accent:"#FFE3EC", text:"#FFF9FB", muted:"#DDC9D0", special:"#FFD0E1"
+  },
+  pumpkinMoon: {
+    name:"Pumpkin Moon", desc:"Cute autumn orange, moonlit purple and warm cream with a playful spooky glow.",
+    bg:"#2D211F", panel:"#45302A", panel2:"#372622",
+    primary:"#F29445", primary2:"#C56A2E",
+    secondary:"#7B5B9B", secondary2:"#594273",
+    accent:"#FFE0A4", text:"#FFF7EA", muted:"#DDC8B3", special:"#FFC266"
+  },
+  emberKingdom: {
+    name:"Ember Kingdom", desc:"Royal charcoal, molten crimson and crown-gold fire from a fallen kingdom.",
+    bg:"#170F0E", panel:"#2A1715", panel2:"#201210",
+    primary:"#ED5A35", primary2:"#B83B23",
+    secondary:"#6C2632", secondary2:"#4A1B23",
+    accent:"#F4C966", text:"#FFF5E9", muted:"#D5B7A5", special:"#FF8D45"
+  },
+  crystalCavern: {
+    name:"Crystal Cavern", desc:"Dark cavern stone with glowing amethyst, cyan crystal and silver shards.",
+    bg:"#151522", panel:"#25253A", panel2:"#1B1B2C",
+    primary:"#9B78F0", primary2:"#6D50BC",
+    secondary:"#4CB7C8", secondary2:"#347E8B",
+    accent:"#D9F2FF", text:"#F8F7FF", muted:"#C5C3D8", special:"#C7A4FF"
+  },
+  ancientRuins: {
+    name:"Ancient Ruins", desc:"Weathered temple stone, old bronze and mossy emerald with forgotten magic.",
+    bg:"#25251D", panel:"#39382A", panel2:"#2D2D22",
+    primary:"#B69755", primary2:"#866B3C",
+    secondary:"#557A55", secondary2:"#3D5A3D",
+    accent:"#D9CCA2", text:"#F6F3E7", muted:"#C8C1A9", special:"#9FCB78"
+  },
+  autumnHearth: {
+    name:"Autumn Hearth", desc:"Warm leaf-orange, cocoa brown and soft firelight like a quiet cabin evening.",
+    bg:"#30241E", panel:"#49352A", panel2:"#3A2A22",
+    primary:"#D98745", primary2:"#AD6231",
+    secondary:"#7A5B42", secondary2:"#5B4432",
+    accent:"#F2D195", text:"#FFF7EC", muted:"#DDC9B5", special:"#EAA85E"
+  },
+  midnightGarden: {
+    name:"Midnight Garden", desc:"Calm moonlit indigo with deep leaves, lavender flowers and silver dew.",
+    bg:"#18201F", panel:"#26322F", panel2:"#1E2927",
+    primary:"#9B8AD9", primary2:"#7162A9",
+    secondary:"#5F8B72", secondary2:"#456653",
+    accent:"#D8E5E8", text:"#F7FAF8", muted:"#C1CECA", special:"#C7B6FF"
+  },
+  goldenPrairie: {
+    name:"Golden Prairie", desc:"Golden grass, pale blue sky and gentle cream sunlight for a peaceful open field.",
+    bg:"#343225", panel:"#4D4934", panel2:"#3D3A2A",
+    primary:"#DDB95A", primary2:"#AF8E3D",
+    secondary:"#7FA29A", secondary2:"#5D7B75",
+    accent:"#F5E5A7", text:"#FFFBEF", muted:"#D9D2B9", special:"#F2CF72"
+  },
+
+  auroraBorealis: {
+    name:"Aurora Borealis", desc:"Polar-black sky with wide flowing curtains of emerald, cyan, violet and icy starlight.",
+    bg:"#06131E", panel:"#102535", panel2:"#0A1B29",
+    primary:"#50F2A4", primary2:"#2AB77A",
+    secondary:"#6F83FF", secondary2:"#4B54BC",
+    accent:"#BDF7FF", text:"#F5FDFF", muted:"#A9CBD5", special:"#CE7CFF"
+  },
+  computerVirus: {
+    name:"Computer Virus", desc:"Corrupted terminal black with toxic green code, magenta errors and infected scanlines.",
+    bg:"#030806", panel:"#0A1710", panel2:"#06100B",
+    primary:"#48FF75", primary2:"#21B94A",
+    secondary:"#FF3FAE", secondary2:"#B51C78",
+    accent:"#C8FFD1", text:"#ECFFF0", muted:"#8EB59A", special:"#7CFFEF"
+  },
+  explosion: {
+    name:"Explosion", desc:"Blackened smoke, white-hot blast cores, orange fire and expanding shockwave energy.",
+    bg:"#160B07", panel:"#2A130C", panel2:"#1E0E09",
+    primary:"#FF7A1A", primary2:"#CF4310",
+    secondary:"#FFD34D", secondary2:"#D89B24",
+    accent:"#FFF4CC", text:"#FFF8EE", muted:"#D9B49D", special:"#FF3C20"
+  },
+  castorianopsia: {
+    name:"Castorianopsia", desc:"Story-title blend: Ch. 1 cloud-blue dome, Ch. 2 chained star-door, and Ch. 3 pink Time Palace clock.",
+    bg:"#09065A", panel:"#21193D", panel2:"#120D2E",
+    primary:"#AFE8F3", primary2:"#78C8DB",
+    secondary:"#F1A5E8", secondary2:"#B865CA",
+    accent:"#8A7D50", text:"#F8F4FF", muted:"#BEB5D4", special:"#756FDC"
   }
 
 };
@@ -5415,7 +5647,23 @@ const HOME_THEME_EFFECTS = {
   deerGrove:       {mode:"fall", count:24, glyphs:["🍃","✦","◆","•"], colors:["#C7A06A","#6F9C68","#EAD9B0"], special:"leafSway", size:[20,38]},
   owlNight:        {mode:"float",count:24, glyphs:["☾","✦","·","•"], colors:["#D7BE78","#E7F0FF","#7D8DAF"], special:"moonOrb", size:[19,36]},
   beardedDunes:    {mode:"drift",count:22, glyphs:["•","◆","✦","~"], colors:["#E0A04F","#F7D48A","#8B8B4A"], special:"dustGust", size:[18,34]},
-  saberFang:       {mode:"rise", count:28, glyphs:["▲","✦","◆","•"], colors:["#D64141","#F1F6FF","#FF9A72"], special:"bloodMoon", size:[19,36]}
+  saberFang:       {mode:"rise", count:28, glyphs:["▲","✦","◆","•"], colors:["#D64141","#F1F6FF","#FF9A72"], special:"bloodMoon", size:[19,36]},
+  auroraVale:      {mode:"drift",count:28, glyphs:["≈","✦","·","◆"], colors:["#65E6C4","#8A76E8","#C9F7FF"], special:"windGust", size:[18,35]},
+  prismTech:       {mode:"pulse",count:28, glyphs:["□","◆","+","✦"], colors:["#59E7FF","#9E69FF","#FF72C8"], special:"arcadeGrid", size:[18,34], tech:true},
+  oceanAbyss:      {mode:"rise", count:29, glyphs:["○","◌","•","✦"], colors:["#38D5C8","#2678C8","#9AF6E9"], special:"bubbleWave", size:[20,40]},
+  candyComet:      {mode:"drift",count:28, glyphs:["★","♡","✦","•"], colors:["#FF83C8","#8F74F1","#FFE19A","#8DE9FF"], special:"petalBurst", size:[21,40]},
+  roseQuartz:      {mode:"float",count:24, glyphs:["◆","♡","✦","◇"], colors:["#F1A2BE","#FFE3EC","#B08AC7"], special:"iceShimmer", size:[19,37]},
+  pumpkinMoon:     {mode:"float",count:24, glyphs:["☾","✦","●","◆"], colors:["#F29445","#7B5B9B","#FFE0A4"], special:"moonOrb", size:[20,38]},
+  emberKingdom:    {mode:"rise", count:31, glyphs:["▲","◆","✦","•"], colors:["#ED5A35","#F4C966","#6C2632"], special:"dragonForge", size:[20,40]},
+  crystalCavern:   {mode:"drift",count:27, glyphs:["◆","◇","✦","⬟"], colors:["#9B78F0","#4CB7C8","#D9F2FF"], special:"runeRing", size:[20,38]},
+  ancientRuins:    {mode:"fall", count:25, glyphs:["◆","◇","✦","•"], colors:["#B69755","#557A55","#D9CCA2"], special:"runeRing", size:[19,36]},
+  autumnHearth:    {mode:"fall", count:27, glyphs:["🍂","🍁","✦","•"], colors:["#D98745","#F2D195","#7A5B42"], special:"leafSway", size:[21,39]},
+  midnightGarden:  {mode:"float",count:25, glyphs:["☾","✿","✦","·"], colors:["#9B8AD9","#5F8B72","#D8E5E8"], special:"moonOrb", size:[20,38]},
+  goldenPrairie:   {mode:"drift",count:25, glyphs:["✦","🍃","•","❋"], colors:["#DDB95A","#7FA29A","#F5E5A7"], special:"pollenHalo", size:[18,35]},
+  auroraBorealis:  {mode:"drift",count:27, glyphs:["✦","·","≈","◇"], colors:["#50F2A4","#6F83FF","#BDF7FF","#CE7CFF"], special:"windGust", size:[17,34]},
+  computerVirus:   {mode:"fall", count:34, glyphs:["0","1","□","×","+"], colors:["#48FF75","#FF3FAE","#C8FFD1","#7CFFEF"], special:"dataRain", size:[14,29], tech:true},
+  explosion:       {mode:"rise", count:34, glyphs:["✦","•","▲","◆"], colors:["#FF7A1A","#FFD34D","#FFF4CC","#FF3C20"], special:"fireFlare", size:[18,38]},
+  castorianopsia:  {mode:"float",count:28, glyphs:["☁","◷","✦","◇","○"], colors:["#AFE8F3","#F1A5E8","#8A7D50","#756FDC","#F8F4FF"], special:"castoriaStory", size:[15,31]}
 };
 
 const HOME_WORLD_BACKGROUND_EFFECTS = {
@@ -5722,6 +5970,86 @@ const HOME_WORLD_BACKGROUND_EFFECTS = {
     filter:"saturate(.90) contrast(1.18) brightness(.60) hue-rotate(2deg)",
     overlay:"radial-gradient(circle at 50% 108%,rgba(214,65,65,.26),rgba(255,154,114,.12) 34%,transparent 68%), radial-gradient(circle at 82% 16%,rgba(241,246,255,.12),transparent 20%)",
     opacity:.44, blend:"screen"
+  },
+  auroraVale: {
+    filter:"saturate(1.02) contrast(1.08) brightness(.72) hue-rotate(8deg)",
+    overlay:"linear-gradient(160deg,rgba(101,230,196,.14),transparent 34%,rgba(138,118,232,.16) 64%,transparent), radial-gradient(circle at 72% 18%,rgba(201,247,255,.18),transparent 28%)",
+    opacity:.42, blend:"screen"
+  },
+  prismTech: {
+    filter:"saturate(1.16) contrast(1.16) brightness(.68) hue-rotate(9deg)",
+    overlay:"repeating-linear-gradient(90deg,rgba(89,231,255,.06) 0 1px,transparent 1px 10px), linear-gradient(145deg,rgba(255,114,200,.12),transparent 38%,rgba(158,105,255,.14))",
+    opacity:.44, blend:"screen"
+  },
+  oceanAbyss: {
+    filter:"saturate(.92) contrast(1.12) brightness(.58) hue-rotate(8deg)",
+    overlay:"radial-gradient(circle at 30% 82%,rgba(56,213,200,.20),transparent 28%), radial-gradient(circle at 82% 20%,rgba(38,120,200,.16),transparent 30%), linear-gradient(180deg,rgba(7,25,34,.12),rgba(7,25,34,.30))",
+    opacity:.44, blend:"screen"
+  },
+  candyComet: {
+    filter:"saturate(1.07) contrast(1.03) brightness(.82) hue-rotate(4deg)",
+    overlay:"radial-gradient(circle at 18% 22%,rgba(255,131,200,.18),transparent 25%), radial-gradient(circle at 82% 74%,rgba(143,116,241,.18),transparent 30%), radial-gradient(circle at 55% 40%,rgba(255,225,154,.10),transparent 22%)",
+    opacity:.38, blend:"screen"
+  },
+  roseQuartz: {
+    filter:"saturate(.94) contrast(.99) brightness(.88) sepia(.03)",
+    overlay:"radial-gradient(circle at 20% 18%,rgba(241,162,190,.18),transparent 26%), radial-gradient(circle at 78% 70%,rgba(176,138,199,.14),transparent 32%), linear-gradient(180deg,rgba(255,227,236,.06),transparent 60%)",
+    opacity:.36, blend:"soft-light"
+  },
+  pumpkinMoon: {
+    filter:"saturate(1.00) contrast(1.08) brightness(.70) sepia(.08)",
+    overlay:"radial-gradient(circle at 82% 16%,rgba(255,224,164,.22),transparent 18%), radial-gradient(circle at 20% 76%,rgba(242,148,69,.18),transparent 30%), linear-gradient(180deg,rgba(123,91,155,.08),transparent 50%)",
+    opacity:.40, blend:"screen"
+  },
+  emberKingdom: {
+    filter:"saturate(.98) contrast(1.18) brightness(.58) sepia(.08)",
+    overlay:"radial-gradient(circle at 50% 112%,rgba(237,90,53,.28),rgba(244,201,102,.12) 34%,transparent 68%), linear-gradient(180deg,rgba(108,38,50,.10),transparent 44%)",
+    opacity:.46, blend:"screen"
+  },
+  crystalCavern: {
+    filter:"saturate(.92) contrast(1.12) brightness(.68) hue-rotate(8deg)",
+    overlay:"radial-gradient(circle at 22% 74%,rgba(155,120,240,.20),transparent 28%), radial-gradient(circle at 80% 22%,rgba(76,183,200,.18),transparent 28%), linear-gradient(180deg,rgba(217,242,255,.06),transparent 50%)",
+    opacity:.42, blend:"screen"
+  },
+  ancientRuins: {
+    filter:"saturate(.82) contrast(1.06) brightness(.76) sepia(.10)",
+    overlay:"radial-gradient(circle at 20% 72%,rgba(85,122,85,.16),transparent 30%), radial-gradient(circle at 80% 24%,rgba(182,151,85,.16),transparent 28%), linear-gradient(180deg,rgba(217,204,162,.05),transparent 60%)",
+    opacity:.36, blend:"soft-light"
+  },
+  autumnHearth: {
+    filter:"saturate(.96) contrast(1.02) brightness(.84) sepia(.11)",
+    overlay:"radial-gradient(circle at 76% 72%,rgba(217,135,69,.20),transparent 30%), radial-gradient(circle at 20% 18%,rgba(242,209,149,.12),transparent 24%)",
+    opacity:.36, blend:"soft-light"
+  },
+  midnightGarden: {
+    filter:"saturate(.82) contrast(1.06) brightness(.68) hue-rotate(6deg)",
+    overlay:"radial-gradient(circle at 82% 18%,rgba(216,229,232,.18),transparent 20%), radial-gradient(circle at 24% 74%,rgba(95,139,114,.16),transparent 32%), radial-gradient(circle at 52% 44%,rgba(155,138,217,.10),transparent 28%)",
+    opacity:.38, blend:"screen"
+  },
+  goldenPrairie: {
+    filter:"saturate(.90) contrast(.98) brightness(.94) sepia(.08)",
+    overlay:"radial-gradient(circle at 80% 18%,rgba(245,229,167,.22),transparent 26%), linear-gradient(180deg,rgba(127,162,154,.06),transparent 52%,rgba(221,185,90,.14))",
+    opacity:.34, blend:"soft-light"
+  },
+  auroraBorealis: {
+    filter:"saturate(1.08) contrast(1.12) brightness(.62) hue-rotate(4deg)",
+    overlay:"linear-gradient(164deg,transparent 12%,rgba(80,242,164,.22) 28%,transparent 42%,rgba(111,131,255,.20) 58%,transparent 70%,rgba(206,124,255,.16) 84%,transparent), radial-gradient(circle at 75% 12%,rgba(189,247,255,.18),transparent 20%)",
+    opacity:.50, blend:"screen"
+  },
+  computerVirus: {
+    filter:"saturate(1.15) contrast(1.22) brightness(.54) hue-rotate(3deg)",
+    overlay:"repeating-linear-gradient(180deg,rgba(72,255,117,.055) 0 1px,transparent 1px 6px), repeating-linear-gradient(90deg,transparent 0 12px,rgba(255,63,174,.035) 12px 13px), radial-gradient(circle at 50% 45%,rgba(72,255,117,.10),transparent 54%)",
+    opacity:.52, blend:"screen"
+  },
+  explosion: {
+    filter:"saturate(1.12) contrast(1.20) brightness(.62) sepia(.08)",
+    overlay:"radial-gradient(circle at 50% 78%,rgba(255,244,204,.26) 0 4%,rgba(255,211,77,.24) 10%,rgba(255,122,26,.22) 22%,rgba(255,60,32,.12) 38%,transparent 62%), linear-gradient(180deg,rgba(22,11,7,.12),rgba(22,11,7,.32))",
+    opacity:.52, blend:"screen"
+  },
+  castorianopsia: {
+    filter:"saturate(.88) contrast(1.14) brightness(.64) hue-rotate(-2deg)",
+    overlay:"radial-gradient(ellipse at 82% 31%,rgba(175,232,243,.25) 0 16%,rgba(117,111,220,.18) 17% 28%,transparent 45%), radial-gradient(ellipse at 16% 43%,rgba(241,165,232,.28) 0 12%,rgba(184,101,202,.15) 24%,transparent 42%), radial-gradient(ellipse at 49% 46%,rgba(138,125,80,.23) 0 15%,rgba(28,20,43,.20) 28%,transparent 45%), linear-gradient(180deg,rgba(9,6,90,.18),rgba(18,13,46,.44))",
+    opacity:.60, blend:"screen"
   }
 };
 
@@ -5837,6 +6165,10 @@ function buildHomeThemeSpecialScene(layer, fx) {
       text:(i%2?"01011010":"10100101"),left:(3+i*8.4)+"%",duration:randSec(3.7,7.2),delay:randSec(-7,0)
     });
     addHomeFxSpecial(layer,"fx-special-hacker-scan");
+  } else if (special === "castoriaStory") {
+    for (let i=0;i<8;i++) addHomeFxSpecial(layer,"fx-castoria-star",{
+      left:randPct(36,96),top:randPct(4,48),color:i%2?"#F8F4FF":"#BDB6FF",delay:randSec(-5,0),duration:randSec(2.4,4.6)
+    });
   } else if (special === "voidPulse") {
     for (let i=0;i<3;i++) addHomeFxSpecial(layer,"fx-special-void-pulse",{delay:(-i*1.5)+"s"});
   } else if (special === "bloodMoon") {
@@ -6117,6 +6449,37 @@ function buildHomeThemeExtraCoolness(layer, themeId, fx) {
       left:randPct(5,90),top:randPct(10,84),color:["#FF9ED8","#77C9FF","#DAB6FF"][i%3],
       delay:randSec(-6,0)
     });
+  } else if (themeId === "auroraBorealis") {
+    addHomeFxSpecial(layer,"fx-extra-aurora",{top:"2%",color:"#50F2A4",vars:{"height":"220px"}});
+    addHomeFxSpecial(layer,"fx-extra-aurora",{top:"15%",color:"#6F83FF",delay:"-2.6s",vars:{"--aurora-flip":"-1","height":"250px"}});
+    addHomeFxSpecial(layer,"fx-extra-aurora",{top:"29%",color:"#CE7CFF",delay:"-5.1s",vars:{"height":"190px"}});
+    for (let i=0;i<7;i++) addHomeFxSpecial(layer,"fx-extra-star-twinkle",{
+      left:randPct(5,95),top:randPct(5,58),color:i%2?"#BDF7FF":"#F5FDFF",delay:randSec(-5,0)
+    });
+  } else if (themeId === "computerVirus") {
+    for (let i=0;i<4;i++) addHomeFxSpecial(layer,"fx-extra-tech-scan",{
+      top:(14+i*21)+"%",color:i%2?"#FF3FAE":"#48FF75",delay:(-i*1.25)+"s"
+    });
+    for (let i=0;i<7;i++) addHomeFxSpecial(layer,"fx-special-glitch-bar",{
+      top:randPct(8,90),delay:randSec(-5,0),duration:randSec(2.3,5.1),color:i%2?"#FF3FAE":"#48FF75"
+    });
+  } else if (themeId === "explosion") {
+    for (let i=0;i<5;i++) addHomeFxSpecial(layer,"fx-extra-fire-ring",{
+      left:(8+i*20)+"%",bottom:(2+(i%2)*10)+"%",color:["#FFF4CC","#FFD34D","#FF7A1A","#FF3C20"][i%4],delay:(-i*.75)+"s"
+    });
+    for (let i=0;i<3;i++) addHomeFxSpecial(layer,"fx-extra-lava-crack",{
+      left:(15+i*31)+"%",bottom:"-3%",color:i===1?"#FFF4CC":"#FF7A1A",delay:(-i*1.3)+"s",vars:{"--crack-rot":(-16+i*15)+"deg"}
+    });
+  } else if (themeId === "castorianopsia") {
+    // Chapter-title motifs: Ch. 1 cloud dome, Ch. 2 chained star-door, Ch. 3 Time Palace clock.
+    addHomeFxSpecial(layer,"fx-castoria-palace",{left:"5%",top:"24%"});
+    addHomeFxSpecial(layer,"fx-castoria-clock",{left:"11%",top:"12%",delay:"-1.4s"});
+    addHomeFxSpecial(layer,"fx-castoria-door",{left:"42%",top:"20%",delay:"-2.1s"});
+    addHomeFxSpecial(layer,"fx-castoria-chain",{left:"34%",top:"41%",color:"#8290A8",delay:"-1.2s",vars:{"--castoria-chain-r":"-13deg"}});
+    addHomeFxSpecial(layer,"fx-castoria-chain",{left:"36%",top:"49%",color:"#6D7B96",delay:"-3.0s",vars:{"--castoria-chain-r":"12deg"}});
+    addHomeFxSpecial(layer,"fx-castoria-dome",{right:"2%",top:"18%",delay:"-2.8s"});
+    addHomeFxSpecial(layer,"fx-castoria-cloud",{right:"-2%",top:"43%",delay:"-1.6s",duration:"8.2s"});
+    addHomeFxSpecial(layer,"fx-castoria-cloud",{right:"15%",top:"51%",delay:"-4.2s",duration:"9.1s"});
   } else if (themeId === "blackNight") {
     for (let i=0;i<8;i++) addHomeFxSpecial(layer,"fx-extra-star-twinkle",{
       left:randPct(6,94),top:randPct(6,80),color:"#E8F0FF",delay:randSec(-5,0)
@@ -6291,13 +6654,14 @@ function buildHomeThemeGrid() {
     "soundElement"
   ];
 
-  const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow"];
-  const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave"];
-  const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang"];
-  const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes"];
-  const featuredThemeIds = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
+  const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon"];
+  const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus"];
+  const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
+  const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"];
+  const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
+  const featuredThemeIds = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...classicThemeOrder];
   const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !featuredThemeIds.includes(id));
-  const themeOrder = [...featuredThemeIds, ...otherThemeOrder];
+  const themeOrder = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...classicThemeOrder,...otherThemeOrder];
 
   for (const id of themeOrder) {
     const theme = HOME_THEMES[id];
@@ -6310,7 +6674,7 @@ function buildHomeThemeGrid() {
       : coolThemeOrder.includes(id) ? "COOL"
       : epicThemeOrder.includes(id) ? "EPIC"
       : relaxingThemeOrder.includes(id) ? "RELAX"
-      : "";
+      : "CLASSIC";
     btn.className = "theme-choice" + (id === currentHomeTheme ? " selected" : "") + (isElementTheme ? " element-theme-choice" : "") + (moodBadge ? " themed-mood-choice" : "");
     btn.innerHTML = `
       <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
@@ -6959,6 +7323,7 @@ function loadMeta() {
       if (!m.ownedStarters) m.ownedStarters = {};
       if (!m.petStages) m.petStages = {};
       if (!m.petStatUpgrades) m.petStatUpgrades = {};
+      if (!m.achievements || typeof m.achievements !== "object") m.achievements = {};
       if (typeof m.starterPetType !== "string") m.starterPetType = "";
       if (typeof m.starterPetName !== "string") m.starterPetName = "";
       m.starterPetGender = m.starterPetGender === "Female" ? "Female" : "Male";
@@ -6980,15 +7345,164 @@ function loadMeta() {
     speciesCards: { dog: 0, cat: 0, dragon: 0, fox: 0, wolf: 0, bear: 0, rabbit: 0 },
     petStages: {},
     petStatUpgrades: {},
+    achievements: {},
     starterPetType: "", starterPetName: "", starterPetGender: "Male",
     lastDaily: null,
   };
 }
 function saveMeta() {
-  try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) {}
+  try {
+    // Achievement unlock records are account-only. Never put them in the general browser meta save.
+    const saveCopy = {...meta};
+    delete saveCopy.achievements;
+    localStorage.setItem(META_KEY, JSON.stringify(saveCopy));
+  } catch (e) {}
 }
 let meta = loadMeta();
+// Old browser-wide achievement records are intentionally ignored from this build onward.
+meta.achievements = {};
 
+// ---------- achievements ----------
+const ACHIEVEMENT_SPECIES = Object.keys(PET_TYPES);
+function achievementSpeciesName(type){ return PET_TYPES[type]?.name || type; }
+function achievementDefs(){
+  const defs = [
+    {id:"first_tame",icon:"🤝",name:"First Animal Tamed",desc:"Tame any wild animal for the first time.",rewardText:"20 Cubits + 2 cards for that animal",reward:{cubits:20,dynamicCards:2}},
+    {id:"first_death",icon:"💀",name:"Well, That Happened",desc:"Die for the first time.",rewardText:"8 Cubits",reward:{cubits:8}},
+    {id:"moonmark_hunter",icon:"🌙",name:"Moonmark Hunter",desc:"Defeat the Moonmarked Hostl boss.",rewardText:"100 Cubits",reward:{cubits:100}},
+    {id:"survive_5",icon:"⏱️",name:"Five Minutes Strong",desc:"Survive for 5 minutes in one run.",rewardText:"35 Cubits",reward:{cubits:35}},
+    {id:"survive_night",icon:"🌅",name:"First Night Survived",desc:"Reach Morning alive after your first Night.",rewardText:"25 Cubits",reward:{cubits:25}},
+    {id:"survive_10",icon:"🛡️",name:"Ten-Minute Survivor",desc:"Survive for 10 minutes in one run.",rewardText:"60 Cubits",reward:{cubits:60}},
+    {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Cubits",reward:{cubits:150}},
+    {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Cubits",reward:{cubits:50}},
+  ];
+  for(const type of ACHIEVEMENT_SPECIES){
+    const info=PET_TYPES[type];
+    defs.push({id:`tame_${type}`,icon:info.emoji||"🐾",name:`First ${info.name} Tamed`,desc:`Tame a wild ${info.name} for the first time.`,rewardText:`10 Cubits + 4 ${info.name} Cards`,reward:{cubits:10,cards:4,species:type}});
+  }
+  for(const type of ACHIEVEMENT_SPECIES){
+    const info=PET_TYPES[type];
+    defs.push({id:`breed_${type}`,icon:"🍼",name:`First ${info.name} Baby`,desc:`Breed your first ${info.name} baby.`,rewardText:`12 Cubits + 6 ${info.name} Cards`,reward:{cubits:12,cards:6,species:type}});
+  }
+  return defs;
+}
+const ACHIEVEMENT_DEFS = achievementDefs();
+const ACHIEVEMENT_BY_ID = new Map(ACHIEVEMENT_DEFS.map(a=>[a.id,a]));
+let achievementToastQueue=[];
+let achievementToastBusy=false;
+let guestAchievementSession={};
+function achievementAccountBridge(){
+  const b = window.__cubeAchievementAccount;
+  if (!b || !b.loggedIn || !b.userId) return null;
+  if (!b.achievements || typeof b.achievements !== "object") b.achievements = {};
+  return b;
+}
+function achievementUnlocked(id){
+  const b = achievementAccountBridge();
+  if(b) return !!(b.achievements && b.achievements[id]);
+  return !!guestAchievementSession[id];
+}
+function queueAchievementToast(def,rewardSummary){
+  achievementToastQueue.push({def,rewardSummary});
+  if(achievementToastBusy)return;
+  const showNext=()=>{
+    const item=achievementToastQueue.shift();
+    if(!item){achievementToastBusy=false;return;}
+    achievementToastBusy=true;
+    const box=el("achievementToast");
+    if(!box){achievementToastBusy=false;return;}
+    box.innerHTML=`🏆 <b>Achievement Unlocked: ${item.def.name}</b><small>${item.rewardSummary||item.def.rewardText}</small>`;
+    box.classList.add("show");
+    setTimeout(()=>{box.classList.remove("show");setTimeout(()=>{achievementToastBusy=false;showNext();},220);},2200);
+  };
+  showNext();
+}
+function grantAchievementReward(def, context={}){
+  const r=def.reward||{}; const bits=[];
+  if(r.cubits){ meta.servs=(meta.servs||0)+r.cubits; bits.push(`+${r.cubits} Cubits`); }
+  const species=r.species || context.species;
+  const cards=Number(r.cards||r.dynamicCards||0);
+  if(cards>0 && species && PET_TYPES[species]){
+    if(!meta.speciesCards)meta.speciesCards={};
+    meta.speciesCards[species]=(meta.speciesCards[species]||0)+cards;
+    bits.push(`+${cards} ${achievementSpeciesName(species)} Card${cards===1?"":"s"}`);
+  }
+  return bits.join(" · ") || "Achievement unlocked";
+}
+function unlockAchievement(id,context={}){
+  const def=ACHIEVEMENT_BY_ID.get(id); if(!def)return false;
+  const account=achievementAccountBridge();
+  if(account){
+    if(account.achievements[id])return false;
+    const rewardSummary=grantAchievementReward(def,context);
+    account.achievements[id]={at:Date.now(),species:context.species||"",rewardSummary};
+    if(typeof account.persist==="function") account.persist(account.achievements);
+    saveMeta();
+    try{buildCardInventory();}catch(_){}
+    try{syncHud();}catch(_){}
+    updateAchievementUI();
+    queueAchievementToast(def,rewardSummary);
+    return true;
+  }
+  // Guests can unlock achievements for this play session, but nothing is saved and rewards wait for login.
+  if(guestAchievementSession[id])return false;
+  guestAchievementSession[id]={at:Date.now(),species:context.species||""};
+  updateAchievementUI();
+  queueAchievementToast(def,`Guest session · Log in to save and claim ${def.rewardText}`);
+  return true;
+}
+function countUnlockedAchievementPrefix(prefix){
+  return ACHIEVEMENT_SPECIES.filter(type=>achievementUnlocked(`${prefix}_${type}`)).length;
+}
+function checkAchievementMetaMilestones(){
+  if(countUnlockedAchievementPrefix("tame")>=ACHIEVEMENT_SPECIES.length) unlockAchievement("tame_all");
+  if(countUnlockedAchievementPrefix("breed")>=3) unlockAchievement("breed_three");
+}
+function achievementTamedSpecies(type){
+  if(!PET_TYPES[type])return;
+  unlockAchievement("first_tame",{species:type});
+  unlockAchievement(`tame_${type}`,{species:type});
+  checkAchievementMetaMilestones();
+}
+function achievementBredSpecies(type){
+  if(!PET_TYPES[type])return;
+  unlockAchievement(`breed_${type}`,{species:type});
+  checkAchievementMetaMilestones();
+}
+function updateAchievementUI(){
+  const account=achievementAccountBridge();
+  const unlocked=ACHIEVEMENT_DEFS.reduce((n,a)=>n+(achievementUnlocked(a.id)?1:0),0);
+  const count=el("homeAchievementCount"); if(count)count.textContent=`${unlocked}/${ACHIEVEMENT_DEFS.length}`;
+  const prog=el("achievementProgressText");
+  if(prog) prog.textContent = account
+    ? `${unlocked} / ${ACHIEVEMENT_DEFS.length} unlocked · Saved to ${account.username||"your account"}`
+    : `${unlocked} / ${ACHIEVEMENT_DEFS.length} unlocked this session · Log in to save and claim rewards`;
+  const grid=el("achievementGrid"); if(!grid)return;
+  grid.innerHTML="";
+  for(const def of ACHIEVEMENT_DEFS){
+    const unlockedNow=achievementUnlocked(def.id);
+    const row=document.createElement("div"); row.className="achievement-row"+(unlockedNow?" unlocked":"");
+    row.innerHTML=`<div class="ach-icon">${unlockedNow?def.icon:"🔒"}</div><div class="ach-copy"><div class="ach-name">${def.name}</div><div class="ach-desc">${def.desc}</div></div><div class="ach-reward">${unlockedNow?"✓ ":""}${def.rewardText}</div>`;
+    grid.appendChild(row);
+  }
+}
+function openAchievementOverlay(){ updateAchievementUI(); const o=el("achievementOverlay"); if(o){o.classList.add("show");o.setAttribute("aria-hidden","false");} }
+function closeAchievementOverlay(){ const o=el("achievementOverlay"); if(o){o.classList.remove("show");o.setAttribute("aria-hidden","true");} }
+window.__cubeAchievementUiApi = {
+  refresh:updateAchievementUI,
+  onAccountChanged(){
+    const account=achievementAccountBridge();
+    if(account){
+      const pending=Object.entries(guestAchievementSession);
+      guestAchievementSession={};
+      for(const [id,entry] of pending) unlockAchievement(id,{species:entry?.species||""});
+    } else {
+      // Logging out starts a fresh temporary guest achievement session.
+      guestAchievementSession={};
+    }
+    updateAchievementUI();
+  }
+};
 
 // ---------- safe multiplayer chat ----------
 const CHAT_MAX_LENGTH = 120;
@@ -8157,7 +8671,7 @@ function syncNetworkFullWorld(force = false) {
     }
     const serverGold = Number(own.gold);
     if (Number.isFinite(serverGold)) applyServerGoldSnapshot(serverGold);
-    if (!!own.dead && !player.dead) { player.dead = true; player.splitT = 0; if (!game.deathCamTarget && game.deathCamTargetId) game.deathCamTarget = resolveNetworkDeathCamTarget(game.deathCamTargetKind, game.deathCamTargetId); sfx.die(); }
+    if (!!own.dead && !player.dead) { player.dead = true; player.splitT = 0; unlockAchievement("first_death"); if (!game.deathCamTarget && game.deathCamTargetId) game.deathCamTarget = resolveNetworkDeathCamTarget(game.deathCamTargetKind, game.deathCamTargetId); sfx.die(); }
     if (!own.dead && player.dead && !game.over) { player.dead = false; player.splitT = 0; }
   }
 
@@ -8282,7 +8796,7 @@ function applyTameNetworkResult(data={}) {
   if (data.pending) { game.tamePending = true; banner(`Taming…${Number.isFinite(Number(data.chance)) ? " "+Math.round(Number(data.chance)*100)+"% chance" : ""}`); return; }
   game.tamePending = false;
   if (data.reason === "max") { banner("Max 4 regular pets! Bred family pets do not use a slot.", true); return; }
-  if (data.success) { if (sfx.tame) sfx.tame(); banner(`Tamed ${PET_TYPES[data.type]?.name||"pet"}!`); }
+  if (data.success) { if (sfx.tame) sfx.tame(); banner(`Tamed ${PET_TYPES[data.type]?.name||"pet"}!`); achievementTamedSpecies(String(data.type||"")); }
   else if (data.type) { banner(`${PET_TYPES[data.type]?.name||"Animal"} resisted taming`, true); }
 }
 function applyPetBreedNetworkResult(data={}) {
@@ -8297,6 +8811,7 @@ function applyPetBreedNetworkResult(data={}) {
   }
   const info = PET_TYPES[data.type] || {};
   banner(`Baby ${info.name || data.type} born! ${genderSymbol(data.gender)} +1 Card`);
+  achievementBredSpecies(String(data.type||""));
   breedPetTarget = null;
   syncPetCards();
 }
@@ -8346,7 +8861,7 @@ function applyPhaseNetworkEvent(data={}) {
   if(phase.name==="Dawn") banner("Dawn — basic Hostls are arriving: sword users and brawlers.");
   if(phase.name==="Night") { sfx.night(); banner("Night — Riders and Tamers have joined the Hostls."); }
   if(phase.name==="Midnight") banner("Midnight — Rangers and Chimest emerge, and the Forest Moonmark awakens!");
-  if(phase.name==="Morning") banner("Morning — sunlight! The Hostls are retreating.");
+  if(phase.name==="Morning") { banner("Morning — sunlight! The Hostls are retreating."); if(game.started && !player.dead) unlockAchievement("survive_night"); }
 }
 function drawRemotePets(){ for(const p of net.remotePetVisuals.values()) if(inView(p.x,p.y,60)) drawAnimal(p); }
 
@@ -8492,6 +9007,7 @@ async function connectMultiplayer() {
       banner("MIDNIGHT HUNT — the Moonmarked Forest Warden is marked on your minimap!");
     });
     room.onMessage("moonmarkClaimed", (data = {}) => {
+      unlockAchievement("moonmark_hunter");
       banner("Forest Moonmark claimed — survive until Morning for First Light!");
       const x=Number(data.x), y=Number(data.y);
       if(Number.isFinite(x)&&Number.isFinite(y)) { spark(x,y,"#d7b7ff",16,150); floatText(x,y-34,"MOONMARK", "#e4c7ff"); }
@@ -8532,6 +9048,7 @@ async function connectMultiplayer() {
         player.health = 0;
         player.dead = true;
         player.splitT = 0;
+        unlockAchievement("first_death");
         const attackerKind = String(data.attackerKind || "");
         const attackerId = String(data.attackerId || "");
         const killer = resolveNetworkDeathCamTarget(attackerKind, attackerId);
@@ -13816,6 +14333,7 @@ function fireBow() {
 }
 
 function grantMoonmarkRewardsOffline(en) {
+  unlockAchievement("moonmark_hunter");
   const goldReward = 50;
   const petXpReward = 1200;
   const cardReward = 30;
@@ -14657,6 +15175,7 @@ function hitPlayer(dmg, attacker = null) {
     player.health = 0;
     player.dead = true;
     player.splitT = 0;
+    unlockAchievement("first_death");
     game.firstLightReady = false;
     setKilledBy(player, attacker);
     beginDeathCamera(attacker);
@@ -14983,6 +15502,7 @@ function tryTameNearby() {
       if (!meta.speciesCards) meta.speciesCards = {};
       meta.speciesCards[best.type] = (meta.speciesCards[best.type] || 0) + 1;
       saveMeta();
+      achievementTamedSpecies(best.type);
       banner(`Tamed ${PET_TYPES[best.type].name}! +1 Card (${meta.speciesCards[best.type]}/${cardsNeeded(best.type)})`);
     } else {
       // fail — sad sound + attacks you
@@ -16503,6 +17023,7 @@ function updateTime(dt) {
       }
     }
     if (phase.name === "Morning") {
+      if(game.started && !player.dead) unlockAchievement("survive_night");
       banner("Morning — sunlight! The Hostls are retreating.");
       startWildMorningBreeding();
       triggerFirstLightOffline();
@@ -16978,6 +17499,7 @@ function createOfflineBredPet(mother, father) {
   spark(baby.x,baby.y,info.color||"#ffd9e6",14,100);
   floatText(baby.x,baby.y-r-12,`Baby ${info.name}!`,"#ffd9e6");
   banner(`Baby ${info.name} born! ${genderSymbol(gender)} +1 Card`);
+  achievementBredSpecies(type);
   syncPetCards(); syncHud();
   return baby;
 }
@@ -20305,7 +20827,11 @@ let resetNetworkVisualDt = 1 / 60;
 
 function runResetSimulationStep(step) {
   if (!game.started) return;
-  if (!player.dead && !game.over) game.survivalTime += step;
+  if (!player.dead && !game.over) {
+    game.survivalTime += step;
+    if(game.survivalTime >= 300) unlockAchievement("survive_5");
+    if(game.survivalTime >= 600) unlockAchievement("survive_10");
+  }
 
   if (net.room) {
     // Online: predict only the local player/actions. Wildlife, pets, enemies,
@@ -20801,6 +21327,7 @@ function setupHome() {
   // daily +5 servs
   const gotDaily = claimDailyServs();
   el("homeServs").textContent = meta.servs;
+  updateAchievementUI();
   const dailyEl = el("dailyServsHint");
   if (dailyEl) {
     dailyEl.textContent = gotDaily
@@ -21116,6 +21643,10 @@ if (starterPetGenderSelect) starterPetGenderSelect.addEventListener("change", ()
   persistStarterPetPreference();
 });
 
+if(el("homeAchievementsBtn")) el("homeAchievementsBtn").addEventListener("click", openAchievementOverlay);
+if(el("closeAchievementOverlay")) el("closeAchievementOverlay").addEventListener("click", closeAchievementOverlay);
+if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedown", (e)=>{ if(e.target===el("achievementOverlay")) closeAchievementOverlay(); });
+
 el("playBtn").addEventListener("click", async () => {
   if (game.started && !game.over) return; // already playing
   setLoadingScreen(net.enabled ? "Connecting to the world…" : "Entering the world…", 28, true);
@@ -21244,7 +21775,7 @@ const GUEST_THEME_LIMIT = 10;
 
 // These are local placeholders until Supabase/real auth is connected.
 // Passwords are NOT persisted here; this is only to build/test the game UI flow.
-let accountState = { loggedIn:false, userId:"", username:"", email:"", cubits:0, unlockedThemes:[], lastDailyCubits:"", lastDailyChest:"" };
+let accountState = { loggedIn:false, userId:"", username:"", email:"", cubits:0, unlockedThemes:[], achievements:{}, lastDailyCubits:"", lastDailyChest:"" };
 
 function utcDayKey() {
   const d = new Date();
@@ -21272,11 +21803,28 @@ function persistAccountProfile() {
     email:accountState.email,
     cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
     unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
+    achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
     lastDailyCubits:accountState.lastDailyCubits || "",
     lastDailyChest:accountState.lastDailyChest || ""
   };
   saveLocalAccountDb(db);
 }
+function syncAchievementAccountBridge(){
+  if(accountState.loggedIn && accountState.userId){
+    if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
+    window.__cubeAchievementAccount = {
+      loggedIn:true, userId:accountState.userId, username:accountState.username||"Player", achievements:accountState.achievements,
+      persist(achievements){
+        accountState.achievements = (achievements && typeof achievements==="object") ? achievements : {};
+        persistAccountProfile();
+      }
+    };
+  } else {
+    window.__cubeAchievementAccount = {loggedIn:false,userId:"",username:"",achievements:{}};
+  }
+  try{ window.__cubeAchievementUiApi?.onAccountChanged?.(); }catch(_){}
+}
+
 function restoreAccountSession() {
   try {
     const s = JSON.parse(localStorage.getItem(ACCOUNT_STORAGE_KEY) || "null");
@@ -21287,8 +21835,10 @@ function restoreAccountSession() {
     accountState = {
       loggedIn:true,userId:p.userId,username:p.username||"Player",email:p.email||"",
       cubits:Number(p.cubits)||0,unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+      achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
       lastDailyCubits:p.lastDailyCubits||"",lastDailyChest:p.lastDailyChest||""
     };
+    syncAchievementAccountBridge();
     claimDailyCubits();
   } catch (_) {}
 }
@@ -21302,6 +21852,7 @@ function claimDailyCubits() {
   return true;
 }
 function syncAccountUi(msg="") {
+  syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
     btn.textContent = accountState.loggedIn ? `${accountState.username} • ${accountState.cubits} Cubits` : "Account";
@@ -21515,7 +22066,7 @@ function createPlaceholderAccount() {
 
   const userId = "local_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
   accountState = {
-    loggedIn:true,userId,username,email,cubits:500,unlockedThemes:[],lastDailyCubits:"",lastDailyChest:""
+    loggedIn:true,userId,username,email,cubits:500,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:""
   };
   claimDailyCubits(); // +10 on the signup day as the daily reward
   persistAccountProfile();
@@ -21531,6 +22082,7 @@ function loginPlaceholderAccount() {
   accountState = {
     loggedIn:true,userId:p.userId,username:p.username||"Player",email:p.email||email,
     cubits:Number(p.cubits)||0,unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     lastDailyCubits:p.lastDailyCubits||"",lastDailyChest:p.lastDailyChest||""
   };
   const got = claimDailyCubits();
@@ -21539,7 +22091,7 @@ function loginPlaceholderAccount() {
 }
 function logoutAccount() {
   persistAccountProfile();
-  accountState = { loggedIn:false,userId:"",username:"",email:"",cubits:0,unlockedThemes:[],lastDailyCubits:"",lastDailyChest:"" };
+  accountState = { loggedIn:false,userId:"",username:"",email:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
   saveAccountSession();
   syncAccountUi("Logged out. Guest progress will not be saved.");
 }
@@ -21623,7 +22175,9 @@ document.addEventListener("keydown", e => {
   }
 });
 
+syncAchievementAccountBridge();
 restoreAccountSession();
+syncAchievementAccountBridge();
 
 </script>
 

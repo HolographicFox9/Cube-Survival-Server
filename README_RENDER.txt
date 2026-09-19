@@ -1,11 +1,12 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 545
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 551
 
-Current additions:
-- Home screen shows live Players Online using /status.
-- Starter pet species/name/gender persist in browser save data.
-- Shared resource topology sync from Game 544 remains active: new server resource/gold IDs, HP, depletion, and respawns are synchronized to all clients.
+Current Game 551 additions:
+- Includes all Game 550 special themes plus the updated Castorianopsia story theme.
+- Castorianopsia now blends visual motifs from the supplied Ch. 1 Pistanthrophobia, Ch. 2 Locked Up, and Ch. 3 Time Palace references.
+- Multiplayer server remains Server 479 with gameplay Rules version 544.
+- Shared resource synchronization, live Players Online status, saved starter pet setup, account-only achievements, breeding/family systems, and prior gameplay fixes remain included.
 
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 545
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 479 / GAME 551
 
 CURRENT BUILD 544 CHANGES
 
