@@ -4948,7 +4948,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "554";
+const CUBE_SHARED_RULES_VERSION = "555";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -8435,7 +8435,9 @@ function updateNetworkPetInterpolation(dt) {
   for (const p of net.petVisuals.values()) {
     if (!p || p.dead || !Number.isFinite(p._netX) || !Number.isFinite(p._netY)) continue;
 
-    // A ridden pet needs to stay exactly under its rider.
+    // A ridden pet stays exactly under its rider, but it must still receive
+    // real movement animation data. Older builds zeroed _renderVX/_renderVY here,
+    // which made a moving mount look frozen and also stopped its natural head motion.
     if (p.ownerId === net.sessionId && player.riding === p) {
       p.x = player.x; p.y = player.y;
       const rideMove = currentMoveVector();
@@ -8444,7 +8446,24 @@ function updateNetworkPetInterpolation(dt) {
         ? p._netAngle
         : (rideLen > 0.05 ? Math.atan2(rideMove.y, rideMove.x) : p.angle);
       if (Number.isFinite(rideTarget)) smoothTurn(p, rideTarget, dt, 2.15);
-      p._renderVX = 0; p._renderVY = 0;
+
+      const actualVX = Number(player._actualMoveVX) || 0;
+      const actualVY = Number(player._actualMoveVY) || 0;
+      p._renderVX = actualVX;
+      p._renderVY = actualVY;
+      const rideSpeed = Math.hypot(actualVX, actualVY);
+      const measuredRatio = Math.max(0, Math.min(1.8, rideSpeed / Math.max(1, p.speed || 1)));
+      const animFollow = 1 - Math.exp(-5.4 * dt);
+      p._netAnimMoveRatio = (Number(p._netAnimMoveRatio) || 0) +
+        (measuredRatio - (Number(p._netAnimMoveRatio) || 0)) * animFollow;
+      p._netAnimPhase = (Number(p._netAnimPhase) || Number(p.tailPhase) || 0) +
+        dt * (0.84 + p._netAnimMoveRatio * 2.50);
+      const tailRate = 0.78 + p._netAnimMoveRatio * 2.35;
+      p._netTailRate = tailRate;
+      p._netTailPhase = (Number.isFinite(p._netTailPhase) ? p._netTailPhase : (Number(p.tailPhase) || 0)) + dt * tailRate;
+      p.tailPhase = p._netTailPhase;
+      p._visualMoveSpeed = rideSpeed;
+      if (rideSpeed > 0.3) p._visualMoveAt = performance.now();
       continue;
     }
 
@@ -8654,7 +8673,13 @@ function syncNetworkFullWorld(force = false) {
         const correction = movementInputActive() ? 0.13 : 0.24;
         player.x += dx * correction;
         player.y += dy * correction;
-        resolveSolidCollisions();
+        if (player.riding && !player.riding.dead) {
+          player.riding.x = player.x; player.riding.y = player.y;
+          resolveAnimalWorld(player.riding);
+          player.x = player.riding.x; player.y = player.riding.y;
+        } else {
+          resolveSolidCollisions();
+        }
       }
     }
 
@@ -14349,11 +14374,19 @@ function eatBerry() {
   }
   player.berries--;
   player.health = clamp(player.health + 22, 0, player.maxHealth);
-  if (net.room) { try { net.room.send("heal", { amount: 22 }); } catch (_) {} }
+  const ridingPet = player.riding && !player.riding.dead ? player.riding : null;
+  if (ridingPet) {
+    ridingPet.hp = clamp((Number(ridingPet.hp) || 0) + 22, 0, Number(ridingPet.maxHp) || 1);
+    ridingPet.flash = Math.max(0, Number(ridingPet.flash) || 0);
+  }
+  if (net.room) {
+    try { net.room.send("heal", { amount: 22, healMount: !!ridingPet, ridingPetId: ridingPet?.netId || "" }); } catch (_) {}
+  }
   player.attackCd = Math.max(player.attackCd, 0.3);
   player.punchTimer = 0.22;
   player.swingWeapon = "Fist";
-  floatText(player.x, player.y - 28, "+22", "#7be08a");
+  if (ridingPet) floatText(ridingPet.x, ridingPet.y - (ridingPet.r || 18) - 24, `+22 ${petDisplayName(ridingPet)}`, "#7be08a");
+  else floatText(player.x, player.y - 28, "+22", "#7be08a");
   sfx.eat();
   const wasLast = player.berries <= 0;
   restoreLastWeaponAfterSpecial();
@@ -15207,8 +15240,26 @@ function updateEnemies(dt) {
   enemies = enemies.filter(en => !en.dead);
 }
 
+function mountedPetAbsorbDamage(rawDmg, attacker = null) {
+  const pet = player.riding;
+  if (!pet || pet.dead || !player.pets.includes(pet)) return false;
+  const dmg = upgradedPetDamageTaken(pet, Math.max(0, Number(rawDmg) || 0));
+  if (!(dmg > 0)) return true;
+  pet.hp -= dmg;
+  pet.flash = 0.18;
+  markCreatureHit(pet, 4.2);
+  if (attacker && combatTargetAlive(attacker)) setPetAttackerTarget(pet, attacker);
+  spark(pet.x, pet.y, "#e0563f", 6, 75);
+  floatText(pet.x, pet.y - (pet.r || 18) - 8, Math.round(dmg), "#f2836a");
+  if (pet.hp <= 0) defeatOwnedPet(pet, attacker);
+  return true;
+}
+
 function hitPlayer(dmg, attacker = null) {
   if (player.dead || game.over) return;
+  // While mounted, the pet is the rider's protective body. One hit is fully
+  // absorbed by the mount; once the mount falls, later hits can hurt the rider.
+  if (mountedPetAbsorbDamage(dmg, attacker)) return;
   dmg = Math.max(0, Number(dmg) || 0) * runDefenseMul();
   player.health -= dmg;
   player.hurtFlash = 0.22;
@@ -15688,7 +15739,7 @@ function mountedPetAttack() {
   for(const a of animals){if(a.dead||a.owned)continue;const d=dist(h.x,h.y,a.x,a.y);if(d<h.r+(a.r||18)+12&&d<best){target=a;best=d;targetIsAnimal=true;}}
   if(!target)return false;
   const raw=petAtkDmg(pet), dmg=targetIsAnimal?animalDamageTaken(target.type,target.stage,raw):raw;
-  pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;
+  pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.34;
   if(targetIsAnimal){target.hp-=dmg;wildlifeHitByPet(target,pet,dmg);if(target.hp<=0&&!target.dead){setKilledBy(target,pet);target.dead=true;game.kills++;awardPetXpContributors(target,pet);}}
   else damageEnemy(target,dmg,false,pet);
   spark(target.x,target.y,"#7be08a",5,80);
@@ -16473,18 +16524,15 @@ function updateAnimals(dt) {
     if (p.abilityCd > 0) p.abilityCd -= dt;
     if (p.flash > 0) p.flash -= dt;
     if (p.atkCd > 0) p.atkCd -= dt;
+    p.attackAnim = Math.max(0, (Number(p.attackAnim) || 0) - dt);
     if (p.combat > 0) p.combat -= dt;
     updateCreatureRecovery(p, dt, Math.max(1.2, p.maxHp * 0.024) * petUpgradeMultiplier(p.type, "regen"));
     p.tailPhase = (p.tailPhase || 0) + dt * (0.34 + Math.min(0.55, Math.max(0, Number(p.speed)||0) * 0.003));
 
     if (player.riding === p) {
-      // Rider stays centered on the torso. The rider aims at the mouse while the
-      // mount turns deliberately toward travel direction.
+      // Mounted steering/movement is handled at 60 Hz in updatePlayer. Keep this
+      // branch collision-only so the mount is not turned a second time at world-AI rate.
       p.x = player.x; p.y = player.y;
-      const rideMove = currentMoveVector();
-      const rideLen = Math.hypot(rideMove.x, rideMove.y);
-      if (rideLen > 0.05) smoothTurn(p, Math.atan2(rideMove.y, rideMove.x), dt, 2.15);
-      // While mounted the pet's own body collision IS the rider's world collision.
       resolveAnimalWorld(p);
       player.x = p.x; player.y = p.y;
       continue;
@@ -17005,45 +17053,43 @@ function resolveSolidCollisions() {
   // or carried, but both bodies share the overlap correction. Light animals give
   // way more; heavy animals resist more. Tangential movement is preserved so the
   // player can keep sliding around an animal instead of getting stuck.
-  const allAnimals = animals.concat(player.pets);
   const mv = currentMoveVector();
   const moveLen = Math.hypot(mv.x, mv.y);
   const moveX = moveLen > 0.05 ? mv.x / moveLen : 0;
   const moveY = moveLen > 0.05 ? mv.y / moveLen : 0;
 
-  for (const a of allAnimals) {
-    if (!a || a.dead || player.riding === a) continue;
-    const broad = (a.r || 18) * 2.35 + PLAYER_R + 46;
-    const bdx = player.x - a.x, bdy = player.y - a.y;
-    if (bdx * bdx + bdy * bdy > broad * broad) continue;
+  const resolvePlayerAnimalList = (list) => {
+    for (const a of list) {
+      if (!a || a.dead || player.riding === a) continue;
+      const broad = (a.r || 18) * 2.35 + PLAYER_R + 46;
+      const bdx = player.x - a.x, bdy = player.y - a.y;
+      if (bdx * bdx + bdy * bdy > broad * broad) continue;
 
-    const hit = deepestAnimalPhysicalOverlap(a, player.x, player.y, PLAYER_R * 0.82);
-    if (!hit || hit.d <= 0.1 || hit.overlap <= 0) continue;
+      const hit = deepestAnimalPhysicalOverlap(a, player.x, player.y, PLAYER_R * 0.82);
+      if (!hit || hit.d <= 0.1 || hit.overlap <= 0) continue;
 
-    // Normal points from the animal contact circle toward the player.
-    const nx = (player.x - hit.h.x) / hit.d;
-    const ny = (player.y - hit.h.y) / hit.d;
-    const towardAnimalX = -nx, towardAnimalY = -ny;
-    const movingInto = moveLen > 0.05 && (moveX*towardAnimalX + moveY*towardAnimalY) > 0.02;
+      const nx = (player.x - hit.h.x) / hit.d;
+      const ny = (player.y - hit.h.y) / hit.d;
+      const towardAnimalX = -nx, towardAnimalY = -ny;
+      const movingInto = moveLen > 0.05 && (moveX*towardAnimalX + moveY*towardAnimalY) > 0.02;
+      const correction = Math.min(hit.overlap + 0.04, 2.15 + Math.sqrt(Math.max(0,hit.overlap))*0.68);
+      const mobility = animalPushMobility(a);
+      let animalShare = Math.max(0.18, Math.min(0.72, 0.18 + mobility * 0.62));
+      if (a.owned) animalShare = Math.min(0.80, animalShare + 0.10);
+      if (movingInto) animalShare = Math.min(0.82, animalShare + 0.08);
+      const playerShare = 1 - animalShare;
 
-    // Resolve gently over several frames. This avoids jerky launches while still
-    // clearing overlap fast enough to keep bodies solid.
-    const correction = Math.min(hit.overlap + 0.04, 2.15 + Math.sqrt(Math.max(0,hit.overlap))*0.68);
-    const mobility = animalPushMobility(a);
-    let animalShare = Math.max(0.18, Math.min(0.72, 0.18 + mobility * 0.62));
-    // Your own pets yield a little more so circling pets don't body-block their owner.
-    if (a.owned) animalShare = Math.min(0.80, animalShare + 0.10);
-    // Pressing into an animal gives the player a little extra leverage, while an
-    // animal walking into an idle player still nudges the player away naturally.
-    if (movingInto) animalShare = Math.min(0.82, animalShare + 0.08);
-    const playerShare = 1 - animalShare;
-
-    player.x = clamp(player.x + nx * correction * playerShare, PLAYER_R, WORLD_W-PLAYER_R);
-    player.y = clamp(player.y + ny * correction * playerShare, PLAYER_R, WORLD_H-PLAYER_R);
-    a.x = clamp(a.x - nx * correction * animalShare, 20, WORLD_W-20);
-    a.y = clamp(a.y - ny * correction * animalShare, 20, WORLD_H-20);
-    resolveAnimalWorld(a);
-  }
+      player.x = clamp(player.x + nx * correction * playerShare, PLAYER_R, WORLD_W-PLAYER_R);
+      player.y = clamp(player.y + ny * correction * playerShare, PLAYER_R, WORLD_H-PLAYER_R);
+      a.x = clamp(a.x - nx * correction * animalShare, 20, WORLD_W-20);
+      a.y = clamp(a.y - ny * correction * animalShare, 20, WORLD_H-20);
+      resolveAnimalWorld(a);
+    }
+  };
+  // Avoid animals.concat(player.pets) here: this function can run every movement
+  // sub-step, so not allocating a new array each time reduces garbage-collector work.
+  resolvePlayerAnimalList(animals);
+  resolvePlayerAnimalList(player.pets);
 
 }
 
@@ -17216,11 +17262,11 @@ function movePlayerSwept(dx, dy) {
     player.y = clamp(player.y + sy, PLAYER_R, WORLD_H - PLAYER_R);
     if (player.riding && !player.riding.dead) {
       player.riding.x = player.x; player.riding.y = player.y;
+      // The mount is the ONLY static collision body while riding. Resolving a
+      // second human circle here made mount/body corrections fight each other
+      // and was a major source of snagging in narrow gaps.
       resolveAnimalWorld(player.riding);
       player.x = player.riding.x; player.y = player.riding.y;
-      // Dynamic bodies still use the one-sided player blocker below.
-      resolveSolidCollisions();
-      player.riding.x = player.x; player.riding.y = player.y;
     } else resolveSolidCollisions();
   }
 }
@@ -17288,13 +17334,32 @@ function updatePlayer(dt) {
       player.angle = mobileFacingAngle;
     }
     let speed = 148;
-    if (player.riding) speed = Math.max(24, player.riding.speed || animalSpeed(player.riding.type, player.riding.stage, true)) * 2.30;
-    if (player.heldSpecial === "Wall") speed *= 0.64;
-    movePlayerSwept((dx / len) * speed * dt, (dy / len) * speed * dt);
+    if (player.riding && !player.riding.dead) {
+      const mount = player.riding;
+      speed = Math.max(24, mount.speed || animalSpeed(mount.type, mount.stage, true)) * 2.30;
+      if (player.heldSpecial === "Wall") speed *= 0.64;
+      // Input chooses where the animal WANTS to face. Movement remains forward
+      // along its CURRENT facing direction while the turn is still happening.
+      // This creates a natural curved riding path instead of sideways sliding.
+      smoothTurn(mount, Math.atan2(dy, dx), dt, 2.15);
+      const inputStrength = clamp(len, 0, 1);
+      movePlayerSwept(Math.cos(mount.angle || 0) * speed * inputStrength * dt,
+                      Math.sin(mount.angle || 0) * speed * inputStrength * dt);
+    } else {
+      if (player.heldSpecial === "Wall") speed *= 0.64;
+      movePlayerSwept((dx / len) * speed * dt, (dy / len) * speed * dt);
+    }
   } else {
-    // Still resolve once while idle so a dynamic push can never leave the player
-    // embedded in a solid until the next key press.
-    resolveSolidCollisions();
+    // Still resolve once while idle. When mounted, only the animal body is a
+    // static collider; using the rider circle as well recreates the same snag
+    // that swept mounted movement avoids.
+    if (player.riding && !player.riding.dead) {
+      player.riding.x = player.x; player.riding.y = player.y;
+      resolveAnimalWorld(player.riding);
+      player.x = player.riding.x; player.y = player.riding.y;
+    } else {
+      resolveSolidCollisions();
+    }
   }
 
   // Track actual post-collision motion. Pet following uses this instead of
@@ -17303,6 +17368,11 @@ function updatePlayer(dt) {
   player._actualMoveVX = (player.x - moveStartX) / moveDt;
   player._actualMoveVY = (player.y - moveStartY) / moveDt;
   player._actualMoving = Math.hypot(player._actualMoveVX, player._actualMoveVY) > 2.5;
+  if (player.riding && !player.riding.dead) {
+    const mountVisualSpeed = Math.hypot(player._actualMoveVX, player._actualMoveVY);
+    player.riding._visualMoveSpeed = mountVisualSpeed;
+    if (mountVisualSpeed > 0.3) player.riding._visualMoveAt = performance.now();
+  }
 
   if (mouse.down) {
     if (player.tool === "Bow" && !player.heldSpecial) fireBow();

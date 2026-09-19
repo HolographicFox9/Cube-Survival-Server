@@ -11,7 +11,7 @@ const WORLD_H = 14400;
 const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
-const CUBE_SHARED_RULES_VERSION = "554";
+const CUBE_SHARED_RULES_VERSION = "555";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -1642,7 +1642,7 @@ export class WorldRoom extends Room {
       }
     }
   }
-  handleHeal(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const amount=clamp(+data.amount||0,0,40);p.health=clamp(p.health+amount,0,p.maxHealth);}
+  handleHeal(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const amount=clamp(+data.amount||0,0,40);p.health=clamp(p.health+amount,0,p.maxHealth);if(data?.healMount&&p.ridingPetId){const pet=this.state.pets.get(p.ridingPetId);if(pet&&pet.ownerId===client.sessionId&&!pet.dead)pet.hp=clamp(pet.hp+amount,0,pet.maxHp);}}
   handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   ensureStarterPetFor(client,type,stage,opts={}){
@@ -2435,7 +2435,12 @@ export class WorldRoom extends Room {
     for(const[id,p]of this.state.players){
       if(p.dead)continue;
       const mount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
-      if(mount&&!mount.dead){p.x=mount.x;p.y=mount.y;}
+      if(mount&&!mount.dead){
+        p.x=mount.x;p.y=mount.y;
+        // The mounted animal-vs-animal solver already owns this collision.
+        // Do not add a second human-circle push on top of the mount body.
+        continue;
+      }
       for(const rec of this.nearbyDynamic(p.x,p.y,180,kinds)){
         const obj=rec.obj;if(!obj)continue;
         if(rec.kind==="pet"&&p.ridingPetId===rec.id)continue;
@@ -2455,7 +2460,19 @@ export class WorldRoom extends Room {
   damageTarget(ref,dmg,attackerKind="world",attackerId=""){
     const obj=this.targetObject(ref);if(!obj)return false;
     if(ref.kind==="player"){
-      if(obj.dead)return false;const amount=Math.max(0,Number(dmg)||0)*this.runPerks(ref.id).defenseMul;if(amount<=0)return false;
+      if(obj.dead)return false;
+      // A living ridden pet absorbs the whole incoming hit first. The hit that
+      // defeats the mount does not spill through; later hits can damage the rider.
+      if(obj.ridingPetId){
+        const mountId=obj.ridingPetId,mount=this.state.pets.get(mountId);
+        if(mount&&mount.ownerId===ref.id&&!mount.dead&&mount.hp>0){
+          const absorbed=this.damageTarget({kind:"pet",id:mountId},dmg,attackerKind,attackerId);
+          if(mount.dead||mount.hp<=0)obj.ridingPetId="";
+          return absorbed;
+        }
+        obj.ridingPetId="";
+      }
+      const amount=Math.max(0,Number(dmg)||0)*this.runPerks(ref.id).defenseMul;if(amount<=0)return false;
       obj.health=Math.max(0,obj.health-amount);if(obj.health<=0){obj.health=0;obj.dead=true;obj.ridingPetId="";this.firstLightReadyPlayers.delete(ref.id);this.broadcastSpectateKill("player",ref.id,attackerKind,attackerId);}
       if(attackerId&&!obj.dead){
         let threat=null;
@@ -2468,7 +2485,7 @@ export class WorldRoom extends Room {
       else this.queuePlayerHit(ref.id,hit);
       return true;
     }
-    if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(obj.hp<=0){obj.dead=true;this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
+    if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(obj.hp<=0){obj.dead=true;const owner=this.state.players.get(obj.ownerId);if(owner&&owner.ridingPetId===ref.id)owner.ridingPetId="";this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
     if(ref.kind==="animal"){
       // Wild animals only damage other wild animals that are normal prey.
       if(attackerKind==="animal"&&attackerId&&this.state.animals.has(attackerId)){
@@ -2609,7 +2626,7 @@ export class WorldRoom extends Room {
   petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));}return true;}
   petDamageResourcesAround(ownerId,p,x,y,range,ability=true){for(const s of this.nearbySolids(x,y,range+120)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;if(dist(x,y,s.x,s.y)<=range+s.r)this.petHitResource(ownerId,p,s.id,r,ability);}}
   petAttackStuckResource(ownerId,p){let best=null,bestD=Infinity;for(const s of this.nearbySolids(p.x,p.y,110)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;const d=dist(p.x,p.y,s.x,s.y);if(d<bestD){bestD=d;best={s,r};}}if(!best)return false;smoothTurn(p,angTo(p.x,p.y,best.s.x,best.s.y),.12,8);p.attackAnim=.18;return this.petHitResource(ownerId,p,best.s.id,best.r,false);}
-  mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);if(dist(face.x,face.y,target.obj.x,target.obj.y)>face.r+(target.obj.r||18)+16)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
+  mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);if(dist(face.x,face.y,target.obj.x,target.obj.y)>face.r+(target.obj.r||18)+16)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.34;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
 
   safePetFollowPoint(p,tx,ty){
     let x=clamp(tx,24,WORLD_W-24),y=clamp(ty,24,WORLD_H-24);

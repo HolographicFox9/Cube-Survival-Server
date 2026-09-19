@@ -16,7 +16,7 @@ app.disable("x-powered-by");
 
 // Render health check. This also gives you a quick way to verify the server is awake.
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 482, gameBuild: 554, rulesVersion: "554", chat: true, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 483, gameBuild: 555, rulesVersion: "555", chat: true, ...getCubeServerStats() });
 });
 
 // Home-screen population check. CORS is intentionally open because players may
@@ -24,7 +24,7 @@ app.get("/healthz", (_req, res) => {
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 482, gameBuild: 554 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 483, gameBuild: 555 });
 });
 
 // Visiting the Render URL opens the game and tells the client to use this same server.

@@ -1,18 +1,20 @@
-CUBE SURVIVAL — FULL RENDER PROJECT — SERVER 482 / GAME 554 / RULES 554
+CUBE SURVIVAL — FULL RENDER PROJECT — SERVER 483 / GAME 555 / RULES 555
 
-CURRENT GAME 554 FAMILY CHANGES
-- Bred pets remain hidden from pet cards by default.
-- A bred pet that becomes an older-sibling leader now gets a visible pet card while it is caring for younger family babies.
-- Older-sibling cards have an "Older Sibling" label and can be controlled normally.
-- Younger bred babies remain hidden from the pet-card list.
-- When wild animals or owned pets successfully make a baby, a large bubbly red heart grows above the birth spot, pulses, pops, and bursts into pink/gold/white stardust.
-- Nearby players hear a soft happy soothing birth chime when the heart effect happens.
-- Multiplayer broadcasts the same birth celebration to all clients so everyone sees the shared effect.
-- Existing orphan-family rules remain: if a lone orphan is the only pet left it becomes a normal card pet; otherwise older siblings care for younger babies and their ability/target copying still works.
+GAME 555 RIDING + COLLISION CLEANUP
+- Mounted pets keep their normal walking/body/head/tail animation while moving.
+- Mounted pet attack animation now visibly lunges/moves the head instead of looking frozen.
+- Riding steering is forward-facing: WASD/arrow input chooses the target heading, while the mount continues moving in its current facing direction as it turns toward that heading.
+- While riding, the mounted pet absorbs incoming damage before the rider can be hurt. The hit that defeats the mount is absorbed by the mount; later hits can damage the rider.
+- Eating a berry while mounted still heals the rider and now also heals the ridden pet by the same amount.
+- Mounted static collision now uses only the pet's physical body hitboxes. The duplicate human collision pass was removed because it could fight the mount correction and snag on trees, rocks, walls, gold, and chests.
+- Multiplayer mounted animal collision no longer adds a second human-circle push on top of the mount's own animal collision.
+- A hot movement-collision path no longer allocates animals.concat(player.pets) every sub-step, reducing unnecessary garbage-collector work.
+- Offline owned-pet attack animation timers now decay correctly instead of being able to stick at a constant attack pose.
+- Existing species/stage hitbox tuning remains in place, including the reduced Boar, Wolf, Bear, Dog, Deer, Snake, and Sabertooth profiles from prior builds.
 
 FULL RENDER PROJECT CONTENTS
-- public/index.html      Game 554
-- WorldRoom.js          Server 482 authoritative multiplayer room
+- public/index.html      Game 555
+- WorldRoom.js          Server 483 authoritative multiplayer room
 - index.js              Express + Colyseus launcher and /healthz + /status
 - package.json          Node dependencies/start command
 - render.yaml           Render Blueprint configuration
@@ -30,7 +32,7 @@ RENDER DEPLOYMENT
 8. Open the Render HTTPS URL; it redirects to /index.html?server=self and the game connects back with WebSockets.
 
 BUILD CHECK
-/healthz reports serverBuild 482, gameBuild 554, rulesVersion 554.
+/healthz reports serverBuild 483, gameBuild 555, rulesVersion 555.
 /status reports the live connected-player count used by the home screen.
 
 NOTE
