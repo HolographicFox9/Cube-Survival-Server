@@ -1,21 +1,11 @@
-CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 455 / GAME 519
+CUBE SURVIVAL — RENDER-READY MULTIPLAYER SERVER 477 / GAME 543
 
-SERVER 451 / GAME 515 — BABY PET ATTACK CONTACT + TIGHTER SLEEPING VIPER CURL:
+CURRENT BUILD 543 CHANGES
 
-- The Midnight Moonmark is now a large Forest Warden biome boss, not a Chimest.
-- The Forest Warden is specially marked on the minimap and uses a five-thorn Forest Burst.
-- Moonmark bosses are data-driven by biome; Forest is the first biome profile.
-- Pets earn XP for real kill/assist damage contributions against wildlife and Hostls.
-- XP scales by victim stage/species/Hostl role; babies give less, bears/sabers give more, Moonmark gives a large reward.
-- Pet evolution is capped at Superboss; large XP rewards can process multiple level-ups immediately.
-- Enemy cubes are now called Hostls in the game UI.
-- Dawn lasts 48s and introduces only Brawler (fist) and Swordsman Hostls.
-- Night lasts 70s and adds Rider and Tamer Hostls with animal mounts/guards.
-- Midnight is a shorter 24s danger phase and adds Ranger (bow) and Chimest (magic) Hostls.
-- Morning lasts 14s; Hostls, mounts, and Tamer guards immediately flee sunlight.
-- Surprise mechanic: one Moonmarked Chimest appears each Midnight. Defeat it and survive until Morning to trigger First Light, healing the player/pets and blasting nearby retreating Hostls.
-- Client/server gameplay rules version: 519.
-
+- Home screen now lets the player name the selected starter pet before Play.
+- Home screen now lets the player choose the starter pet gender: Male or Female.
+- Offline and multiplayer both create the starter pet with that exact chosen name and gender.
+- Client/server gameplay Rules version: 542.
 
 WHAT THIS PACKAGE DOES
 - Runs the full Colyseus Cube Survival multiplayer world.
@@ -858,3 +848,16 @@ SERVER 457 / GAME 521 MOONMARK SPAWN + MINIMAP
 - Moonmark bosses spawn at random clear points across the entire map.
 - Spawn validation avoids resources, gold, chests, players, pets, animals, Hostls, walls, and towers.
 - Moonmark minimap markers are large solid biome-colored dots; Forest uses deep green (#0b542f).
+
+
+Game 539 / Server 475 update:
+- Hostl Rider mounts use the Wolf physical collision profile.
+- Player/animal contact uses smooth mutual push; the player can push animals and animals can push the player without sticky carry behavior.
+
+
+GAME 541 / SERVER 476 — WILDLIFE FAMILIES
+- Wild animals no longer proactively fight the same species; animal-vs-animal hunting is restricted to species prey relationships.
+- Wild animals and pets have synchronized Male/Female genders.
+- During Morning, a limited number of calm grown same-species Male/Female wild pairs seek each other; contact creates a baby.
+- Pet menu has Breed: same species, opposite gender, Adult or older. Bred family babies do not consume one of the four normal pet/tame slots and award +1 species card.
+- Bred babies follow their parents, fight/level normally, and copy either parent's ability cast without their own cooldown.

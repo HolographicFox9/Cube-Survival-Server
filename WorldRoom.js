@@ -11,7 +11,7 @@ const WORLD_H = 14400;
 const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
-const CUBE_SHARED_RULES_VERSION = "521";
+const CUBE_SHARED_RULES_VERSION = "542";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -475,6 +475,14 @@ function dogWallStats(stage,level=1){const lv=Math.max(1,Number(level)||1),t={ba
 function wallDamageForTool(toolName,w){const t=TOOL[toolName]||TOOL.Fist;return w?.kind==="stoneSpike"?(t.stoneWall||.5):(t.woodWall||1);}
 
 const WILD_SPECIES = Object.keys(PET_TYPES);
+const WILD_PREY = {
+  fox:new Set(["rabbit"]), wolf:new Set(["rabbit","deer","boar"]), bear:new Set(["rabbit","deer","boar"]),
+  cat:new Set(["rabbit","snake"]), dog:new Set(["rabbit"]), rabbit:new Set(), owl:new Set(["rabbit","snake"]),
+  snake:new Set(["rabbit"]), deer:new Set(), boar:new Set(), saber:new Set(["rabbit","deer","boar","wolf"]),
+  dragon:new Set(["rabbit","snake"]),
+};
+function wildCanPreyOn(predatorType,preyType){return !!predatorType&&!!preyType&&predatorType!==preyType&&!!WILD_PREY[predatorType]?.has(preyType);}
+function randomAnimalGender(){return Math.random()<.5?"Male":"Female";}
 
 const TOOL = {
   Fist:    { dmg: 1.0, range: 42, cadence: 0.50, gather: 0.06, resourcePower: 0.08, woodWall:1.0, stoneWall:0.45 },
@@ -528,7 +536,8 @@ class AnimalState extends Schema {
     this.speed=60; this.sleeping=false; this.tailPhase=0; this.attackAnim=0; this.flash=0;
     this.atkCd=0; this.abilityCd=0; this.combat=0; this.recentHit=0; this.wanderT=1; this.wanderA=0;
     this.fleeUntil=0; this.enraged=false; this.tameFailedAggro=false; this.desperateAggro=false;
-    this.releasedWild=false; this.level=1; this.exp=0; this.petName="";
+    this.releasedWild=false; this.hostileRiderMount=false; this.level=1; this.exp=0; this.petName="";
+    this.gender="Male"; this.motherId=""; this.fatherId=""; this.bredChild=false;
   }
 }
 defineTypes(AnimalState, {
@@ -536,7 +545,8 @@ defineTypes(AnimalState, {
   hp:"number", maxHp:"number", coat:"string", spotCol:"string", spotsJson:"string", speed:"number",
   sleeping:"boolean", tailPhase:"number", attackAnim:"number", flash:"number", atkCd:"number", abilityCd:"number",
   combat:"number", recentHit:"number", wanderT:"number", wanderA:"number", fleeUntil:"number", enraged:"boolean",
-  tameFailedAggro:"boolean", desperateAggro:"boolean", releasedWild:"boolean", level:"number", exp:"number", petName:"string"
+  tameFailedAggro:"boolean", desperateAggro:"boolean", releasedWild:"boolean", hostileRiderMount:"boolean", level:"number", exp:"number", petName:"string",
+  gender:"string", motherId:"string", fatherId:"string", bredChild:"boolean"
 });
 
 class PetState extends Schema {
@@ -548,6 +558,7 @@ class PetState extends Schema {
     this.abilityCd=0; this.atkCd=0; this.combat=0; this.level=1; this.exp=0; this.petName="Pet";
     this.orderMode="follow"; this.targetX=-1; this.targetY=-1; this.dead=false;
     this.upHealth=0; this.upDefense=0; this.upAttack=0; this.upWeight=0; this.upRegen=0; this.upSpeed=0;
+    this.gender="Male"; this.motherId=""; this.fatherId=""; this.bredChild=false;
     this.wanderT=rand(.6,2.2); this.wanderA=rand(0,TAU);
   }
 }
@@ -557,7 +568,7 @@ defineTypes(PetState, {
   tailPhase:"number", attackAnim:"number", flash:"number", abilityCd:"number", atkCd:"number", combat:"number",
   level:"number", exp:"number", petName:"string", orderMode:"string", targetX:"number", targetY:"number", dead:"boolean",
   upHealth:"number", upDefense:"number", upAttack:"number", upWeight:"number", upRegen:"number", upSpeed:"number",
-  wanderT:"number", wanderA:"number"
+  gender:"string", motherId:"string", fatherId:"string", bredChild:"boolean", wanderT:"number", wanderA:"number"
 });
 
 class EnemyState extends Schema {
@@ -713,7 +724,7 @@ function animalHitboxFit(type,stage){
     wolf:{len:1.03,body:1.04,head:1.05},
     bear:{len:.99,body:1.08,head:1.05},
     rabbit:{len:1.02,body:1.00,head:1.08},
-    snake:{len:1.08,body:.98,head:1.08},
+    snake:{len:.84,body:.74,head:.82},
     boar:{len:1.03,body:1.04,head:1.06},
     saber:{len:.88,body:.88,head:.90},
     deer:{len:.98,body:.88,head:.90},
@@ -786,17 +797,67 @@ function animalHitCircles(a) {
   });
 }
 function animalPhysicalCircles(a){
-  // Full geometry is still used for attacks and weapon hits.
-  // Movement collision includes the body + neck and excludes only the final
-  // two face/snout circles, so the snout remains touchable without making the
-  // whole front of the animal non-solid.
-  const hits=animalHitCircles(a);
-  const physical=hits.length>2?hits.slice(0,hits.length-2):hits;
-  // Player-owned baby pets were proportionally too solid because the generic
-  // hit geometry has an 8px minimum radius. Slim movement collision only;
-  // weapon/projectile/body damage geometry stays unchanged.
-  if(a?.ownerId&&a.stage==="baby")return physical.map(h=>({...h,r:Math.max(4.5,h.r*.80)}));
-  return physical;
+  // Hostl Rider mounts always use the Wolf movement-collision profile, even if
+  // their visible mount is a Boar/Bear/Dog/Saber. Damage geometry stays real.
+  const riderWolfCollision=!!a?.hostileRiderMount;
+  const collisionAnimal=riderWolfCollision?Object.assign({},a,{type:"wolf"}):a;
+  // Movement collision keeps the torso plus a smaller solid skull/head circle.
+  // Only the final muzzle/snout-tip circle is non-solid, so the nose can overlap
+  // an obstacle a little without allowing the whole head to pass through it.
+  const hits=animalHitCircles(collisionAnimal);
+  if(!hits.length)return hits;
+  const physical=hits.length>1?hits.slice(0,hits.length-1):hits.slice();
+  let radiusMul=1;
+  if(collisionAnimal?.stage==="baby")radiusMul*=.70;
+  if(collisionAnimal?.type==="snake")radiusMul*=.72;
+  if(collisionAnimal?.type==="wolf"){
+    const ownedWolf=!!collisionAnimal?.ownerId;
+    if(collisionAnimal?.stage==="boss")radiusMul*=.60;
+    else if(!ownedWolf)radiusMul*=.70;
+    else radiusMul*=.78;
+  }
+  if(collisionAnimal?.type==="bear")radiusMul*=.84;
+  if(collisionAnimal?.type==="dog")radiusMul*=.92;
+  if(collisionAnimal?.type==="boar"){
+    if(collisionAnimal?.stage==="baby")radiusMul*=.52;
+    else if(collisionAnimal?.stage==="boss")radiusMul*=.68;
+    else radiusMul*=.66;
+  }
+  if(collisionAnimal?.type==="deer"&&collisionAnimal?.stage==="adult")radiusMul*=.68;
+  const last=physical.length-1;
+  return physical.map((h,i)=>{
+    let rMul=radiusMul;
+    const bossBoarFront=collisionAnimal?.type==="boar"&&(collisionAnimal?.stage==="boss"||collisionAnimal?.stage==="superboss")&&i>=last-1;
+    if(bossBoarFront){
+      const isSkull=i===last;
+      const frontMul=collisionAnimal?.stage==="superboss"?(isSkull?.12:.28):(isSkull?.16:.34);
+      rMul*=frontMul;
+    }else if(i===last&&physical.length>1){
+      let headMul=.72;
+      if(collisionAnimal?.type==="boar"&&collisionAnimal?.stage==="baby")headMul=.30;
+      else if(collisionAnimal?.type==="boar"&&collisionAnimal?.stage==="bigmomma")headMul=.20;
+      else if(collisionAnimal?.type==="boar")headMul=.62;
+      else if(collisionAnimal?.type==="deer"&&collisionAnimal?.stage==="adult")headMul=.64;
+      else if(collisionAnimal?.type==="deer"&&collisionAnimal?.stage==="boss")headMul=.50;
+      else if(collisionAnimal?.stage==="baby")headMul=.68;
+      rMul*=headMul;
+    }
+    const compactBoarHead=i===last&&collisionAnimal?.type==="boar"&&(collisionAnimal?.stage==="boss"||collisionAnimal?.stage==="superboss"||collisionAnimal?.stage==="bigmomma");
+    let minPhysicalR=4;
+    if(i===last&&collisionAnimal?.type==="boar"&&collisionAnimal?.stage==="baby")minPhysicalR=2.5;
+    else if(bossBoarFront)minPhysicalR=i===last?1.6:2.2;
+    else if(compactBoarHead)minPhysicalR=3;
+    const out={...h,r:Math.max(minPhysicalR,h.r*rMul)};
+    if(bossBoarFront){
+      const ang=Number(a?.angle)||0,r=Number(a?.r)||18;
+      const back=(i===last)?(collisionAnimal?.stage==="superboss"?.34:.30)*r:(collisionAnimal?.stage==="superboss"?.14:.11)*r;
+      out.x-=Math.cos(ang)*back;out.y-=Math.sin(ang)*back;
+    }else if(compactBoarHead){
+      const back=.20*(Number(a?.r)||18),ang=Number(a?.angle)||0;
+      out.x-=Math.cos(ang)*back;out.y-=Math.sin(ang)*back;
+    }
+    return out;
+  });
 }
 
 function animalMeleeTouch(a,px,py,range,angle,maxFacing=1.05){
@@ -929,7 +990,8 @@ function petFollowRangeFor(p){
   // while slow/heavy pets naturally stay closer to their owner.
   const bodyR=Math.max(10,Number(p?.r)||18);
   const moveSpeed=Math.max(24,Number(p?.speed)||60);
-  const stop=clamp(PLAYER_R+bodyR*.60+18,54,104);
+  const clingPad=(p?.type==="wolf"||p?.type==="boar")?14:6;
+  const stop=clamp(PLAYER_R+bodyR*.70+26+clingPad,64,126);
   const roamBand=clamp(24+moveSpeed*.50,34,128);
   const start=stop+roamBand;
   const run=start+clamp(80+moveSpeed*.48,105,190);
@@ -961,6 +1023,7 @@ export class WorldRoom extends Room {
     this.wallSpikeNext=new Map(); this.wallEnemyNext=new Map();
     this.enemyPetByEnemy=new Map(); this.enemyOwnerByPet=new Map(); this.ownerThreat=new Map();
     this.firstLightReadyPlayers=new Set(); this.midnightMarkSpawned=false; this.petXpContrib=new Map();
+    this.wildMateTargets=new Map(); this.wildLastBreedDay=new Map();
     this.fxQueue=[]; this.fxFlushAccum=0; this.pendingPlayerHits=new Map(); this.hitFlushAccum=0;
     this.pendingAnimalPushes=new Map(); this.pushFlushAccum=0;
     this.petDeathTimers=new Map(); this.solidGrid=new Map(); this.dynamicGrid=new Map(); this.chestRewards=new Map(); this.chatLastSent=new Map(); this.waveTimer=4;
@@ -985,6 +1048,7 @@ export class WorldRoom extends Room {
     this.onMessage("respawn",(client)=>this.handleRespawn(client));
     this.onMessage("petOrder",(client,data={})=>this.handlePetOrder(client,data));
     this.onMessage("petAbility",(client,data={})=>this.handlePetAbility(client,data));
+    this.onMessage("petBreed",(client,data={})=>this.handlePetBreed(client,data));
     this.onMessage("petRelease",(client,data={})=>this.handlePetRelease(client,data));
     this.onMessage("petRename",(client,data={})=>this.handlePetRename(client,data));
     this.onMessage("ensureStarterPet",(client,data={})=>this.handleEnsureStarterPet(client,data));
@@ -1078,8 +1142,12 @@ export class WorldRoom extends Room {
         }else if(solid.kind==="gold"){const g=this.state.gold.get(solid.id);if(!g||(!g.infinite&&g.goldLeft<=0))continue;const h=goldHit(g);pushCreatureFrom(h.x,h.y,h.r);}
         else if(solid.kind==="chest"){const c=this.state.chests.get(solid.id);if(!c||c.opened)continue;const h=chestHit(c);pushCreatureFrom(h.x,h.y,h.r);}
       }
-      // Offline creature-vs-wall collision intentionally uses the broad body radius.
-      for(const[,w]of this.state.walls){const d=dist(obj.x,obj.y,w.x,w.y),min=w.r+(obj.r||18)*.85;if(d<min&&d>.1){const a=angTo(w.x,w.y,obj.x,obj.y);obj.x=w.x+Math.cos(a)*min;obj.y=w.y+Math.sin(a)*min;}}
+      // Creature-vs-wall collision uses the same torso-only circles as other solids.
+      for(const[,w]of this.state.walls){
+        let best=null,bestOverlap=0;
+        for(const h of animalPhysicalCircles(obj)){const d=dist(h.x,h.y,w.x,w.y),overlap=h.r+w.r-d;if(overlap>bestOverlap){bestOverlap=overlap;best={h,d,overlap};}}
+        if(best&&best.d>.1){const a=angTo(w.x,w.y,best.h.x,best.h.y);obj.x+=Math.cos(a)*best.overlap;obj.y+=Math.sin(a)*best.overlap;}
+      }
       obj.x=clamp(obj.x,20,WORLD_W-20);obj.y=clamp(obj.y,20,WORLD_H-20);return;
     }
 
@@ -1198,7 +1266,7 @@ export class WorldRoom extends Room {
     const hasSpots=(type==="dog"&&Math.random()<.55)||(type==="cat"&&Math.random()<.35)||(type==="rabbit"&&Math.random()<.25);
     const spots=hasSpots?Array.from({length:randi(3,7)},()=>({x:rand(-.5,.5),y:rand(-.4,.4),s:rand(.12,.22)})):[];
     const sleeping=opts.sleeping??(stage==="bigmomma"?Math.random()<.96:stage==="superboss"?Math.random()<.88:stage==="boss"?Math.random()<.75:stage==="baby"?Math.random()<.65:false);
-    Object.assign(a,{type,stage,x,y,angle:rand(0,TAU),r,hp,maxHp:hp,coat,spotCol:shadeHex(coat,Math.random()<.5?-35:30),spotsJson:JSON.stringify(spots),speed:animalSpeed(type,stage,false),sleeping,tailPhase:rand(0,TAU),abilityCd:rand(3,info.abilityCd),wanderT:rand(1,3),wanderA:rand(0,TAU),releasedWild:!!opts.releasedWild,level:opts.level||1,exp:opts.exp||0,petName:opts.petName||""});
+    Object.assign(a,{type,stage,x,y,angle:rand(0,TAU),r,hp,maxHp:hp,coat,spotCol:shadeHex(coat,Math.random()<.5?-35:30),spotsJson:JSON.stringify(spots),speed:animalSpeed(type,stage,false),sleeping,tailPhase:rand(0,TAU),abilityCd:rand(3,info.abilityCd),wanderT:rand(1,3),wanderA:rand(0,TAU),releasedWild:!!opts.releasedWild,level:opts.level||1,exp:opts.exp||0,petName:opts.petName||"",gender:opts.gender||randomAnimalGender(),motherId:String(opts.motherId||""),fatherId:String(opts.fatherId||""),bredChild:!!opts.bredChild});
     if(opts.hp!=null)a.hp=clamp(opts.hp,1,a.maxHp); if(opts.enraged)a.enraged=true; if(opts.tameFailedAggro)a.tameFailedAggro=true; if(opts.desperateAggro)a.desperateAggro=true;
     const id=`a${this.nextAnimalId++}`;this.state.animals.set(id,a);return id;
   }
@@ -1217,7 +1285,7 @@ export class WorldRoom extends Room {
     const info=PET_TYPES[type];if(!info)return null;stage=["baby","adult","boss","superboss"].includes(stage)?stage:(stage==="bigmomma"?"superboss":"baby");const p=new PetState();const r=animalRadius(type,stage);this.applyPetUpgradeFields(p,ownerId,type);
     const baseHp=typeHp(type,stage),hp=Math.max(12,Math.round(baseHp*petUpgradeMultiplier(p,"health")));const coat=opts.coat||pick(info.coats||[info.color]);
     const speed=animalSpeed(type,stage,true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");
-    Object.assign(p,{ownerId,type,stage,x,y,angle:opts.angle||0,r,hp:opts.hp!=null?Math.min(hp,opts.hp):hp,maxHp:hp,coat,spotCol:opts.spotCol||shadeHex(coat,-30),spotsJson:opts.spotsJson||"[]",speed,sleeping:false,tailPhase:rand(0,TAU),abilityCd:0,atkCd:0,combat:0,level:opts.level||1,exp:opts.exp||0,petName:String(opts.petName||type).slice(0,14),orderMode:"follow",targetX:-1,targetY:-1,dead:false});
+    Object.assign(p,{ownerId,type,stage,x,y,angle:opts.angle||0,r,hp:opts.hp!=null?Math.min(hp,opts.hp):hp,maxHp:hp,coat,spotCol:opts.spotCol||shadeHex(coat,-30),spotsJson:opts.spotsJson||"[]",speed,sleeping:false,tailPhase:rand(0,TAU),abilityCd:0,atkCd:0,combat:0,level:opts.level||1,exp:opts.exp||0,petName:String(opts.petName||type).slice(0,14),orderMode:"follow",targetX:-1,targetY:-1,dead:false,gender:opts.gender||randomAnimalGender(),motherId:String(opts.motherId||""),fatherId:String(opts.fatherId||""),bredChild:!!opts.bredChild});
     const id=`p${this.nextPetId++}`;this.state.pets.set(id,p);return id;
   }
   enemySpawnPoint(anchor=null) {
@@ -1238,26 +1306,60 @@ export class WorldRoom extends Room {
   }
 
   moonmarkSpawnPoint(radius=36){
+    // The Moonmark may land anywhere except on the permanent giant pure-gold chunk.
     const pad=Math.max(54,radius+18);
-    const clearAt=(x,y)=>{
-      if(!Number.isFinite(x)||!Number.isFinite(y))return false;
-      if(x<pad||x>WORLD_W-pad||y<pad||y>WORLD_H-pad)return false;
-      if(!this.canPlace(x,y,radius+10,0))return false;
-      for(const[,pl]of this.state.players){if(pl&&!pl.dead&&dist(x,y,pl.x,pl.y)<radius+PLAYER_R+18)return false;}
-      for(const[,p]of this.state.pets){if(p&&!p.dead&&p.hp>0&&dist(x,y,p.x,p.y)<radius+Math.max(8,p.r||18)+12)return false;}
-      for(const[,a]of this.state.animals){if(a&&a.hp>0&&dist(x,y,a.x,a.y)<radius+Math.max(8,a.r||18)+12)return false;}
-      for(const[,en]of this.state.enemies){if(en&&!en.dead&&en.hp>0&&dist(x,y,en.x,en.y)<radius+Math.max(10,en.r||17)+12)return false;}
-      for(const[,w]of this.state.walls){if(w&&w.hp>0&&dist(x,y,w.x,w.y)<radius+Math.max(8,w.r||20)+10)return false;}
-      for(const[,t]of this.state.towers){if(t&&dist(x,y,t.x,t.y)<radius+22)return false;}
-      return true;
+    const blockedByPureGold=(x,y)=>{
+      for(const[,g]of this.state.gold){
+        if(!g||!(g.pure||g.infinite))continue;
+        const h=goldHit(g);
+        if(dist(x,y,h.x,h.y)<radius+h.r+14)return true;
+      }
+      return false;
     };
-    for(let tries=0;tries<260;tries++){
+    for(let tries=0;tries<180;tries++){
       const x=rand(pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);
-      if(clearAt(x,y))return{x,y};
+      if(!blockedByPureGold(x,y))return{x,y};
     }
-    const step=96,offX=rand(0,step),offY=rand(0,step);
-    for(let y=pad+offY;y<=WORLD_H-pad;y+=step)for(let x=pad+offX;x<=WORLD_W-pad;x+=step)if(clearAt(x,y))return{x,y};
+    const step=120,offX=rand(0,step),offY=rand(0,step);
+    for(let y=pad+offY;y<=WORLD_H-pad;y+=step)for(let x=pad+offX;x<=WORLD_W-pad;x+=step)if(!blockedByPureGold(x,y))return{x,y};
     return null;
+  }
+
+  clearMoonmarkSpawnArea(x,y,radius=36){
+    const clearR=radius+16;
+    let broken=0;
+    for(const[id,r]of this.state.resources){
+      if(!r||!r.alive)continue;
+      const c=resourceCenter(r),rr=r.type==="log"?Math.max(r.solidR*1.35,18):r.solidR;
+      if(dist(x,y,c.x,c.y)>=clearR+rr)continue;
+      r.hp=0;r.alive=false;this.resourceRespawns.set(id,rand(12,22));broken++;
+    }
+    for(const[,g]of this.state.gold){
+      if(!g||g.pure||g.infinite||g.goldLeft<=0)continue;
+      const h=goldHit(g);if(dist(x,y,h.x,h.y)<clearR+h.r){g.goldLeft=0;broken++;}
+    }
+    for(const[id,c]of this.state.chests){
+      if(!c||c.opened)continue;
+      const h=chestHit(c);if(dist(x,y,h.x,h.y)<clearR+h.r){c.hp=0;c.opened=true;this.chestRewards.delete(id);broken++;}
+    }
+    for(const[id,w]of Array.from(this.state.walls.entries())){
+      if(w&&dist(x,y,w.x,w.y)<clearR+Math.max(8,w.r||20)){this.state.walls.delete(id);this.hostileWildWalls.delete(id);broken++;}
+    }
+    for(const[id,t]of Array.from(this.state.towers.entries())){
+      if(t&&dist(x,y,t.x,t.y)<clearR+24){this.state.towers.delete(id);broken++;}
+    }
+    const shove=(o,rr)=>{
+      if(!o||o.dead||(o.hp!=null&&o.hp<=0)||(o.health!=null&&o.health<=0))return;
+      const minD=clearR+Math.max(8,Number(rr)||18)+4,d=dist(x,y,o.x,o.y);if(d>=minD)return;
+      const a=d>.01?angTo(x,y,o.x,o.y):rand(0,TAU);
+      o.x=clamp(x+Math.cos(a)*minD,20,WORLD_W-20);o.y=clamp(y+Math.sin(a)*minD,20,WORLD_H-20);
+    };
+    for(const[,p]of this.state.players)if(p&&!p.dead)shove(p,PLAYER_R);
+    for(const[,p]of this.state.pets)if(p&&!p.dead)shove(p,p.r);
+    for(const[,a]of this.state.animals)if(a&&a.hp>0)shove(a,a.r);
+    for(const[,en]of this.state.enemies)if(en&&en.hp>0)shove(en,en.r);
+    if(broken>0)this.broadcastFx({kind:"hit",x,y,text:`SPAWN CRUSH x${broken}`,color:"#d8ef8a"});
+    return broken;
   }
 
   spawnEnemyGuardPet(enemyId,en,strong=false,rider=false){
@@ -1268,7 +1370,7 @@ export class WorldRoom extends Room {
     const pos=rider?{x:en.x,y:en.y}:this.safePetSpawnNear(en.x,en.y,rr);
     const aid=this.addAnimal(type,stage,pos.x,pos.y,{sleeping:false,enraged:true,petName:`Raider ${PET_TYPES[type]?.name||type}`});
     const a=this.state.animals.get(aid);
-    if(a){a.sleeping=false;a.enraged=true;a.combat=9999;a.wanderT=rand(.5,1.5);}
+    if(a){a.sleeping=false;a.enraged=true;a.combat=9999;a.wanderT=rand(.5,1.5);a.hostileRiderMount=!!rider;}
     this.enemyPetByEnemy.set(enemyId,aid);
     this.enemyOwnerByPet.set(aid,enemyId);
     en.guardPetId=aid; en.hasGuard=true; en.ridingPetId=rider?aid:"";
@@ -1285,7 +1387,7 @@ export class WorldRoom extends Room {
     const a=this.state.animals.get(aid);
     if(!a)return;
     if(remove){this.state.animals.delete(aid);this.animalAggro.delete(aid);this.animalFleeFrom.delete(aid);return;}
-    a.enraged=true;a.sleeping=false;a.combat=10;a.tameFailedAggro=true;
+    a.hostileRiderMount=false;a.enraged=true;a.sleeping=false;a.combat=10;a.tameFailedAggro=true;
     if(attackerId)this.animalAggro.set(aid,{kind:"player",id:attackerId});
   }
 
@@ -1304,6 +1406,7 @@ export class WorldRoom extends Room {
 
     // Convert the former hostile-cube mount/guard into ordinary wildlife.
     this.animalAggro.delete(aid);
+    a.hostileRiderMount=false;
     a.enraged=false;
     a.sleeping=false;
     a.combat=0;
@@ -1324,6 +1427,7 @@ export class WorldRoom extends Room {
     const pos=moonMarked?this.moonmarkSpawnPoint(36):this.enemySpawnPoint(anchor);
     if(!pos)return null;
     const x=pos.x,y=pos.y;
+    if(moonMarked)this.clearMoonmarkSpawnArea(x,y,36);
     const phaseName=TIME_PHASES[this.state.dayPhase]?.name||"Dawn";
     let role=forcedRole||chooseHostlRole(phaseName);
     const moonProfile=moonMarked?(MOONMARK_BIOMES[CURRENT_BIOME_ID]||MOONMARK_BIOMES.forest):null;
@@ -1374,25 +1478,45 @@ export class WorldRoom extends Room {
     for(let i=0;i<14;i++)for(let t=0;t<80;t++){const x=rand(400,WORLD_W-400),y=rand(400,WORLD_H-400);if(this.canPlace(x,y,48,500)){this.addGold(x,y,"huge",48,40);break;}}
     for(let i=0;i<120;i++)for(let t=0;t<70;t++){const x=rand(120,WORLD_W-120),y=rand(120,WORLD_H-120);if(this.canPlace(x,y,16)){this.addGold(x,y,"small",16,6);break;}}
     for(let i=0;i<72;i++)for(let t=0;t<80;t++){const x=rand(130,WORLD_W-130),y=rand(130,WORLD_H-130);if(dist(x,y,WORLD_W/2,WORLD_H/2)<280||!this.canPlace(x,y,20))continue;this.addChest(x,y);break;}
-    const spawnWild=(forced=null)=>{
-      const type=pick(WILD_SPECIES);
+    const randomGroupStage=()=>{const roll=Math.random();return roll<.50?"baby":roll<.90?"adult":roll<.98?"boss":"superboss";};
+    const spawnWild=(forced=null,typeOverride=null,anchor=null)=>{
+      const type=typeOverride||pick(WILD_SPECIES);
       let stage=forced;
       if(!stage){const roll=Math.random();stage=roll<.46?"baby":roll<.84?"adult":roll<.95?"boss":"superboss";}
       const footprint=animalSpawnFootprint(type,stage);
-      for(let t=0;t<80;t++){
-        const x=rand(footprint+60,WORLD_W-footprint-60),y=rand(footprint+60,WORLD_H-footprint-60);
+      for(let t=0;t<(anchor?110:80);t++){
+        let x,y;
+        if(anchor){
+          const aa=rand(0,TAU),anchorR=animalSpawnFootprint(anchor.type,anchor.stage);
+          const minD=Math.max(78,footprint+anchorR+18),maxD=Math.max(minD+28,Math.min(310,minD+170)),dd=rand(minD,maxD);
+          x=clamp(anchor.x+Math.cos(aa)*dd,footprint+40,WORLD_W-footprint-40);
+          y=clamp(anchor.y+Math.sin(aa)*dd,footprint+40,WORLD_H-footprint-40);
+        }else{
+          x=rand(footprint+60,WORLD_W-footprint-60);y=rand(footprint+60,WORLD_H-footprint-60);
+        }
         if(!this.canPlace(x,y,footprint,0))continue;
         let crowded=false;
         for(const[,a]of this.state.animals){
           if(!a||a.hp<=0)continue;
-          if(dist(x,y,a.x,a.y)<footprint+animalSpawnFootprint(a.type,a.stage)+36){crowded=true;break;}
+          const gap=anchor?8:36;
+          if(dist(x,y,a.x,a.y)<footprint+animalSpawnFootprint(a.type,a.stage)+gap){crowded=true;break;}
         }
         if(crowded)continue;
-        this.addAnimal(type,stage,x,y);
-        return;
+        const id=this.addAnimal(type,stage,x,y);
+        return this.state.animals.get(id)||null;
       }
+      return null;
     };
-    for(let i=0;i<330;i++)spawnWild();for(let i=0;i<14;i++)spawnWild("superboss");for(let i=0;i<5;i++)spawnWild("bigmomma");
+    const spawnWildCluster=(forced=null)=>{
+      const type=pick(WILD_SPECIES),anchor=spawnWild(forced,type,null);if(!anchor)return 0;
+      let made=1,extras=randi(3,5);
+      for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor))made++;
+      return made;
+    };
+    // About the same total wildlife as before, now arranged in same-species groups.
+    for(let i=0;i<51;i++)spawnWildCluster();
+    for(let i=0;i<14;i++)spawnWildCluster("superboss");
+    for(let i=0;i<5;i++)spawnWildCluster("bigmomma");
     console.log(`Full world generated: ${this.state.resources.size} resources, ${this.state.gold.size} gold, ${this.state.chests.size} chests, ${this.state.animals.size} wildlife`);
   }
 
@@ -1470,8 +1594,15 @@ export class WorldRoom extends Room {
     if(Number.isFinite(+input.angle))p.angle=+input.angle;
     if(typeof input.color==="string"&&input.color.length<32)p.color=input.color;
     if(typeof input.tool==="string"&&input.tool.length<24)p.tool=this.validTool(input.tool);
-    if(typeof input.heldSpecial==="string")p.heldSpecial=["Berry","Wall"].includes(input.heldSpecial)?input.heldSpecial:"";
-    if(typeof input.ridingPetId==="string")p.ridingPetId=input.ridingPetId.slice(0,32);
+    if(typeof input.heldSpecial==="string")p.heldSpecial=["Berry","Wall","Saddle","Tower"].includes(input.heldSpecial)?input.heldSpecial:"";
+    if(typeof input.ridingPetId==="string"){
+      const requested=input.ridingPetId.slice(0,32);
+      if(!requested)p.ridingPetId="";
+      else{
+        const mount=this.state.pets.get(requested);
+        p.ridingPetId=(mount&&mount.ownerId===client.sessionId&&!mount.dead&&["adult","boss","superboss"].includes(mount.stage))?requested:"";
+      }
+    }
 
     // Escape input wins immediately over a stale carry window. This is the key
     // anti-hook rule: pressing away from the animal can never be ignored for a frame.
@@ -1481,11 +1612,11 @@ export class WorldRoom extends Room {
       p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);
     }
 
-    const carryUntil=this.playerCarryUntil.get(client.sessionId)||0;
-    const carried=p.animalCarryT>0||this.state.worldTime<carryUntil;
+    // Animals never own the player's movement anymore; they only block entry.
+    p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);
     const clientX=Number.isFinite(+input.clientX)?+input.clientX:+input.x;
     const clientY=Number.isFinite(+input.clientY)?+input.clientY:+input.y;
-    if(!carried&&Number.isFinite(clientX)&&Number.isFinite(clientY)){
+    if(Number.isFinite(clientX)&&Number.isFinite(clientY)){
       let tx=clamp(clientX,PLAYER_R,WORLD_W-PLAYER_R),ty=clamp(clientY,PLAYER_R,WORLD_H-PLAYER_R);
       // Bound correction distance so lag spikes cannot tunnel a player straight
       // through a creature or wall in a single network packet.
@@ -1493,29 +1624,40 @@ export class WorldRoom extends Room {
       if(len>maxStep){dx=dx/len*maxStep;dy=dy/len*maxStep;tx=p.x+dx;ty=p.y+dy;}
       const steps=Math.max(1,Math.min(16,Math.ceil(Math.hypot(tx-p.x,ty-p.y)/5.5)));
       const sx=(tx-p.x)/steps,sy=(ty-p.y)/steps;
-      for(let i=0;i<steps;i++){p.x=clamp(p.x+sx,PLAYER_R,WORLD_W-PLAYER_R);p.y=clamp(p.y+sy,PLAYER_R,WORLD_H-PLAYER_R);this.resolveStatic(p,PLAYER_R*.82);}
+      for(let i=0;i<steps;i++){
+        p.x=clamp(p.x+sx,PLAYER_R,WORLD_W-PLAYER_R);p.y=clamp(p.y+sy,PLAYER_R,WORLD_H-PLAYER_R);
+        const mount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
+        if(mount&&!mount.dead){
+          mount.x=p.x;mount.y=p.y;
+          this.resolveStatic(mount,(mount.r||18)*.72);
+          p.x=mount.x;p.y=mount.y;
+        }else this.resolveStatic(p,PLAYER_R*.82);
+      }
     }
   }
   handleHeal(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const amount=clamp(+data.amount||0,0,40);p.health=clamp(p.health+amount,0,p.maxHealth);}
   handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
-  ensureStarterPetFor(client,type,stage){
+  ensureStarterPetFor(client,type,stage,opts={}){
     if(!client||!PET_TYPES[type])return null;
     const validStage=["baby","adult","boss","superboss"].includes(stage)?stage:"baby";
+    const defaultName=PET_TYPES[type].name||type;
+    const petName=(String(opts.petName||"").trim().replace(/\s+/g," ").slice(0,14)||defaultName.slice(0,14));
+    const gender=String(opts.gender||"")==="Female"?"Female":"Male";
     for(const [id,p] of this.state.pets){
       if(p&&p.ownerId===client.sessionId&&!p.dead){client.send("starterPetEnsured",{id,type:p.type,existing:true});return id;}
     }
     const owner=this.state.players.get(client.sessionId);if(!owner)return null;
     const rr=animalRadius(type,validStage),pos=this.safePetSpawnNear(owner.x,owner.y,rr);
-    const id=this.addPet(client.sessionId,type,validStage,pos.x,pos.y,{petName:PET_TYPES[type].name||type});
-    if(id)client.send("starterPetEnsured",{id,type,stage:validStage,existing:false});
+    const id=this.addPet(client.sessionId,type,validStage,pos.x,pos.y,{petName,gender});
+    if(id)client.send("starterPetEnsured",{id,type,stage:validStage,petName,gender,existing:false});
     return id;
   }
 
   handleEnsureStarterPet(client,data={}){
     const type=String(data.type||"");
     const stage=String(data.stage||"baby");
-    this.ensureStarterPetFor(client,type,stage);
+    this.ensureStarterPetFor(client,type,stage,{petName:data.petName,gender:data.gender});
   }
 
   handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;const toolName=this.validTool(String(data.tool||"Fist")),t=TOOL[toolName];const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"resourceHit",tool:toolName,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"resource",targetId:id});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(id,rand(12,22));}}
@@ -1531,7 +1673,7 @@ export class WorldRoom extends Room {
     if(guardOwner){a.fleeUntil=0;a.tameFailedAggro=true;this.animalFleeFrom.delete(id);this.animalAggro.set(id,ref);}
     else this.setWildReactionToAttacker(id,a,ref);
     this.broadcastFx({kind:"hit",x:a.x,y:a.y,text:(crit?"CRIT ":"")+Math.round(dmg),color:crit?"#ffe08a":"#f2836a"});
-    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
+    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="animal"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
   }
   hitEnemy(id,en,dmg,attackerId,crit=false,attackerRef=null){
     if(!en||en.hp<=0)return;
@@ -1544,12 +1686,23 @@ export class WorldRoom extends Room {
     if(en.hp<=0){
       this.awardPetXpContributors("enemy",id,en,ref.kind==="pet"?ref.id:"");
       if(en.moonMarked&&attackerId){this.firstLightReadyPlayers.add(attackerId);const c=this.clientById(attackerId);if(c)c.send("moonmarkClaimed",{x:en.x,y:en.y,biome:en.moonBiome||CURRENT_BIOME_ID,boss:en.role||"Forest Warden"});}
-      this.broadcastSpectateKill("enemy",id,ref.kind,ref.id||attackerId);this.state.enemies.delete(id);this.enemyAggro.delete(id);this.detachEnemyGuard(id,attackerId,false);this.rewardKill(attackerId,"enemy",en.x,en.y);
+      for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="enemy"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}
+      this.broadcastSpectateKill("enemy",id,ref.kind,ref.id||attackerId);this.state.enemies.delete(id);this.enemyAggro.delete(id);this.detachEnemyGuard(id,attackerId,false);if(en.moonMarked)this.rewardMoonmarkKill(attackerId,en.x,en.y);else this.rewardKill(attackerId,"enemy",en.x,en.y);
     }
+  }
+  rewardMoonmarkKill(ownerId,x,y){
+    const owner=this.state.players.get(ownerId);if(!ownerId||!owner)return;
+    const goldReward=50,petXpReward=1200,cardReward=30,species=pick(WILD_SPECIES)||"dog";
+    owner.kills=Math.max(0,(owner.kills||0)+1);
+    owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+goldReward));
+    this.sendReward(ownerId,{kind:"resource",resource:"gold",amount:goldReward},{x,y,kill:true});
+    this.sendReward(ownerId,{kind:"cards",species,amount:cardReward},{x,y});
+    for(const[petId,p]of this.state.pets){if(p&&p.ownerId===ownerId&&!p.dead)this.givePetExp(petId,p,petXpReward);}
+    const c=this.clientById(ownerId);if(c)c.send("moonmarkRewardSummary",{gold:goldReward,petXp:petXpReward,cards:cardReward,species,x,y});
   }
   rewardKill(ownerId,kind,x,y,species=""){const owner=this.state.players.get(ownerId);if(owner)owner.kills=Math.max(0,(owner.kills||0)+1);const drop=weighted([{v:"wood",w:3},{v:"stone",w:2},{v:"gold",w:1}]),amount=drop==="gold"?1:2;if(owner&&drop==="gold")owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+amount));this.sendReward(ownerId,{kind:"resource",resource:drop,amount},{x,y,kill:true});if(kind==="enemy"&&Math.random()<Math.min(.45,.1*this.runPerks(ownerId).cardMul)){const sp=weighted([{v:"dog",w:2},{v:"cat",w:2},{v:"rabbit",w:2},{v:"fox",w:2},{v:"dragon",w:1},{v:"wolf",w:1},{v:"bear",w:1}]);this.sendReward(ownerId,{kind:"cards",species:sp,amount:1},{x,y});}if(kind==="animal"&&species&&Math.random()<Math.min(.35,.08*this.runPerks(ownerId).cardMul)){this.sendReward(ownerId,{kind:"cards",species,amount:1},{x,y});}}
 
-  handleAttack(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const now=this.state.worldTime,next=this.playerAttackCd.get(client.sessionId)||0;if(now<next)return;const tool=this.validTool(String(data.tool||p.tool||"Fist")),t=TOOL[tool],runDmg=this.runPerks(client.sessionId).damageMul;this.playerAttackCd.set(client.sessionId,now+(t.cadence||.3));const angle=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=angle;this.broadcast("playerAction",{playerId:client.sessionId,action:"attack",tool,angle,heldSpecial:p.heldSpecial||""});
+  handleAttack(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const now=this.state.worldTime,next=this.playerAttackCd.get(client.sessionId)||0;if(now<next)return;const tool=this.validTool(String(data.tool||p.tool||"Fist")),t=TOOL[tool],runDmg=this.runPerks(client.sessionId).damageMul;this.playerAttackCd.set(client.sessionId,now+(t.cadence||.3));const angle=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=angle;this.broadcast("playerAction",{playerId:client.sessionId,action:"attack",tool,angle,heldSpecial:p.heldSpecial||""});this.mountedPetAttack(client.sessionId,p);
     // PvP is at most 11 targets, so keep it direct.
     for(const [pid,target] of this.state.players){if(pid===client.sessionId||target.dead)continue;if(dist(p.x,p.y,target.x,target.y)<t.range+PLAYER_R&&facing(p.x,p.y,angle,target.x,target.y,.95)){const crit=Math.random()<.12,dmg=t.dmg*runDmg*(crit?2:1);this.damageTarget({kind:"player",id:pid},dmg,"player",client.sessionId);this.broadcastFx({kind:"hit",x:target.x,y:target.y-8,text:(crit?"CRIT ":"")+Math.round(dmg),color:crit?"#ffe08a":"#f2836a"});}}
 
@@ -1571,7 +1724,7 @@ export class WorldRoom extends Room {
   hitChest(client,id,c){if(!c||c.opened)return;c.hp=Math.max(0,c.hp-1);c.pulse=1;if(c.hp<=0){c.opened=true;const reward=this.chestRewards.get(id)||this.makeChestReward();this.chestRewards.delete(id);client.send("chestReward",{id,reward});this.broadcastFx({kind:"chest",x:c.x,y:c.y});}else{const first=c.chipSide||"wood",second=first==="wood"?"stone":"wood",bonus=Math.random()<.45;c.chipSide=second;client.send("worldReward",{kind:"resource",resource:first,amount:1,x:c.x,y:c.y});if(bonus)client.send("worldReward",{kind:"resource",resource:second,amount:1,x:c.x,y:c.y});}}
   makeChestReward(){const roll=Math.random();if(roll<.34)return{kind:"cubits",amount:Math.random()<.1?randi(12,18):randi(5,10)};if(roll<.52)return{kind:"cards",species:weighted(WILD_SPECIES.map(v=>({v,w:v==="dog"||v==="cat"?2.2:v==="dragon"?.55:1}))),amount:Math.random()<.14?25:10};const res=weighted([{v:"wood",w:2.8},{v:"stone",w:2.3},{v:"berries",w:1.8},{v:"gold",w:1.1}]);const amount=res==="wood"?randi(16,28):res==="stone"?randi(12,22):res==="berries"?randi(6,12):randi(3,6);return{kind:"resource",resource:res,amount};}
 
-  handleShoot(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const now=this.state.worldTime,next=this.playerShootCd.get(client.sessionId)||0;if(now<next)return;this.playerShootCd.set(client.sessionId,now+.45);const a=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=a;this.broadcast("playerAction",{playerId:client.sessionId,action:"shoot",tool:"Bow",angle:a,heldSpecial:""});this.addProjectile({x:p.x+Math.cos(a)*26,y:p.y+Math.sin(a)*26,vx:Math.cos(a)*640,vy:Math.sin(a)*640,life:1.15,r:5,hostile:false,kind:"arrow",color:"#7ec0ee",dmg:TOOL.Bow.dmg*this.runPerks(client.sessionId).damageMul,ownerId:client.sessionId,petBlast:false,knock:0});}
+  handleShoot(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const now=this.state.worldTime,next=this.playerShootCd.get(client.sessionId)||0;if(now<next)return;this.playerShootCd.set(client.sessionId,now+.45);const a=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=a;this.broadcast("playerAction",{playerId:client.sessionId,action:"shoot",tool:"Bow",angle:a,heldSpecial:""});this.mountedPetAttack(client.sessionId,p);this.addProjectile({x:p.x+Math.cos(a)*26,y:p.y+Math.sin(a)*26,vx:Math.cos(a)*640,vy:Math.sin(a)*640,life:1.15,r:5,hostile:false,kind:"arrow",color:"#7ec0ee",dmg:TOOL.Bow.dmg*this.runPerks(client.sessionId).damageMul,ownerId:client.sessionId,petBlast:false,knock:0});}
 
   runShopState(ownerId){
     let s=this.playerRunShop.get(ownerId);
@@ -1606,7 +1759,7 @@ export class WorldRoom extends Room {
     if(this.tamePendingPlayers.has(client.sessionId)){client.send("tameResult",{pending:true,reason:"busy"});return;}
     const id=String(data.id||""),a=this.state.animals.get(id);
     if(!a||a.stage!=="baby"||!a.sleeping||dist(p.x,p.y,a.x,a.y)>78)return;
-    let count=0;for(const[,pet]of this.state.pets)if(pet.ownerId===client.sessionId&&!pet.dead)count++;
+    let count=0;for(const[,pet]of this.state.pets)if(pet.ownerId===client.sessionId&&!pet.dead&&!pet.bredChild)count++;
     if(count>=4){client.send("tameResult",{success:false,reason:"max"});return;}
     const chance=this.tameChanceFor(client.sessionId,a.type);
     this.tamePendingPlayers.add(client.sessionId);
@@ -1617,7 +1770,7 @@ export class WorldRoom extends Room {
       if(!current||!owner||current.stage!=="baby"||dist(owner.x,owner.y,current.x,current.y)>100){client.send("tameResult",{success:false,reason:"moved",type:a.type});return;}
       if(Math.random()<chance){
         this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);
-        const petId=this.addPet(client.sessionId,current.type,current.stage,current.x,current.y,{hp:current.maxHp,coat:current.coat,spotCol:current.spotCol,spotsJson:current.spotsJson,petName:current.type});
+        const petId=this.addPet(client.sessionId,current.type,current.stage,current.x,current.y,{hp:current.maxHp,coat:current.coat,spotCol:current.spotCol,spotsJson:current.spotsJson,petName:current.type,gender:current.gender});
         client.send("tameResult",{success:true,type:current.type,petId,chance});
         this.sendReward(client.sessionId,{kind:"cards",species:current.type,amount:1},{x:current.x,y:current.y,tame:true});
       }else{
@@ -1641,7 +1794,7 @@ export class WorldRoom extends Room {
       const obj=kind==="animal"?this.state.animals.get(targetId):kind==="enemy"?this.state.enemies.get(targetId):null;
       if(obj&&((kind==="animal"&&obj.hp>0)||(kind==="enemy"&&!obj.dead&&obj.hp>0))){
         this.petFocusTargets.set(id,{kind,id:targetId});
-        p.orderMode="follow";
+        p.orderMode="defend";
         p.targetX=-1;p.targetY=-1;
       }
       return;
@@ -1654,11 +1807,28 @@ export class WorldRoom extends Room {
     }else if(mode!=="set"){p.targetX=-1;p.targetY=-1;}
   }
   handlePetRename(client,data){const p=this.ownedPet(client,data.id);if(!p)return;const name=String(data.name||"").replace(/[<>]/g,"").trim().slice(0,14);if(name)p.petName=name;}
-  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
+  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true,gender:p.gender,motherId:p.motherId,fatherId:p.fatherId,bredChild:p.bredChild});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
 
-  handlePetAbility(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p||p.dead||p.abilityCd>0)return;const info=PET_TYPES[p.type];p.abilityCd=info.abilityCd;const owner=this.state.players.get(client.sessionId);const angle=owner?.angle||p.angle;const elem=info.elem;this.broadcast("abilityEvent",{petId:id,ownerId:client.sessionId,elem,x:p.x,y:p.y,r:p.r});
+  handlePetBreed(client,data={}){
+    let motherId=String(data.motherId||""),fatherId=String(data.fatherId||"");
+    let mother=this.ownedPet(client,motherId),father=this.ownedPet(client,fatherId);
+    if(!mother||!father||mother.dead||father.dead||motherId===fatherId){client.send("petBreedResult",{success:false,reason:"invalid"});return;}
+    if(mother.type!==father.type){client.send("petBreedResult",{success:false,reason:"species"});return;}
+    if(mother.gender===father.gender||!mother.gender||!father.gender){client.send("petBreedResult",{success:false,reason:"gender"});return;}
+    if(mother.stage==="baby"||father.stage==="baby"){client.send("petBreedResult",{success:false,reason:"age"});return;}
+    if(mother.gender!=="Female"){const t=mother;mother=father;father=t;const ti=motherId;motherId=fatherId;fatherId=ti;}
+    const type=mother.type,info=PET_TYPES[type],x=clamp((mother.x+father.x)*.5+rand(-14,14),24,WORLD_W-24),y=clamp((mother.y+father.y)*.5+rand(-14,14),24,WORLD_H-24);
+    const babyId=this.addPet(client.sessionId,type,"baby",x,y,{petName:`Baby ${info.name}`,gender:randomAnimalGender(),motherId,fatherId,bredChild:true,coat:Math.random()<.5?mother.coat:father.coat});
+    const baby=this.state.pets.get(babyId);if(baby){baby.abilityCd=0;baby.orderMode="follow";}
+    this.sendReward(client.sessionId,{kind:"cards",species:type,amount:1},{x,y,breed:true});
+    client.send("petBreedResult",{success:true,id:babyId,type,gender:baby?.gender||"",motherId,fatherId});
+    this.broadcastFx({kind:"hit",x,y,text:`Baby ${info.name}!`,color:"#ffd9e6"});
+  }
+
+  handlePetAbility(client,data,inherited=false){const id=String(data?.id||""),p=this.ownedPet(client,id);if(!p||p.dead||(!inherited&&p.abilityCd>0)||(!inherited&&p.bredChild))return;const info=PET_TYPES[p.type];p.abilityCd=inherited?0:info.abilityCd;const owner=this.state.players.get(client.sessionId);const angle=Number.isFinite(p.angle)?p.angle:(owner?.angle||0);const elem=info.elem;this.broadcast("abilityEvent",{petId:id,ownerId:client.sessionId,elem,x:p.x,y:p.y,r:p.r,inherited});
+    this.petDamageResourcesAround(client.sessionId,p,p.x,p.y,p.r+42,true);
     const areaKinds=new Set(["enemy","animal"]);
-    const area=(damage,range,knock=0)=>{for(const rec of this.nearbyDynamic(p.x,p.y,range+120,areaKinds)){const o=rec.obj;if(!o)continue;const d=dist(p.x,p.y,o.x,o.y);if(d>range)continue;if(rec.kind==="enemy"){this.hitEnemy(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.enemies.has(rec.id)){const a=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(a)*knock;o.y+=Math.sin(a)*knock;}}else{this.hitWild(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.animals.has(rec.id)){const q=angTo(p.x,p.y,o.x,o.y),push=knock*animalKnockbackScale(o);o.x+=Math.cos(q)*push;o.y+=Math.sin(q)*push;this.resolveStatic(o,(o.r||18)*.68);}}}};
+    const area=(damage,range,knock=0)=>{this.petDamageResourcesAround(client.sessionId,p,p.x,p.y,range,true);for(const rec of this.nearbyDynamic(p.x,p.y,range+120,areaKinds)){const o=rec.obj;if(!o)continue;const d=dist(p.x,p.y,o.x,o.y);if(d>range)continue;if(rec.kind==="enemy"){this.hitEnemy(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.enemies.has(rec.id)){const a=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(a)*knock;o.y+=Math.sin(a)*knock;}}else{this.hitWild(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.animals.has(rec.id)){const q=angTo(p.x,p.y,o.x,o.y),push=knock*animalKnockbackScale(o);o.x+=Math.cos(q)*push;o.y+=Math.sin(q)*push;this.resolveStatic(o,(o.r||18)*.68);}}}};
     if(elem==="Stone"){const ws=dogWallStats(p.stage,p.level||1),wallAngle=Number.isFinite(p.angle)?p.angle:angle,wallR=27,wallDist=Math.max(48,(p.r||18)*.72+wallR+8),wx=p.x+Math.cos(wallAngle)*wallDist,wy=p.y+Math.sin(wallAngle)*wallDist;this.addWall(wx,wy,wallR,-1,client.sessionId,{hp:ws.hp,kind:"stoneSpike",spiked:true,spikeDmg:ws.spikeDmg,sourcePetId:id});this.bounceAnimalsFromNewDogWall(wx,wy,wallR,id,"");}
     else if(elem==="Sound")area(10,p.r+90,20);
     else if(elem==="Fire")area(18,p.r+92,0);
@@ -1671,6 +1841,7 @@ export class WorldRoom extends Room {
     else if(elem==="Water")this.addProjectile({x:p.x,y:p.y,vx:Math.cos(angle)*360,vy:Math.sin(angle)*360,life:1.15,r:12,hostile:false,kind:"water",color:"#4aa3e0",dmg:15,ownerId:client.sessionId,petBlast:true,knock:26,sourcePetId:id});
     else if(elem==="Plant"){this.addProjectile({x:p.x,y:p.y,vx:Math.cos(angle)*400,vy:Math.sin(angle)*400,life:1,r:7,hostile:false,kind:"leaf",color:"#5cb85c",dmg:14,ownerId:client.sessionId,petBlast:true,knock:0,sourcePetId:id});if(owner&&!owner.dead)owner.health=clamp(owner.health+22,0,owner.maxHealth);for(const[,mate]of this.state.pets)if(mate.ownerId===client.sessionId&&!mate.dead)mate.hp=clamp(mate.hp+18,0,mate.maxHp);}
     else if(elem==="Combat"){const t=this.nearestHostile(p.x,p.y,300);if(t){const a=angTo(p.x,p.y,t.obj.x,t.obj.y),dd=Math.min(150,Math.max(0,t.d-(p.r+t.obj.r)*.7));p.x=clamp(p.x+Math.cos(a)*dd,20,WORLD_W-20);p.y=clamp(p.y+Math.sin(a)*dd,20,WORLD_H-20);p.angle=a;if(dist(p.x,p.y,t.obj.x,t.obj.y)<p.r+t.obj.r+20){if(t.kind==="enemy")this.hitEnemy(t.id,t.obj,34+p.level*4,client.sessionId,false,{kind:"pet",id});else this.hitWild(t.id,t.obj,34+p.level*4,client.sessionId,false,{kind:"pet",id});}}}
+    if(!inherited){for(const[cid,child]of this.state.pets){if(!child||child.dead||!child.bredChild||child.ownerId!==client.sessionId)continue;if(child.motherId===id||child.fatherId===id)this.handlePetAbility(client,{id:cid},true);}}
   }
 
   nearestHostile(x,y,range=Infinity){
@@ -1704,6 +1875,11 @@ export class WorldRoom extends Room {
     if(!a||!ref)return;
     const target=this.targetObject(ref);
     const info=PET_TYPES[a.type]||{};
+    if(ref.kind==="animal"&&target&&target.type&&!wildCanPreyOn(a.type,target.type)){
+      a.sleeping=false;a.enraged=false;a.desperateAggro=false;a.combat=Math.max(a.combat||0,4);
+      this.animalAggro.delete(id);this.animalFleeFrom.set(id,ref);a.fleeUntil=this.state.worldTime+4;
+      a.wanderA=angTo(target.x,target.y,a.x,a.y);return;
+    }
     const shouldFleeFirst=a.stage==="baby"||!!info.flee;
     const lowHealthFight=shouldFleeFirst&&a.hp>0&&a.maxHp>0&&a.hp/a.maxHp<=.32;
     a.sleeping=false;a.enraged=true;a.combat=Math.max(a.combat||0,8);
@@ -1756,6 +1932,7 @@ export class WorldRoom extends Room {
       const o=rec.obj;
       if(rec.kind==="animal"){
         if(rec.id===selfId||o.dead||o.hp<=0||o.stage==="baby"||this.enemyOwnerByPet.has(rec.id))continue;
+        if(!wildCanPreyOn(a.type,o.type))continue;
       }else if(rec.kind==="enemy"){
         if(o.dead||o.hp<=0)continue;
       }else continue;
@@ -1835,37 +2012,13 @@ export class WorldRoom extends Room {
     if(!a||!ref||!target)return false;
     if(Math.hypot(moveDx,moveDy)<.001)return false;
     if(animalTargetOverlap(a,ref,target)<=0)return false;
-
-    // Exact movement transfer only.
-    const dx=moveDx,dy=moveDy;
-
-    if(ref.kind==="player"){
-      if(target.dead)return false;
-
-      // A player deliberately moving away always escapes. This threshold is
-      // intentionally forgiving so latency cannot turn body contact into a hook.
-      if(this.playerEscapingAnimal(target,a)){
-        target.animalCarryT=0;this.playerCarryUntil.delete(ref.id);this.playerCarryAnimal.delete(ref.id);
-        return false;
-      }
-
-      target.x=clamp(target.x+dx,PLAYER_R,WORLD_W-PLAYER_R);
-      target.y=clamp(target.y+dy,PLAYER_R,WORLD_H-PLAYER_R);
-      this.resolveStatic(target,PLAYER_R*.82);
-
-      // One short authoritative carry window prevents stale position packets from
-      // cancelling real body movement, but is short enough to release instantly.
-      target.animalCarryT=.08;
-      this.playerCarryUntil.set(ref.id,this.state.worldTime+.08);
-      this.playerCarryAnimal.set(ref.id,animalId);
-      this.queueAnimalPush(ref.id,{animalId,dx,dy,x:target.x,y:target.y});
-      return true;
-    }
-
+    // Moving animal bodies never carry players. A player can be blocked when
+    // they walk into an animal, but the animal's own movement cannot drag them.
+    if(ref.kind==="player")return false;
     if(ref.kind==="pet"){
       if(target.dead)return false;
-      target.x=clamp(target.x+dx,20,WORLD_W-20);
-      target.y=clamp(target.y+dy,20,WORLD_H-20);
+      target.x=clamp(target.x+moveDx,20,WORLD_W-20);
+      target.y=clamp(target.y+moveDy,20,WORLD_H-20);
       this.resolveStatic(target,(target.r||18)*.72);
       return true;
     }
@@ -1874,16 +2027,7 @@ export class WorldRoom extends Room {
 
   carryEverythingTouchedByAnimal(animalId,a,moveDx,moveDy){
     if(!a||Math.hypot(moveDx,moveDy)<.001)return;
-
-    // Any player touched by the MOVING BODY gets carried, regardless of who
-    // the animal is attacking.
-    for(const[id,p]of this.state.players){
-      if(p.dead)continue;
-      const ref={kind:"player",id};
-      if(animalTargetOverlap(a,ref,p)>0)this.pushTargetWithAnimal(animalId,a,ref,p,moveDx,moveDy);
-    }
-
-    // Pets behave the same way.
+    // Players are intentionally excluded: wildlife cannot hook/carry a player.
     for(const[id,p]of this.state.pets){
       if(p.dead)continue;
       const ref={kind:"pet",id};
@@ -1968,6 +2112,54 @@ export class WorldRoom extends Room {
     return true;
   }
 
+  startWildMorningBreeding(){
+    const day=this.state.dayCount;
+    const eligible=[];
+    for(const[id,a]of this.state.animals){
+      if(!a||a.hp<=0||a.stage==="baby"||this.enemyOwnerByPet.has(id)||a.enraged||a.tameFailedAggro||a.desperateAggro)continue;
+      if((this.wildLastBreedDay.get(id)||-1)===day)continue;
+      eligible.push({id,a});
+    }
+    for(let i=eligible.length-1;i>0;i--){const j=randi(0,i),t=eligible[i];eligible[i]=eligible[j];eligible[j]=t;}
+    const used=new Set();let pairs=0;
+    for(const rec of eligible){
+      if(pairs>=12||used.has(rec.id)||Math.random()>.46)continue;
+      let mate=null,bestD=900;
+      for(const other of eligible){
+        if(other.id===rec.id||used.has(other.id)||other.a.type!==rec.a.type||other.a.gender===rec.a.gender)continue;
+        const d=dist(rec.a.x,rec.a.y,other.a.x,other.a.y);if(d<bestD){bestD=d;mate=other;}
+      }
+      if(!mate)continue;
+      this.wildMateTargets.set(rec.id,mate.id);this.wildMateTargets.set(mate.id,rec.id);
+      rec.a.sleeping=false;mate.a.sleeping=false;used.add(rec.id);used.add(mate.id);pairs++;
+    }
+  }
+
+  clearWildMate(id){
+    const mateId=this.wildMateTargets.get(id);this.wildMateTargets.delete(id);
+    if(mateId&&this.wildMateTargets.get(mateId)===id)this.wildMateTargets.delete(mateId);
+  }
+
+  updateWildMating(id,a,dt){
+    const mateId=this.wildMateTargets.get(id);if(!mateId)return false;
+    const phase=TIME_PHASES[this.state.dayPhase],mate=this.state.animals.get(mateId);
+    if(!phase||phase.name!=="Morning"||!mate||mate.hp<=0||mate.type!==a.type||mate.gender===a.gender){this.clearWildMate(id);return false;}
+    a.sleeping=false;const face=angTo(a.x,a.y,mate.x,mate.y);smoothTurn(a,face,dt,4.0);
+    this.moveCreatureSwept(a,(a.speed||60)*.78,dt);
+    const touchD=Math.max(14,(a.r||18)*.42+(mate.r||18)*.42);
+    if(dist(a.x,a.y,mate.x,mate.y)<=touchD){
+      const female=a.gender==="Female"?a:(mate.gender==="Female"?mate:null),male=a.gender==="Male"?a:(mate.gender==="Male"?mate:null);
+      if(female&&male){
+        const mx=(female.x+male.x)*.5,my=(female.y+male.y)*.5;
+        const babyId=this.addAnimal(a.type,"baby",clamp(mx+rand(-18,18),24,WORLD_W-24),clamp(my+rand(-18,18),24,WORLD_H-24),{gender:randomAnimalGender(),motherId:a.gender==="Female"?id:mateId,fatherId:a.gender==="Male"?id:mateId,bredChild:true,sleeping:false});
+        this.wildLastBreedDay.set(id,this.state.dayCount);this.wildLastBreedDay.set(mateId,this.state.dayCount);
+        const baby=this.state.animals.get(babyId);if(baby)this.broadcastFx({kind:"hit",x:baby.x,y:baby.y,text:`Baby ${PET_TYPES[a.type]?.name||a.type}!`,color:"#ffd9e6"});
+      }
+      this.clearWildMate(id);
+    }
+    return true;
+  }
+
   updateAnimals(dt){
     // Multiplayer adaptation of the offline wildlife loop. The target selection
     // uses the nearest living player because online can have several players,
@@ -1975,7 +2167,7 @@ export class WorldRoom extends Room {
     // timing intentionally match the offline rules.
     for(const[id,a]of this.state.animals){
       if(!a||a.hp<=0)continue;
-      const forcedActive=this.enemyOwnerByPet.has(id)||this.animalAggro.has(id)||a.tameFailedAggro||a.desperateAggro||(a.recentHit||0)>0;
+      const forcedActive=this.enemyOwnerByPet.has(id)||this.animalAggro.has(id)||this.wildMateTargets.has(id)||a.tameFailedAggro||a.desperateAggro||(a.recentHit||0)>0;
       if(!forcedActive&&!this.hasNearbyPlayerOrPet(a.x,a.y,1650))continue;
       const moveStartX=a.x,moveStartY=a.y;
 
@@ -1999,6 +2191,8 @@ export class WorldRoom extends Room {
       }
 
       if(a.recentHit<=0&&a.hp<a.maxHp)a.hp=Math.min(a.maxHp,a.hp+Math.max(.8,a.maxHp*.018)*dt);
+
+      if(this.updateWildMating(id,a,dt)){a.x=clamp(a.x,20,WORLD_W-20);a.y=clamp(a.y,20,WORLD_H-20);this.resolveStatic(a,(a.r||18)*.68);continue;}
 
       const info=PET_TYPES[a.type]||{};
       const lowHealthFight=!!info.flee&&a.hp>0&&a.maxHp>0&&a.hp/a.maxHp<=.32;
@@ -2132,8 +2326,10 @@ export class WorldRoom extends Room {
 
   applyPlayerCreaturePushes(){
     const kinds=new Set(["animal","pet"]);
-    const pushOne=(player,obj,isPet=false,playerId="")=>{
+    const pushOne=(player,obj,isPet=false,playerId="",objId="")=>{
       if(!obj||obj.dead)return;
+      // A ridden mount is already the player's collision body.
+      if(player.ridingPetId&&isPet&&player.ridingPetId===objId)return;
       let hit=null,bestOverlap=0;
       for(const h of animalPhysicalCircles(obj)){
         const d=dist(player.x,player.y,h.x,h.y),overlap=PLAYER_R*.82+h.r-d;
@@ -2141,40 +2337,42 @@ export class WorldRoom extends Room {
       }
       if(!hit||hit.d<=.1||hit.overlap<=0)return;
 
-      // Same escape rule as offline: movement away from the animal is never resisted.
-      if(this.playerEscapingAnimal(player,obj))return;
+      const nx=(player.x-hit.h.x)/hit.d,ny=(player.y-hit.h.y)/hit.d;
+      let mx=player.moveX||0,my=player.moveY||0,ml=Math.hypot(mx,my);
+      if(ml>.05){mx/=ml;my/=ml;}else{mx=0;my=0;}
+      const movingInto=ml>.05&&(mx*(-nx)+my*(-ny))>.02;
+      const correction=Math.min(hit.overlap+.04,2.15+Math.sqrt(Math.max(0,hit.overlap))*.68);
 
-      const mobility=animalPushMobility(obj),weight=animalWeight(obj);
-      const correction=Math.min(hit.overlap,1.25+Math.sqrt(Math.max(0,hit.overlap))*1.35);
-      const ang=angTo(hit.h.x,hit.h.y,player.x,player.y),nx=Math.cos(ang),ny=Math.sin(ang);
-      const animalShare=Math.max(.10,Math.min(.82,mobility*.92)),playerShare=1-animalShare;
+      const mobility=animalPushMobility(obj);
+      let animalShare=Math.max(.18,Math.min(.72,.18+mobility*.62));
+      const ownPet=isPet&&obj.ownerId===playerId;
+      if(ownPet)animalShare=Math.min(.80,animalShare+.10);
+      if(movingInto)animalShare=Math.min(.82,animalShare+.08);
+      const playerShare=1-animalShare;
 
       const oldPX=player.x,oldPY=player.y;
-      player.x+=nx*correction*playerShare;
-      player.y+=ny*correction*playerShare;
-      obj.x-=nx*correction*animalShare;
-      obj.y-=ny*correction*animalShare;
-
-      obj._pushVelX=(obj._pushVelX||0)*.62-nx*correction*animalShare*.38;
-      obj._pushVelY=(obj._pushVelY||0)*.62-ny*correction*animalShare*.38;
-      obj.x+=obj._pushVelX;obj.y+=obj._pushVelY;
-      if(weight>4){obj._pushVelX*=.72;obj._pushVelY*=.72;}
-
+      player.x=clamp(player.x+nx*correction*playerShare,PLAYER_R,WORLD_W-PLAYER_R);
+      player.y=clamp(player.y+ny*correction*playerShare,PLAYER_R,WORLD_H-PLAYER_R);
+      obj.x=clamp(obj.x-nx*correction*animalShare,20,WORLD_W-20);
+      obj.y=clamp(obj.y-ny*correction*animalShare,20,WORLD_H-20);
       this.resolveStatic(obj,(obj.r||18)*(isPet?.72:.68));
       this.resolveStatic(player,PLAYER_R*.82);
+
       if(playerId){
         const dx=player.x-oldPX,dy=player.y-oldPY;
-        if(Math.hypot(dx,dy)>.001)this.queueAnimalPush(playerId,{animalId:"",dx,dy,x:player.x,y:player.y});
+        if(Math.hypot(dx,dy)>.001)this.queueAnimalPush(playerId,{animalId:objId||"",dx,dy,x:player.x,y:player.y});
       }
     };
 
     for(const[id,p]of this.state.players){
       if(p.dead)continue;
+      const mount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
+      if(mount&&!mount.dead){p.x=mount.x;p.y=mount.y;}
       for(const rec of this.nearbyDynamic(p.x,p.y,180,kinds)){
         const obj=rec.obj;if(!obj)continue;
         if(rec.kind==="pet"&&p.ridingPetId===rec.id)continue;
         const rr=(obj.r||18)*2.35+PLAYER_R+46,dx=p.x-obj.x,dy=p.y-obj.y;if(dx*dx+dy*dy>rr*rr)continue;
-        pushOne(p,obj,rec.kind==="pet",id);
+        pushOne(p,obj,rec.kind==="pet",id,rec.id);
       }
     }
   }
@@ -2204,6 +2402,11 @@ export class WorldRoom extends Room {
     }
     if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(obj.hp<=0){obj.dead=true;this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
     if(ref.kind==="animal"){
+      // Wild animals only damage other wild animals that are normal prey.
+      if(attackerKind==="animal"&&attackerId&&this.state.animals.has(attackerId)){
+        const attacker=this.state.animals.get(attackerId);
+        if(attacker&&attacker.type&&!wildCanPreyOn(attacker.type,obj.type))return false;
+      }
       // Multiplayer animal bites route here through performAnimalBite().
       if(obj.dead||obj.hp<=0)return false;
       const raw=Math.max(0,Number(dmg)||0);
@@ -2271,6 +2474,23 @@ export class WorldRoom extends Room {
     return moved;
   }
 
+  resolveMountedCreaturePair(anchor,mover){
+    if(!anchor||!mover||anchor.dead||mover.dead)return false;
+    let best=null,bestOverlap=0;
+    for(const ca of animalPhysicalCircles(anchor))for(const cb of animalPhysicalCircles(mover)){
+      const dx=cb.x-ca.x,dy=cb.y-ca.y,rr=ca.r+cb.r,d2=dx*dx+dy*dy;
+      if(d2>=rr*rr)continue;
+      const d=Math.sqrt(Math.max(.0001,d2)),ov=rr-d;
+      if(ov>bestOverlap){bestOverlap=ov;best={dx,dy,d};}
+    }
+    if(!best||bestOverlap<=.01)return false;
+    let nx=best.dx/best.d,ny=best.dy/best.d;
+    if(!Number.isFinite(nx)||!Number.isFinite(ny)){const dx=mover.x-anchor.x,dy=mover.y-anchor.y,d=Math.hypot(dx,dy)||1;nx=dx/d;ny=dy/d;}
+    const correction=Math.min(bestOverlap,.70+Math.sqrt(Math.max(0,bestOverlap))*.92);
+    mover.x+=nx*correction;mover.y+=ny*correction;
+    return true;
+  }
+
   resolveAnimalAnimalCollisions(){
     const all=[];
     // Only solve creature-vs-creature physics in active player regions. Distant
@@ -2297,10 +2517,16 @@ export class WorldRoom extends Room {
         const bucket=grid.get(`${gx},${gy}`);if(!bucket)continue;
         for(const j of bucket){
           if(j<=i)continue;
-          const b=all[j].obj;if(!b||!Number.isFinite(b.x)||!Number.isFinite(b.y))continue;
+          const recA=all[i],recB=all[j],b=recB.obj;if(!b||!Number.isFinite(b.x)||!Number.isFinite(b.y))continue;
           const broad=animalSpawnFootprint(a.type,a.stage)+animalSpawnFootprint(b.type,b.stage);
           const dx=b.x-a.x,dy=b.y-a.y;if(dx*dx+dy*dy>broad*broad)continue;
-          if(this.resolveCreaturePairPhysical(a,b)){moved.add(a);moved.add(b);}
+          const aOwner=recA.kind==="pet"?this.state.players.get(a.ownerId):null;
+          const bOwner=recB.kind==="pet"?this.state.players.get(b.ownerId):null;
+          const aMounted=!!(aOwner&&aOwner.ridingPetId===recA.id);
+          const bMounted=!!(bOwner&&bOwner.ridingPetId===recB.id);
+          if(aMounted&&!bMounted){if(this.resolveMountedCreaturePair(a,b))moved.add(b);}
+          else if(bMounted&&!aMounted){if(this.resolveMountedCreaturePair(b,a))moved.add(a);}
+          else if(!aMounted&&!bMounted&&this.resolveCreaturePairPhysical(a,b)){moved.add(a);moved.add(b);}
         }
       }
     }
@@ -2310,6 +2536,12 @@ export class WorldRoom extends Room {
       this.resolveStatic(o,(o.r||18)*.68);
     }
   }
+
+  petResourceDamage(p,ability=false){const stageMul=p.stage==="baby"?1:p.stage==="adult"?1.35:p.stage==="boss"?1.9:p.stage==="superboss"?2.6:3;return(ability?5.5:3.2)*stageMul+Math.max(0,(p.level||1)-1)*(ability?.75:.45);}
+  petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));}return true;}
+  petDamageResourcesAround(ownerId,p,x,y,range,ability=true){for(const s of this.nearbySolids(x,y,range+120)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;if(dist(x,y,s.x,s.y)<=range+s.r)this.petHitResource(ownerId,p,s.id,r,ability);}}
+  petAttackStuckResource(ownerId,p){let best=null,bestD=Infinity;for(const s of this.nearbySolids(p.x,p.y,110)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;const d=dist(p.x,p.y,s.x,s.y);if(d<bestD){bestD=d;best={s,r};}}if(!best)return false;smoothTurn(p,angTo(p.x,p.y,best.s.x,best.s.y),.12,8);p.attackAnim=.18;return this.petHitResource(ownerId,p,best.s.id,best.r,false);}
+  mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);if(dist(face.x,face.y,target.obj.x,target.obj.y)>face.r+(target.obj.r||18)+16)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
 
   safePetFollowPoint(p,tx,ty){
     let x=clamp(tx,24,WORLD_W-24),y=clamp(ty,24,WORLD_H-24);
@@ -2345,7 +2577,11 @@ export class WorldRoom extends Room {
       if(!owner)continue;
 
       if(owner.ridingPetId===id){
-        p.x=owner.x;p.y=owner.y;p.angle=owner.angle;
+        p.x=owner.x;p.y=owner.y;
+        const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
+        if(ml>.05)smoothTurn(p,Math.atan2(owner.moveY||0,owner.moveX||0),dt,2.15);
+        this.resolveStatic(p,(p.r||18)*.72);
+        owner.x=p.x;owner.y=p.y;
         continue;
       }
 
@@ -2395,6 +2631,18 @@ export class WorldRoom extends Room {
         }
         if(current){target=current;targetSource="combat";}
       }
+      // Family babies join whatever either parent is actively fighting.
+      if(!target&&p.bredChild){
+        for(const parentId of [p.motherId,p.fatherId]){
+          if(!parentId)continue;
+          const parent=this.state.pets.get(parentId);if(!parent||parent.dead)continue;
+          const pf=this.petFocusTargets.get(parentId);
+          if(pf){const obj=pf.kind==="animal"?this.state.animals.get(pf.id):this.state.enemies.get(pf.id);if(obj&&obj.hp>0&&!obj.dead){target={kind:pf.kind,id:pf.id,obj,d:dist(p.x,p.y,obj.x,obj.y)};targetSource="family";break;}}
+          const ph=this.petHuntState.get(parentId);
+          if(ph&&ph.kind&&ph.targetId){const obj=ph.kind==="animal"?this.state.animals.get(ph.targetId):this.state.enemies.get(ph.targetId);if(obj&&obj.hp>0&&!obj.dead){target={kind:ph.kind,id:ph.targetId,obj,d:dist(p.x,p.y,obj.x,obj.y)};targetSource="family";break;}}
+        }
+      }
+
       // Follow / Defend / Set do not start random fights. Defend still responds
       // to ownerThreat above, and manual right-click focus remains allowed.
 
@@ -2417,11 +2665,11 @@ export class WorldRoom extends Room {
             this.enemyAggro.set(target.id,{kind:"pet",id});
             const before=this.state.enemies.has(target.id);
             this.hitEnemy(target.id,target.obj,dmg,p.ownerId,false,{kind:"pet",id});
-            if(before&&!this.state.enemies.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);}
+            if(before&&!this.state.enemies.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
           }else{
             const before=this.state.animals.has(target.id);
             this.hitWild(target.id,target.obj,rawDmg,p.ownerId,false,{kind:"pet",id});
-            if(before&&!this.state.animals.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);}
+            if(before&&!this.state.animals.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
           }
         }
       }else if(p.orderMode==="combat"){
@@ -2448,13 +2696,18 @@ export class WorldRoom extends Room {
           p.targetX=-1;p.targetY=-1;p.orderMode="follow";
         }
       }else{
-        const ownerDistance=dist(p.x,p.y,owner.x,owner.y);
+        let followX=owner.x,followY=owner.y;
+        if(p.bredChild){
+          const family=[];for(const parentId of [p.motherId,p.fatherId]){const parent=parentId?this.state.pets.get(parentId):null;if(parent&&!parent.dead)family.push(parent);}
+          if(family.length){followX=family.reduce((v,q)=>v+q.x,0)/family.length;followY=family.reduce((v,q)=>v+q.y,0)/family.length;}
+        }
+        const ownerDistance=dist(p.x,p.y,followX,followY);
         const followRange=petFollowRangeFor(p);
         const inputMag=clamp(Math.hypot(owner.moveX||0,owner.moveY||0),0,1);
         let ownerMoveSpeed=148*inputMag;
         if(owner.ridingPetId){
           const mount=this.state.pets.get(owner.ridingPetId);
-          if(mount&&!mount.dead)ownerMoveSpeed=Math.max(24,mount.speed||148)*inputMag;
+          if(mount&&!mount.dead)ownerMoveSpeed=Math.max(24,mount.speed||148)*2.30*inputMag;
         }
         if(owner.heldSpecial==="Wall")ownerMoveSpeed*=.64;
         const ownerMoving=!!owner.moving||ownerMoveSpeed>2.5;
@@ -2480,7 +2733,7 @@ export class WorldRoom extends Room {
         }
 
         if(fs.returning){
-          const targetAngle=angTo(p.x,p.y,owner.x,owner.y);
+          const targetAngle=angTo(p.x,p.y,followX,followY);
           const turnRate=ownerDistance>=followRange.sprint?6.4:ownerDistance>=followRange.run?5.8:4.8;
           smoothTurn(p,targetAngle,dt,turnRate);
 
@@ -2501,8 +2754,10 @@ export class WorldRoom extends Room {
           // still the owner, so this cannot turn into the old wandering formation.
           if(ownerDistance>followRange.run&&moved<Math.max(.20,expected*.18)){
             fs.stuckT+=dt;
+            fs.resourceCd=Math.max(0,(fs.resourceCd||0)-dt);
+            if(fs.stuckT>.42&&fs.resourceCd<=0){if(this.petAttackStuckResource(p.ownerId,p))fs.resourceCd=animalAttackCooldown(p.type,p.stage,true);}
             if(fs.stuckT>.12){
-              const direct=angTo(p.x,p.y,owner.x,owner.y);
+              const direct=angTo(p.x,p.y,followX,followY);
               p.angle=direct+fs.avoidSide*.72;
               const ax=p.x,ay=p.y;
               this.moveCreatureSwept(p,followSpeed*.88,dt);
@@ -2516,11 +2771,20 @@ export class WorldRoom extends Room {
             const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
             const backA=ml>.05?Math.atan2(owner.moveY||0,owner.moveX||0):(owner.angle||0);
             const rescue=this.safePetFollowPoint(p,
-              owner.x-Math.cos(backA)*(followRange.stop+18),
-              owner.y-Math.sin(backA)*(followRange.stop+18));
-            p.x=rescue.x;p.y=rescue.y;p.angle=angTo(p.x,p.y,owner.x,owner.y);fs.stuckT=0;
+              followX-Math.cos(backA)*(followRange.stop+18),
+              followY-Math.sin(backA)*(followRange.stop+18));
+            p.x=rescue.x;p.y=rescue.y;p.angle=angTo(p.x,p.y,followX,followY);fs.stuckT=0;
           }
         }else{
+          const keepOut=PLAYER_R+Math.max(12,(Number(p.r)||18)*.72)+18;
+          if(ownerDistance<keepOut){
+            const away=angTo(followX,followY,p.x,p.y);
+            const side=Number.isFinite(fs.ownerOrbitSide)?fs.ownerOrbitSide:fs.avoidSide;
+            fs.ownerOrbitSide=side;fs.roamA=away+side*.58;
+            smoothTurn(p,fs.roamA,dt,3.0);
+            this.moveCreatureSwept(p,Math.max(22,(Number(p.speed)||60)*.46),dt);
+            fs.roamT=Math.max(Number(fs.roamT)||0,.28);
+          }else{
           // Continuous natural roaming. No destination-arrival pause and no
           // mechanical orbit point: the heading bends every so often while the
           // owner's distance softly changes the odds of moving out or back in.
@@ -2531,7 +2795,7 @@ export class WorldRoom extends Room {
           const roamRatio=ownerDistance/Math.max(1,followRange.start);
 
           if(fs.roamT<=0){
-            const toOwnerA=ownerDistance>5?angTo(p.x,p.y,owner.x,owner.y):rand(0,TAU);
+            const toOwnerA=ownerDistance>5?angTo(p.x,p.y,followX,followY):rand(0,TAU);
             const awayA=toOwnerA+Math.PI;
             const roll=Math.random();
             if(roamRatio>.78){
@@ -2559,6 +2823,7 @@ export class WorldRoom extends Room {
             fs.roamA=(Number(p.angle)||0)+fs.avoidSide*rand(.72,1.12);
             fs.roamT=rand(.18,.46);
             fs.avoidSide*=-1;
+          }
           }
         }
       }
@@ -2659,6 +2924,7 @@ export class WorldRoom extends Room {
           if(p.hostile){const a=best.a,dmg=animalDamageTaken(a.type,a.stage,p.dmg);a.hp=Math.max(0,a.hp-dmg);a.flash=.12;a.recentHit=4;a.sleeping=false;a.enraged=true;a.combat=8;if(a.hp>0&&this.state.enemies.has(p.ownerId))this.setWildReactionToAttacker(best.aid,a,{kind:"enemy",id:p.ownerId});if(a.hp<=0){this.awardPetXpContributors("animal",best.aid,a,"");this.broadcastSpectateKill("animal",best.aid,"projectile",p.ownerId);this.state.animals.delete(best.aid);this.animalAggro.delete(best.aid);this.animalFleeFrom.delete(best.aid);}}
           else{this.hitWild(best.aid,best.a,p.dmg,p.ownerId,false,p.sourcePetId?{kind:"pet",id:p.sourcePetId}:null);if(p.knock&&this.state.animals.has(best.aid)){const q=Math.atan2(p.vy,p.vx),push=p.knock*animalKnockbackScale(best.a);best.a.x+=Math.cos(q)*push;best.a.y+=Math.sin(q)*push;this.resolveStatic(best.a,(best.a.r||18)*.68);}}
         }
+        else if(best.type==="solid"&&p.petBlast&&best.solid?.kind==="resource"&&p.sourcePetId){const pet=this.state.pets.get(p.sourcePetId),r=this.state.resources.get(best.solid.id);if(pet&&r)this.petHitResource(p.ownerId,pet,best.solid.id,r,true);}
         this.state.projectiles.delete(id);
       }
     }
@@ -2682,7 +2948,9 @@ export class WorldRoom extends Room {
         // can be hurt by the same wall at the same time.
         for(const rec of this.nearbyDynamic(w.x,w.y,w.r+110,spikeKinds)){
           const o=rec.obj;if(!o)continue;
-          const contact=rec.kind==="enemy"?(!o.dead&&dist(w.x,w.y,o.x,o.y)<=w.r+o.r+3):(w.sourcePetId&&o.hp>0&&dist(w.x,w.y,o.x,o.y)<=w.r+o.r*.78+2);
+          const contact=rec.kind==="enemy"
+            ?(!o.dead&&dist(w.x,w.y,o.x,o.y)<=w.r+o.r+3)
+            :(w.sourcePetId&&o.hp>0&&animalProjectileTouch(o,w.x,w.y,w.r+2));
           if(!contact)continue;
           const key=`${id}:${rec.kind}:${rec.id}`,next=this.wallSpikeNext.get(key)||0;
           if(now<next)continue;
@@ -2734,7 +3002,7 @@ export class WorldRoom extends Room {
       if(phase.spawn)this.waveTimer=Math.min(this.waveTimer||0,.65);
       if(phase.name==="Dawn")this.midnightMarkSpawned=false;
       if(phase.name==="Midnight"&&!this.midnightMarkSpawned&&this.state.enemies.size<70){const mid=this.addEnemy(true,null,"Forest Warden",true);if(mid){this.midnightMarkSpawned=true;const boss=this.state.enemies.get(mid);if(boss)this.broadcast("moonmarkSpawned",{id:mid,x:boss.x,y:boss.y,biome:boss.moonBiome||CURRENT_BIOME_ID,boss:boss.role});}}
-      if(phase.name==="Morning")this.triggerFirstLight();
+      if(phase.name==="Morning"){this.startWildMorningBreeding();this.triggerFirstLight();}
       this.broadcast("phaseEvent",{phase:this.state.dayPhase,dayCount:this.state.dayCount});
     }
     const phase=TIME_PHASES[this.state.dayPhase];
@@ -2756,7 +3024,7 @@ export class WorldRoom extends Room {
     // Stability guard: bound dt so a stalled process never tries to catch up in one giant tick.
     if(!Number.isFinite(dt)||dt<0)dt=0;
     dt=Math.min(dt,.05);
-    this.updateTime(dt);for(const[id,p]of this.state.players){p.animalCarryT=Math.max(0,(p.animalCarryT||0)-dt);const regen=this.runPerks(id).regen;if(regen>0&&!p.dead&&p.health<p.maxHealth)p.health=Math.min(p.maxHealth,p.health+regen*dt);}for(const[id,left]of Array.from(this.resourceRespawns.entries())){const n=left-dt;if(n<=0){const r=this.state.resources.get(id);if(r){r.hp=r.maxHp;r.alive=true;}this.resourceRespawns.delete(id);}else this.resourceRespawns.set(id,n);}for(const[,c]of this.state.chests)c.pulse=Math.max(0,c.pulse-dt*3);this.updateAnimals(dt);this.updatePets(dt);this.resolveAnimalAnimalCollisions();this.updateEnemies(dt);this.rebuildDynamicGrid();this.applyPlayerCreaturePushes();this.updateWallsTowers(dt);this.updateProjectiles(dt);this.flushNetworkEvents(dt);
+    this.updateTime(dt);for(const[id,p]of this.state.players){p.animalCarryT=0;const regen=this.runPerks(id).regen;if(regen>0&&!p.dead&&p.health<p.maxHealth)p.health=Math.min(p.maxHealth,p.health+regen*dt);}for(const[id,left]of Array.from(this.resourceRespawns.entries())){const n=left-dt;if(n<=0){const r=this.state.resources.get(id);if(r){r.hp=r.maxHp;r.alive=true;}this.resourceRespawns.delete(id);}else this.resourceRespawns.set(id,n);}for(const[,c]of this.state.chests)c.pulse=Math.max(0,c.pulse-dt*3);this.updateAnimals(dt);this.updatePets(dt);this.resolveAnimalAnimalCollisions();this.updateEnemies(dt);this.rebuildDynamicGrid();this.applyPlayerCreaturePushes();this.updateWallsTowers(dt);this.updateProjectiles(dt);this.flushNetworkEvents(dt);
   }
 
   onJoin(client,options={}){
@@ -2765,7 +3033,7 @@ export class WorldRoom extends Room {
     this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.state.players.set(client.sessionId,p);
     const clientRules=String(options.rulesVersion||"");
     if(clientRules&&clientRules!==CUBE_SHARED_RULES_VERSION)client.send("rulesMismatch",{serverRulesVersion:CUBE_SHARED_RULES_VERSION,clientRulesVersion:clientRules});
-    const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage);client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
+    const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
   }
 
   onLeave(client){this.state.players.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
