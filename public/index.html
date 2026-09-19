@@ -4948,7 +4948,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "544";
+const CUBE_SHARED_RULES_VERSION = "554";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -8330,6 +8330,8 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
   v.bredChild = !!s.bredChild;
   v.motherId = s.motherId || "";
   v.fatherId = s.fatherId || "";
+  v.olderBrotherId = s.olderBrotherId || "";
+  v.olderSisterId = s.olderSisterId || "";
   const nextLevel = Number(s.level) || 1;
   const nextExp = Number(s.exp) || 0;
   if (!fresh && owned) {
@@ -8819,6 +8821,7 @@ function applyWorldFx(data={}) {
   const x=Number(data.x)||0,y=Number(data.y)||0;
   if(data.kind==="hit"){spark(x,y,data.color||"#f2836a",net.room?3:5,80);if(data.text)floatText(x,y-24,String(data.text),data.color||"#f2836a");}
   else if(data.kind==="chest"){spark(x,y,"#ffd85f",net.room?9:14,120);}
+  else if(data.kind==="familyBirth"){familyBirthCelebration(x,y);}
 }
 function applyAbilityEvent(data={}) {
   const elem=data.elem||""; const x=Number(data.x)||0,y=Number(data.y)||0,r=Number(data.r)||20;
@@ -9100,6 +9103,19 @@ async function connectMultiplayer() {
       }
     });
     room.onMessage("petGrew", d => banner(`${PET_TYPES[d.type]?.name||"Pet"} became ${stageDisplayName(d.stage)}!`));
+    room.onMessage("familyOlderSiblings", d => {
+      const ids = [String(d?.brotherId||""), String(d?.sisterId||"")].filter(Boolean);
+      const names = ids.map(id => net.petVisuals.get(id)).filter(Boolean).map(p => petDisplayName(p));
+      if (names.length > 1) banner(`${names[0]} and ${names[1]} are now the older siblings!`);
+      else if (names.length === 1) banner(`${names[0]} is now the older sibling!`);
+      else banner("An older sibling is taking care of the family!");
+      setTimeout(() => { syncNetworkFullWorld(true); syncPetCards(); }, 45);
+    });
+    room.onMessage("familyPromotedNormal", d => {
+      setTimeout(() => { syncNetworkFullWorld(true); syncPetCards(); }, 40);
+      const p = net.petVisuals.get(String(d?.id||""));
+      banner(`${p ? petDisplayName(p) : "Your family pet"} is your normal pet now!`);
+    });
     room.onMessage("petReleased", d => banner(`${d.name||"Pet"} was released`));
     room.onMessage("starterPetEnsured", () => {
       setTimeout(() => syncNetworkFullWorld(true), 60);
@@ -9497,6 +9513,13 @@ canvas.addEventListener("mousedown", e => {
     mouse.rdown = true;
     const wx = e.clientX + game.camX;
     const wy = e.clientY + game.camY;
+    const clickedPet = petUnderWorldPoint(wx, wy);
+    if (clickedPet && clickedPet.bredChild && clickedPet.stage === "baby") {
+      mouse.rdown = false;
+      openPetRename(clickedPet);
+      e.preventDefault();
+      return;
+    }
     const clickedAnimal = animalUnderWorldPoint(wx, wy);
     if (clickedAnimal && focusAllPetsOnAnimal(clickedAnimal)) {
       e.preventDefault();
@@ -9781,6 +9804,13 @@ const sfx = {
   ability: () => { beep(300, 0.08, "sawtooth", 0.04); beep(500, 0.12, "triangle", 0.04); },
   gold: () => beep(880, 0.1, "sine", 0.04),
   night: () => beep(80, 0.4, "sawtooth", 0.03),
+  familyBirth: () => {
+    // Warm, happy, gentle arpeggio for a new baby.
+    beep(392, 0.42, "sine", 0.035);
+    setTimeout(() => beep(494, 0.46, "sine", 0.032), 95);
+    setTimeout(() => beep(587, 0.50, "sine", 0.030), 190);
+    setTimeout(() => beep(659, 0.38, "sine", 0.024), 315);
+  },
 };
 
 // ---------- background ----------
@@ -13426,6 +13456,7 @@ function spawnWildBabyFromParents(mother, father) {
   animals.push(baby);
   mother._lastBreedDay = game.dayCount; father._lastBreedDay = game.dayCount;
   clearWildMatePair(mother);
+  familyBirthCelebration(x, y);
   spark(x, y, info.color || "#efe6d2", 12, 75);
   floatText(x, y - r - 10, `Baby ${info.name || type}!`, "#ffd9e6");
   return baby;
@@ -13667,6 +13698,23 @@ function spark(x, y, color, n = 6, speed = 120) {
       life: rand(0.25, 0.55), maxLife: 0.55, color, size: rand(2, 4.5),
     });
   }
+}
+function stardust(x, y, n = 34, speed = 145) {
+  const colors = ["#fff7d6", "#ffd6ea", "#ff9fc6", "#ffd76a", "#ffffff"];
+  if (particles.length > 720) n = Math.min(n, 12);
+  for (let i = 0; i < n && particles.length < 900; i++) {
+    const a = rand(0, TAU), sp = rand(35, speed), life = rand(0.48, 0.92);
+    particles.push({
+      x:x+rand(-5,5), y:y+rand(-5,5), vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-rand(4,28),
+      life, maxLife:life, color:colors[randi(0, colors.length-1)], size:rand(2.2,5.2),
+      star:true, spin:rand(0,TAU), spinV:rand(-5.5,5.5)
+    });
+  }
+}
+function familyBirthCelebration(x, y) {
+  abilityFx.push({type:"birthHeart",x,y:y-8,life:1.18,maxLife:1.18,popped:false,phase:0});
+  // Births can happen elsewhere in the shared world; only play the soothing chime nearby.
+  if (sfx.familyBirth && dist(player.x, player.y, x, y) < 950) sfx.familyBirth();
 }
 function floatText(x, y, text, color) {
   if (floaters.length >= 120) floaters.shift();
@@ -15663,8 +15711,8 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
   if (!pet || pet.dead) return;
   const info = PET_TYPES[pet.type];
   if (!info) return;
-  if (pet.bredChild && !inheritedFrom) {
-    banner(`${petDisplayName(pet)} copies its parents' abilities instead of having its own cooldown.`, true);
+  if (pet.bredChild && !inheritedFrom && !isOlderSiblingLeaderPet(pet)) {
+    banner(`${petDisplayName(pet)} copies its family leaders' abilities instead of having its own cooldown.`, true);
     return;
   }
   if (!inheritedFrom && pet.abilityCd > 0) {
@@ -16460,9 +16508,10 @@ function updateAnimals(dt) {
         }
       }
     }
+    if (p.bredChild && !net.room) makeLoneOrphanNormalOffline(p);
     if (p.bredChild && !p.forcedTarget) {
-      const parents = petParents(p);
-      for (const parent of parents) {
+      const familyLeaders = petFamilyLeaders(p);
+      for (const parent of familyLeaders) {
         const inheritedTarget = combatTargetAlive(parent.forcedTarget) ? parent.forcedTarget :
           (parent.huntTarget && combatTargetAlive(parent.huntTarget.obj) ? parent.huntTarget.obj : null);
         if (inheritedTarget) {
@@ -16490,10 +16539,10 @@ function updateAnimals(dt) {
       continue;
     }
 
-    // Bred family pets follow the mother/father instead of consuming a normal
-    // player-follow slot. They still fall back to the player if both parents are gone.
+    // Bred babies follow their parents. If both parents are gone before the baby
+    // reaches Adult, two older siblings take over as the family leaders.
     if (p.bredChild && p.follow && p.targetX == null) {
-      const parents = petParents(p);
+      const parents = petFamilyLeaders(p);
       if (parents.length) {
         const fx = parents.reduce((sum,q)=>sum+q.x,0)/parents.length;
         const fy = parents.reduce((sum,q)=>sum+q.y,0)/parents.length;
@@ -16836,6 +16885,13 @@ function updateAbilityFx(dt) {
     if (fx.type === "cast") {
       // Visuals are drawn in drawAbilityFx(). Keep the update pass free of canvas
       // state changes so an ability can never fade the grass/background texture.
+    } else if (fx.type === "birthHeart") {
+      const elapsed = (fx.maxLife || 1.18) - fx.life;
+      if (!fx.popped && elapsed >= 0.72) {
+        fx.popped = true;
+        stardust(fx.x, fx.y, 38, 155);
+        spark(fx.x, fx.y, "#ff8daf", 12, 105);
+      }
     } else if (fx.followPet) {
       const pet = fx.followPet;
       if (pet && !pet.dead) {
@@ -17070,6 +17126,7 @@ function updateFx(dt) {
   for (const p of particles) {
     p.x += p.vx * dt; p.y += p.vy * dt;
     p.vx *= 0.9; p.vy *= 0.9;
+    if (p.star) { p.vy += 18 * dt; p.spin = (p.spin || 0) + (p.spinV || 0) * dt; }
     p.life -= dt;
   }
   particles = particles.filter(p => p.life > 0);
@@ -17474,10 +17531,111 @@ function petParents(pet) {
   const father = resolveFamilyPet(pet.father, pet.fatherId);
   return [mother, father].filter(Boolean);
 }
+function promoteOlderSiblingOffline(pet) {
+  if (!pet || pet.dead || pet.stage !== "baby") return false;
+  pet.stage = "adult";
+  pet.r = animalRadius(pet.type, "adult");
+  pet.maxHp = upgradedPetMaxHp(pet.type, "adult");
+  pet.hp = pet.maxHp;
+  pet.speed = upgradedPetSpeed(pet.type, "adult");
+  pet.level = 1; pet.exp = 0;
+  spark(pet.x, pet.y, "#7be08a", 18, 140);
+  floatText(pet.x, pet.y - pet.r - 18, "OLDER SIBLING!", "#7be08a");
+  return true;
+}
+function sameBredFamily(a, b) {
+  if (!a || !b || !a.bredChild || !b.bredChild) return false;
+  if (a.mother && b.mother && a.father && b.father) return a.mother === b.mother && a.father === b.father;
+  const am=String(a.motherId||""), af=String(a.fatherId||""), bm=String(b.motherId||""), bf=String(b.fatherId||"");
+  return !!(am && af && am===bm && af===bf);
+}
+function makeLoneOrphanNormalOffline(child) {
+  if (!child || child.dead || !child.bredChild || net.room) return false;
+  if (petParents(child).length) return false;
+  const living = player.pets.filter(p => p && !p.dead);
+  if (living.length !== 1 || living[0] !== child) return false;
+  child.bredChild = false;
+  child.mother = null; child.father = null; child.motherId = ""; child.fatherId = "";
+  child.olderBrother = null; child.olderSister = null; child.olderBrotherId = ""; child.olderSisterId = "";
+  child.orderMode = "follow"; child.follow = true; child.targetX = null; child.targetY = null;
+  child.forcedTarget = null; child.forcedTargetAutoDefense = false;
+  child.huntTarget = null; child.huntRetarget = 0; child.huntWanderT = 0;
+  syncPetCards();
+  banner(`${petDisplayName(child)} is your normal pet now!`);
+  return true;
+}
+function chooseOlderSiblingLeadersOffline(candidates) {
+  const pool = candidates.filter(p => p && !p.dead);
+  if (!pool.length) return [];
+  const males = pool.filter(p => p.gender === "Male");
+  const females = pool.filter(p => p.gender === "Female");
+  if (males.length && females.length) {
+    const male = males[randi(0, males.length - 1)];
+    const femalePool = females.filter(p => p !== male);
+    if (femalePool.length) return [male, femalePool[randi(0, femalePool.length - 1)]];
+  }
+  return [pool[randi(0, pool.length - 1)]];
+}
+function ensureOfflineOlderSiblings(child) {
+  if (!child || !child.bredChild || child.dead || child.stage !== "baby" || net.room) return false;
+  if (petParents(child).length) return false;
+  if (makeLoneOrphanNormalOffline(child)) return false;
+
+  const currentBrother = resolveFamilyPet(child.olderBrother, child.olderBrotherId);
+  const currentSister = resolveFamilyPet(child.olderSister, child.olderSisterId);
+  if (currentBrother || currentSister) return true;
+
+  const familyBabies = player.pets.filter(p => p && !p.dead && p.bredChild && p.stage === "baby" && sameBredFamily(p, child));
+  const familySet = new Set(familyBabies);
+  let candidates = player.pets.filter(p => p && !p.dead && !familySet.has(p) && p !== child && p !== child.mother && p !== child.father);
+  // If Mom and Dad were the only other pets but there are several children,
+  // another child can grow up and become the older sibling leader.
+  if (!candidates.length && familyBabies.length > 1) candidates = familyBabies.filter(p => p !== child);
+  const leaders = chooseOlderSiblingLeadersOffline(candidates);
+  if (!leaders.length) return false;
+
+  for (const leader of leaders) promoteOlderSiblingOffline(leader);
+  const brother = leaders.find(p => p.gender === "Male") || null;
+  const sister = leaders.find(p => p.gender === "Female") || null;
+  for (const baby of familyBabies) {
+    if (!baby || baby.dead || baby.stage !== "baby") continue;
+    baby.olderBrother = brother; baby.olderSister = sister;
+    baby.olderBrotherId = String(brother?.netId || "");
+    baby.olderSisterId = String(sister?.netId || "");
+  }
+  syncPetCards();
+  const names = leaders.map(p => petDisplayName(p));
+  banner(names.length > 1 ? `${names[0]} and ${names[1]} are now the older siblings!` : `${names[0]} is now the older sibling!`);
+  return true;
+}
+function petFamilyLeaders(pet) {
+  if (!pet || !pet.bredChild) return [];
+  const parents = petParents(pet);
+  if (parents.length) return parents;
+  if (pet.stage !== "baby") return [];
+  if (!net.room) ensureOfflineOlderSiblings(pet);
+  if (!pet.bredChild) return [];
+  const brother = resolveFamilyPet(pet.olderBrother, pet.olderBrotherId);
+  const sister = resolveFamilyPet(pet.olderSister, pet.olderSisterId);
+  return [brother, sister].filter(q => q && q !== pet);
+}
+function isOlderSiblingLeaderPet(pet) {
+  if (!pet || pet.dead) return false;
+  const pid = String(pet.netId || "");
+  return player.pets.some(c => c && !c.dead && c.bredChild && c.stage === "baby" && (
+    c.olderBrother === pet || c.olderSister === pet ||
+    (pid && (String(c.olderBrotherId || "") === pid || String(c.olderSisterId || "") === pid))
+  ));
+}
 function bredChildrenOf(parent) {
   if (!parent) return [];
   const pid = String(parent.netId || "");
-  return player.pets.filter(c => c && !c.dead && c.bredChild && (c.mother === parent || c.father === parent || (pid && (String(c.motherId||"")===pid || String(c.fatherId||"")===pid))));
+  return player.pets.filter(c => {
+    if (!c || c.dead || !c.bredChild) return false;
+    if (c.mother === parent || c.father === parent || c.olderBrother === parent || c.olderSister === parent) return true;
+    if (!pid) return false;
+    return [c.motherId,c.fatherId,c.olderBrotherId,c.olderSisterId].some(id => String(id||"") === pid);
+  });
 }
 function createOfflineBredPet(mother, father) {
   const type = mother.type, info = PET_TYPES[type];
@@ -17488,7 +17646,7 @@ function createOfflineBredPet(mother, father) {
     type, stage, x:(mother.x+father.x)*0.5, y:(mother.y+father.y)*0.5, angle:rand(0,TAU),
     r, hp:maxHp, maxHp, speed:upgradedPetSpeed(type,stage), coat:coat || info.color, spots:[], spotCol:shadeColor(coat || info.color,-30),
     sleeping:false, owned:true, follow:true, orderMode:"follow", petName:`Baby ${info.name}`,
-    gender, bredChild:true, mother, father, motherId:"", fatherId:"", abilityCd:0, targetX:null,targetY:null,
+    gender, bredChild:true, mother, father, motherId:"", fatherId:"", olderBrother:null, olderSister:null, olderBrotherId:"", olderSisterId:"", abilityCd:0, targetX:null,targetY:null,
     huntTarget:null,huntRetarget:0,huntWanderT:0,wanderT:0,wanderA:0,flash:0,dead:false,tailPhase:rand(0,TAU),
     atkCd:0,combat:0,exp:0,level:1,recentHit:0,attackAnim:0,
   };
@@ -17496,6 +17654,7 @@ function createOfflineBredPet(mother, father) {
   if (!meta.speciesCards) meta.speciesCards = {};
   meta.speciesCards[type] = (meta.speciesCards[type] || 0) + 1;
   saveMeta();
+  familyBirthCelebration(baby.x,baby.y);
   spark(baby.x,baby.y,info.color||"#ffd9e6",14,100);
   floatText(baby.x,baby.y-r-12,`Baby ${info.name}!`,"#ffd9e6");
   banner(`Baby ${info.name} born! ${genderSymbol(gender)} +1 Card`);
@@ -17577,7 +17736,7 @@ function savePetRename() {
   syncPetCards();
 }
 function activateAllPetAbilities() {
-  const readyPets = player.pets.filter(p => p && !p.dead && !p.bredChild && (p.abilityCd || 0) <= 0);
+  const readyPets = player.pets.filter(p => p && !p.dead && (!p.bredChild || isOlderSiblingLeaderPet(p)) && (p.abilityCd || 0) <= 0);
   if (!readyPets.length) {
     banner("No pet abilities are ready yet", true);
     return;
@@ -17639,12 +17798,16 @@ function releasePet(pet) {
   syncPetCards();
 }
 
+function petHasVisibleCard(pet) {
+  return !!(pet && !pet.dead && (!pet.bredChild || isOlderSiblingLeaderPet(pet)));
+}
 function syncPetCards() {
   const wrap = el("petCards");
   if (!wrap) return;
   wrap.innerHTML = "";
 
-  if (player.pets.length) {
+  const hasVisiblePetCards = player.pets.some(p => petHasVisibleCard(p));
+  if (hasVisiblePetCards) {
     const allBtn = document.createElement("button");
     allBtn.type = "button";
     allBtn.className = "pet-all-abilities";
@@ -17659,6 +17822,7 @@ function syncPetCards() {
   }
 
   player.pets.forEach((pet, petIndex) => {
+    if (!petHasVisibleCard(pet)) return;
     const info = PET_TYPES[pet.type];
     if (!info) return;
     const maxCd = info.abilityCd || 12;
@@ -17679,7 +17843,7 @@ function syncPetCards() {
       `<div class="pc-cdbar" style="height:${fillPct}%"></div>` +
       `<div class="pc-icon">${info.emoji}</div>` +
       `<div class="pc-name">${name}</div>` +
-      `<div class="pc-type">${info.name} · ${genderSymbol(pet.gender)}${genderDotHtml(pet.gender)}${pet.bredChild ? " · Family" : ""}</div>` +
+      `<div class="pc-type">${info.name} · ${genderSymbol(pet.gender)}${genderDotHtml(pet.gender)}${isOlderSiblingLeaderPet(pet) ? " · Older Sibling" : (pet.bredChild ? " · Family" : "")}</div>` +
       `<div class="pc-hp"><div class="pc-hp-fill" style="width:${Math.max(0,Math.min(100,(pet.hp/Math.max(1,pet.maxHp))*100))}%"></div></div>` +
       `<button class="pet-orders" type="button" title="Pet orders">⋯</button>` +
       `<div class="pet-menu" data-pet="${pet.type}">` +
@@ -20045,6 +20209,28 @@ function drawAbilityFx() {
       ctx.globalAlpha = (1 - t) * 0.45;
       ctx.fillStyle = fx.color || "#fff";
       circ(fx.x, fx.y, Math.max(3, rr * 0.22));
+    } else if (fx.type === "birthHeart") {
+      const elapsed = (fx.maxLife || 1.18) - fx.life;
+      if (!fx.popped) {
+        const grow = clamp(elapsed / 0.46, 0, 1);
+        const pulse = 1 + Math.sin(elapsed * 15) * 0.055 * grow;
+        const scale = (0.18 + 0.94 * (1 - Math.pow(1-grow, 3))) * pulse;
+        ctx.translate(fx.x, fx.y); ctx.scale(scale, scale);
+        ctx.globalAlpha = clamp(0.45 + grow * 0.55, 0, 1);
+        ctx.shadowColor = "rgba(255,96,135,.6)"; ctx.shadowBlur = 14;
+        const grad = ctx.createRadialGradient(-8,-9,2,0,2,34);
+        grad.addColorStop(0,"#ff7f9f"); grad.addColorStop(.48,"#f13f68"); grad.addColorStop(1,"#b8173b");
+        ctx.fillStyle = grad; ctx.strokeStyle = "#ffb4c8"; ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(0,30);
+        ctx.bezierCurveTo(-7,21,-29,9,-29,-8);
+        ctx.bezierCurveTo(-29,-25,-8,-32,0,-17);
+        ctx.bezierCurveTo(8,-32,29,-25,29,-8);
+        ctx.bezierCurveTo(29,9,7,21,0,30);
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur = 0; ctx.globalAlpha *= 0.72; ctx.fillStyle = "#ffdce5";
+        ctx.beginPath(); ctx.ellipse(-10,-12,5,8,-0.55,0,TAU); ctx.fill();
+      }
     } else if (fx.followPet) {
       if (fx.type === "fire") drawOrbitRing(fx, ["#ff6a2a", "#ffcc40", "#ff4020"], "flame");
       else if (fx.type === "sound") drawOrbitRing(fx, ["#a0e0ff", "#70c0ff", "#dff6ff"], "dot");
@@ -20326,7 +20512,13 @@ function drawFx() {
     if (p.trail) continue;
     ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
     ctx.fillStyle = p.color;
-    circ(p.x, p.y, p.size);
+    if (p.star) {
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.spin||0);
+      const s=p.size; ctx.beginPath();
+      ctx.moveTo(0,-s*1.65); ctx.lineTo(s*.42,-s*.42); ctx.lineTo(s*1.65,0); ctx.lineTo(s*.42,s*.42);
+      ctx.lineTo(0,s*1.65); ctx.lineTo(-s*.42,s*.42); ctx.lineTo(-s*1.65,0); ctx.lineTo(-s*.42,-s*.42);
+      ctx.closePath(); ctx.fill(); ctx.restore();
+    } else circ(p.x, p.y, p.size);
   }
   ctx.globalAlpha = 1;
   for (const f of floaters) {

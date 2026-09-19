@@ -11,7 +11,7 @@ const WORLD_H = 14400;
 const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
-const CUBE_SHARED_RULES_VERSION = "544";
+const CUBE_SHARED_RULES_VERSION = "554";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -559,6 +559,7 @@ class PetState extends Schema {
     this.orderMode="follow"; this.targetX=-1; this.targetY=-1; this.dead=false;
     this.upHealth=0; this.upDefense=0; this.upAttack=0; this.upWeight=0; this.upRegen=0; this.upSpeed=0;
     this.gender="Male"; this.motherId=""; this.fatherId=""; this.bredChild=false;
+    this.olderBrotherId=""; this.olderSisterId="";
     this.wanderT=rand(.6,2.2); this.wanderA=rand(0,TAU);
   }
 }
@@ -568,7 +569,7 @@ defineTypes(PetState, {
   tailPhase:"number", attackAnim:"number", flash:"number", abilityCd:"number", atkCd:"number", combat:"number",
   level:"number", exp:"number", petName:"string", orderMode:"string", targetX:"number", targetY:"number", dead:"boolean",
   upHealth:"number", upDefense:"number", upAttack:"number", upWeight:"number", upRegen:"number", upSpeed:"number",
-  gender:"string", motherId:"string", fatherId:"string", bredChild:"boolean", wanderT:"number", wanderA:"number"
+  gender:"string", motherId:"string", fatherId:"string", bredChild:"boolean", olderBrotherId:"string", olderSisterId:"string", wanderT:"number", wanderA:"number"
 });
 
 class EnemyState extends Schema {
@@ -1291,7 +1292,7 @@ export class WorldRoom extends Room {
     const info=PET_TYPES[type];if(!info)return null;stage=["baby","adult","boss","superboss"].includes(stage)?stage:(stage==="bigmomma"?"superboss":"baby");const p=new PetState();const r=animalRadius(type,stage);this.applyPetUpgradeFields(p,ownerId,type);
     const baseHp=typeHp(type,stage),hp=Math.max(12,Math.round(baseHp*petUpgradeMultiplier(p,"health")));const coat=opts.coat||pick(info.coats||[info.color]);
     const speed=animalSpeed(type,stage,true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");
-    Object.assign(p,{ownerId,type,stage,x,y,angle:opts.angle||0,r,hp:opts.hp!=null?Math.min(hp,opts.hp):hp,maxHp:hp,coat,spotCol:opts.spotCol||shadeHex(coat,-30),spotsJson:opts.spotsJson||"[]",speed,sleeping:false,tailPhase:rand(0,TAU),abilityCd:0,atkCd:0,combat:0,level:opts.level||1,exp:opts.exp||0,petName:String(opts.petName||type).slice(0,14),orderMode:"follow",targetX:-1,targetY:-1,dead:false,gender:opts.gender||randomAnimalGender(),motherId:String(opts.motherId||""),fatherId:String(opts.fatherId||""),bredChild:!!opts.bredChild});
+    Object.assign(p,{ownerId,type,stage,x,y,angle:opts.angle||0,r,hp:opts.hp!=null?Math.min(hp,opts.hp):hp,maxHp:hp,coat,spotCol:opts.spotCol||shadeHex(coat,-30),spotsJson:opts.spotsJson||"[]",speed,sleeping:false,tailPhase:rand(0,TAU),abilityCd:0,atkCd:0,combat:0,level:opts.level||1,exp:opts.exp||0,petName:String(opts.petName||type).slice(0,14),orderMode:"follow",targetX:-1,targetY:-1,dead:false,gender:opts.gender||randomAnimalGender(),motherId:String(opts.motherId||""),fatherId:String(opts.fatherId||""),bredChild:!!opts.bredChild,olderBrotherId:String(opts.olderBrotherId||""),olderSisterId:String(opts.olderSisterId||"")});
     const id=`p${this.nextPetId++}`;this.state.pets.set(id,p);return id;
   }
   enemySpawnPoint(anchor=null) {
@@ -1828,10 +1829,71 @@ export class WorldRoom extends Room {
     const baby=this.state.pets.get(babyId);if(baby){baby.abilityCd=0;baby.orderMode="follow";}
     this.sendReward(client.sessionId,{kind:"cards",species:type,amount:1},{x,y,breed:true});
     client.send("petBreedResult",{success:true,id:babyId,type,gender:baby?.gender||"",motherId,fatherId});
+    this.broadcastFx({kind:"familyBirth",x,y});
     this.broadcastFx({kind:"hit",x,y,text:`Baby ${info.name}!`,color:"#ffd9e6"});
   }
 
-  handlePetAbility(client,data,inherited=false){const id=String(data?.id||""),p=this.ownedPet(client,id);if(!p||p.dead||(!inherited&&p.abilityCd>0)||(!inherited&&p.bredChild))return;const info=PET_TYPES[p.type];p.abilityCd=inherited?0:info.abilityCd;const owner=this.state.players.get(client.sessionId);const angle=Number.isFinite(p.angle)?p.angle:(owner?.angle||0);const elem=info.elem;this.broadcast("abilityEvent",{petId:id,ownerId:client.sessionId,elem,x:p.x,y:p.y,r:p.r,inherited});
+  promoteOlderSiblingPet(id,p){
+    if(!p||p.dead||p.stage!=="baby")return false;
+    p.stage="adult";p.r=animalRadius(p.type,"adult");
+    p.maxHp=Math.max(12,Math.round(typeHp(p.type,"adult")*petUpgradeMultiplier(p,"health")));p.hp=p.maxHp;
+    p.speed=animalSpeed(p.type,"adult",true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");
+    p.level=1;p.exp=0;const c=this.clientById(p.ownerId);if(c)c.send("petGrew",{id,stage:"adult",type:p.type,reason:"olderSibling"});return true;
+  }
+  convertLoneOrphanToNormal(childId,p){
+    if(!p||p.dead||!p.bredChild)return false;
+    for(const pid of [p.motherId,p.fatherId]){const q=pid?this.state.pets.get(pid):null;if(q&&!q.dead&&q.ownerId===p.ownerId)return false;}
+    const living=[];for(const[id,q]of this.state.pets)if(q&&!q.dead&&q.ownerId===p.ownerId)living.push([id,q]);
+    if(living.length!==1||living[0][0]!==childId)return false;
+    p.bredChild=false;p.motherId="";p.fatherId="";p.olderBrotherId="";p.olderSisterId="";
+    p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFocusTargets.delete(childId);this.petHuntState.delete(childId);this.petFollowState.delete(childId);
+    const c=this.clientById(p.ownerId);if(c)c.send("familyPromotedNormal",{id:childId});
+    return true;
+  }
+  familyLeaderIds(childId,p){
+    if(!p||!p.bredChild)return[];
+    const parents=[p.motherId,p.fatherId].filter(pid=>{const q=pid?this.state.pets.get(pid):null;return !!(q&&!q.dead&&q.ownerId===p.ownerId);});
+    if(parents.length)return parents;
+    if(p.stage!=="baby")return[];
+    this.ensureOrphanOlderSiblings(childId,p);
+    if(!p.bredChild)return[];
+    return[p.olderBrotherId,p.olderSisterId].filter(pid=>pid&&pid!==childId).filter(pid=>{const q=this.state.pets.get(pid);return !!(q&&!q.dead&&q.ownerId===p.ownerId);});
+  }
+  chooseOlderSiblingLeaders(candidates){
+    if(!candidates.length)return[];
+    const males=candidates.filter(([,q])=>q.gender==="Male"),females=candidates.filter(([,q])=>q.gender==="Female");
+    if(males.length&&females.length){const m=males[randi(0,males.length-1)],fp=females.filter(([id])=>id!==m[0]);if(fp.length)return[m,fp[randi(0,fp.length-1)]];}
+    return[candidates[randi(0,candidates.length-1)]];
+  }
+  ensureOrphanOlderSiblings(childId,p){
+    if(!p||p.dead||!p.bredChild||p.stage!=="baby")return false;
+    for(const pid of [p.motherId,p.fatherId]){const q=pid?this.state.pets.get(pid):null;if(q&&!q.dead&&q.ownerId===p.ownerId)return false;}
+    if(this.convertLoneOrphanToNormal(childId,p))return false;
+    const brother=p.olderBrotherId?this.state.pets.get(p.olderBrotherId):null;
+    const sister=p.olderSisterId?this.state.pets.get(p.olderSisterId):null;
+    if((brother&&!brother.dead&&p.olderBrotherId!==childId)||(sister&&!sister.dead&&p.olderSisterId!==childId))return true;
+    const familyIds=[];
+    for(const[id,q]of this.state.pets){if(!q||q.dead||q.ownerId!==p.ownerId||!q.bredChild||q.stage!=="baby")continue;if(q.motherId===p.motherId&&q.fatherId===p.fatherId)familyIds.push(id);}
+    const familySet=new Set(familyIds);let candidates=[];
+    for(const[id,q]of this.state.pets){if(!q||q.dead||q.ownerId!==p.ownerId||familySet.has(id)||id===p.motherId||id===p.fatherId)continue;candidates.push([id,q]);}
+    // If the parents were the only other pets and several children remain,
+    // one or two of those children can grow up into the older sibling role.
+    if(!candidates.length&&familyIds.length>1)candidates=familyIds.filter(id=>id!==childId).map(id=>[id,this.state.pets.get(id)]).filter(([,q])=>q&&!q.dead);
+    const leaders=this.chooseOlderSiblingLeaders(candidates);if(!leaders.length)return false;
+    for(const[id,q]of leaders)this.promoteOlderSiblingPet(id,q);
+    const male=leaders.find(([,q])=>q.gender==="Male"),female=leaders.find(([,q])=>q.gender==="Female");
+    const brotherId=male?male[0]:"",sisterId=female?female[0]:"";
+    for(const bid of familyIds){const baby=this.state.pets.get(bid);if(!baby||baby.dead||baby.stage!=="baby")continue;baby.olderBrotherId=brotherId;baby.olderSisterId=sisterId;}
+    const c=this.clientById(p.ownerId);if(c)c.send("familyOlderSiblings",{brotherId,sisterId,motherId:p.motherId,fatherId:p.fatherId});
+    return true;
+  }
+  isOlderSiblingLeaderPet(id,p){
+    if(!p||p.dead)return false;
+    for(const[,child]of this.state.pets){if(!child||child.dead||!child.bredChild||child.ownerId!==p.ownerId||child.stage!=="baby")continue;if(child.olderBrotherId===id||child.olderSisterId===id)return true;}
+    return false;
+  }
+
+  handlePetAbility(client,data,inherited=false){const id=String(data?.id||""),p=this.ownedPet(client,id);if(!p||p.dead||(!inherited&&p.abilityCd>0)||(!inherited&&p.bredChild&&!this.isOlderSiblingLeaderPet(id,p)))return;const info=PET_TYPES[p.type];p.abilityCd=inherited?0:info.abilityCd;const owner=this.state.players.get(client.sessionId);const angle=Number.isFinite(p.angle)?p.angle:(owner?.angle||0);const elem=info.elem;this.broadcast("abilityEvent",{petId:id,ownerId:client.sessionId,elem,x:p.x,y:p.y,r:p.r,inherited});
     this.petDamageResourcesAround(client.sessionId,p,p.x,p.y,p.r+42,true);
     const areaKinds=new Set(["enemy","animal"]);
     const area=(damage,range,knock=0)=>{this.petDamageResourcesAround(client.sessionId,p,p.x,p.y,range,true);for(const rec of this.nearbyDynamic(p.x,p.y,range+120,areaKinds)){const o=rec.obj;if(!o)continue;const d=dist(p.x,p.y,o.x,o.y);if(d>range)continue;if(rec.kind==="enemy"){this.hitEnemy(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.enemies.has(rec.id)){const a=angTo(p.x,p.y,o.x,o.y);o.x+=Math.cos(a)*knock;o.y+=Math.sin(a)*knock;}}else{this.hitWild(rec.id,o,damage,client.sessionId,false,{kind:"pet",id});if(knock&&this.state.animals.has(rec.id)){const q=angTo(p.x,p.y,o.x,o.y),push=knock*animalKnockbackScale(o);o.x+=Math.cos(q)*push;o.y+=Math.sin(q)*push;this.resolveStatic(o,(o.r||18)*.68);}}}};
@@ -1847,7 +1909,7 @@ export class WorldRoom extends Room {
     else if(elem==="Water")this.addProjectile({x:p.x,y:p.y,vx:Math.cos(angle)*360,vy:Math.sin(angle)*360,life:1.15,r:12,hostile:false,kind:"water",color:"#4aa3e0",dmg:15,ownerId:client.sessionId,petBlast:true,knock:26,sourcePetId:id});
     else if(elem==="Plant"){this.addProjectile({x:p.x,y:p.y,vx:Math.cos(angle)*400,vy:Math.sin(angle)*400,life:1,r:7,hostile:false,kind:"leaf",color:"#5cb85c",dmg:14,ownerId:client.sessionId,petBlast:true,knock:0,sourcePetId:id});if(owner&&!owner.dead)owner.health=clamp(owner.health+22,0,owner.maxHealth);for(const[,mate]of this.state.pets)if(mate.ownerId===client.sessionId&&!mate.dead)mate.hp=clamp(mate.hp+18,0,mate.maxHp);}
     else if(elem==="Combat"){const t=this.nearestHostile(p.x,p.y,300);if(t){const a=angTo(p.x,p.y,t.obj.x,t.obj.y),dd=Math.min(150,Math.max(0,t.d-(p.r+t.obj.r)*.7));p.x=clamp(p.x+Math.cos(a)*dd,20,WORLD_W-20);p.y=clamp(p.y+Math.sin(a)*dd,20,WORLD_H-20);p.angle=a;if(dist(p.x,p.y,t.obj.x,t.obj.y)<p.r+t.obj.r+20){if(t.kind==="enemy")this.hitEnemy(t.id,t.obj,34+p.level*4,client.sessionId,false,{kind:"pet",id});else this.hitWild(t.id,t.obj,34+p.level*4,client.sessionId,false,{kind:"pet",id});}}}
-    if(!inherited){for(const[cid,child]of this.state.pets){if(!child||child.dead||!child.bredChild||child.ownerId!==client.sessionId)continue;if(child.motherId===id||child.fatherId===id)this.handlePetAbility(client,{id:cid},true);}}
+    if(!inherited){for(const[cid,child]of this.state.pets){if(!child||child.dead||!child.bredChild||child.ownerId!==client.sessionId)continue;if(child.motherId===id||child.fatherId===id||child.olderBrotherId===id||child.olderSisterId===id)this.handlePetAbility(client,{id:cid},true);}}
   }
 
   nearestHostile(x,y,range=Infinity){
@@ -2159,7 +2221,7 @@ export class WorldRoom extends Room {
         const mx=(female.x+male.x)*.5,my=(female.y+male.y)*.5;
         const babyId=this.addAnimal(a.type,"baby",clamp(mx+rand(-18,18),24,WORLD_W-24),clamp(my+rand(-18,18),24,WORLD_H-24),{gender:randomAnimalGender(),motherId:a.gender==="Female"?id:mateId,fatherId:a.gender==="Male"?id:mateId,bredChild:true,sleeping:false});
         this.wildLastBreedDay.set(id,this.state.dayCount);this.wildLastBreedDay.set(mateId,this.state.dayCount);
-        const baby=this.state.animals.get(babyId);if(baby)this.broadcastFx({kind:"hit",x:baby.x,y:baby.y,text:`Baby ${PET_TYPES[a.type]?.name||a.type}!`,color:"#ffd9e6"});
+        const baby=this.state.animals.get(babyId);if(baby){this.broadcastFx({kind:"familyBirth",x:baby.x,y:baby.y});this.broadcastFx({kind:"hit",x:baby.x,y:baby.y,text:`Baby ${PET_TYPES[a.type]?.name||a.type}!`,color:"#ffd9e6"});}
       }
       this.clearWildMate(id);
     }
@@ -2581,6 +2643,7 @@ export class WorldRoom extends Room {
 
       const owner=this.state.players.get(p.ownerId);
       if(!owner)continue;
+      if(p.bredChild)this.convertLoneOrphanToNormal(id,p);
 
       if(owner.ridingPetId===id){
         p.x=owner.x;p.y=owner.y;
@@ -2637,9 +2700,10 @@ export class WorldRoom extends Room {
         }
         if(current){target=current;targetSource="combat";}
       }
-      // Family babies join whatever either parent is actively fighting.
+      // Family babies join whatever their living parents are fighting. If both
+      // parents are gone before Adult, their two older siblings become the leaders.
       if(!target&&p.bredChild){
-        for(const parentId of [p.motherId,p.fatherId]){
+        for(const parentId of this.familyLeaderIds(id,p)){
           if(!parentId)continue;
           const parent=this.state.pets.get(parentId);if(!parent||parent.dead)continue;
           const pf=this.petFocusTargets.get(parentId);
@@ -2704,7 +2768,7 @@ export class WorldRoom extends Room {
       }else{
         let followX=owner.x,followY=owner.y;
         if(p.bredChild){
-          const family=[];for(const parentId of [p.motherId,p.fatherId]){const parent=parentId?this.state.pets.get(parentId):null;if(parent&&!parent.dead)family.push(parent);}
+          const family=[];for(const parentId of this.familyLeaderIds(id,p)){const parent=parentId?this.state.pets.get(parentId):null;if(parent&&!parent.dead)family.push(parent);}
           if(family.length){followX=family.reduce((v,q)=>v+q.x,0)/family.length;followY=family.reduce((v,q)=>v+q.y,0)/family.length;}
         }
         const ownerDistance=dist(p.x,p.y,followX,followY);
