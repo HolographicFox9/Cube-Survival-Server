@@ -17778,7 +17778,63 @@ function updateAbilityFx(dt) {
     } else if (fx.type === "fireMuzzle" || fx.type === "poisonMuzzle") {
       const t=clamp(1-fx.life/(fx.maxLife||.5),0,1);ctx.globalAlpha=1-t;ctx.fillStyle=fx.type==="fireMuzzle"?"#ff8b36":"#69cf69";ctx.translate(fx.x,fx.y);ctx.rotate(fx.angle||0);ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-26,-15*(1-t));ctx.lineTo(-18,0);ctx.lineTo(-26,15*(1-t));ctx.closePath();ctx.fill();
     } else if (fx.type === "pounce") {
-      const t=clamp(1-fx.life/(fx.maxLife||.55),0,1);ctx.globalAlpha=(1-t)*.75;ctx.strokeStyle="#ffd08a";ctx.lineWidth=8*(1-t)+2;ctx.beginPath();ctx.moveTo(fx.x,fx.y);ctx.lineTo(fx.toX||fx.x,fx.toY||fx.y);ctx.stroke();
+      const maxLife=(fx.maxLife||.55), t=clamp(1-fx.life/maxLife,0,1);
+      const sx=fx.x, sy=fx.y, ex=fx.toX||fx.x, ey=fx.toY||fx.y;
+      const dx=ex-sx, dy=ey-sy, len=Math.hypot(dx,dy)||1;
+      const nx=-dy/len, ny=dx/len;
+      const mx=lerp(sx,ex,0.5), my=lerp(sy,ey,0.5);
+      const trailAlpha=(1-t)*0.92;
+
+      // Deep red-orange shock lane from the launch point.
+      ctx.globalAlpha=trailAlpha;
+      const grad=ctx.createLinearGradient(sx,sy,ex,ey);
+      grad.addColorStop(0,"rgba(115,18,8,0.95)");
+      grad.addColorStop(0.22,"rgba(170,34,10,0.95)");
+      grad.addColorStop(0.55,"rgba(226,74,22,0.92)");
+      grad.addColorStop(0.82,"rgba(255,135,44,0.85)");
+      grad.addColorStop(1,"rgba(255,212,140,0.55)");
+      ctx.strokeStyle=grad;
+      ctx.lineCap="round";
+      ctx.lineWidth=(15*(1-t))+5;
+      ctx.beginPath();
+      ctx.moveTo(sx,sy);
+      ctx.lineTo(mx+nx*8*(1-t),my+ny*8*(1-t));
+      ctx.lineTo(ex,ey);
+      ctx.stroke();
+
+      // Inner hot core.
+      ctx.globalAlpha=trailAlpha*0.75;
+      ctx.strokeStyle="rgba(255,209,122,0.9)";
+      ctx.lineWidth=(5*(1-t))+2;
+      ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
+
+      // Launch shock bloom where the Saber started the pounce.
+      ctx.globalAlpha=trailAlpha*0.72;
+      ctx.fillStyle="rgba(175,38,12,0.35)";
+      ctx.beginPath(); ctx.arc(sx,sy,(fx.r||18)*(1.05+t*0.2)+14*(1-t),0,TAU); ctx.fill();
+      ctx.strokeStyle="rgba(255,111,34,0.9)";
+      ctx.lineWidth=4.5;
+      ctx.beginPath(); ctx.arc(sx,sy,(fx.r||18)*0.95 + 18*(1-t),0,TAU); ctx.stroke();
+
+      // Jagged shock streaks along the path.
+      for(let i=0;i<4;i++){
+        const q=0.18+i*0.2;
+        const px=lerp(sx,ex,q), py=lerp(sy,ey,q);
+        const amp=(12-2*i)*(1-t);
+        ctx.globalAlpha=(0.6-0.08*i)*trailAlpha;
+        ctx.strokeStyle=i%2?"rgba(255,96,28,0.95)":"rgba(132,22,7,0.9)";
+        ctx.lineWidth=Math.max(1.6,3.8-0.5*i);
+        ctx.beginPath();
+        ctx.moveTo(px-nx*amp*0.35, py-ny*amp*0.35);
+        ctx.lineTo(px+nx*amp, py+ny*amp);
+        ctx.lineTo(px+nx*amp*0.15+dx/len*8*(1-t), py+ny*amp*0.15+dy/len*8*(1-t));
+        ctx.stroke();
+      }
+
+      // Impact ember at the landing point.
+      ctx.globalAlpha=(1-t)*0.68;
+      ctx.fillStyle="rgba(255,154,58,0.34)";
+      ctx.beginPath(); ctx.arc(ex,ey,Math.max(10,(fx.r||18)*0.55 + 8*(1-t)),0,TAU); ctx.fill();
     } else if (fx.followPet) {
       const pet = fx.followPet;
       if (pet && !pet.dead) {
