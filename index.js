@@ -16,7 +16,7 @@ app.disable("x-powered-by");
 
 // Render health check. This also gives you a quick way to verify the server is awake.
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "Cube Survival", multiplayer: true, serverBuild: 483, gameBuild: 555, rulesVersion: "555", chat: true, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 483, gameBuild: 555, rulesVersion: "555", chat: true, ...getCubeServerStats() });
 });
 
 // Home-screen population check. CORS is intentionally open because players may
@@ -41,6 +41,6 @@ const gameServer = new Server({
 gameServer.define("world", WorldRoom);
 await gameServer.listen(port);
 
-console.log(`Cube Survival multiplayer listening on port ${port}`);
+console.log(`HOSTL multiplayer listening on port ${port}`);
 console.log(`Local game: http://localhost:${port}`);
 console.log("On Render, open the service's HTTPS URL. The game auto-connects with WSS.");

@@ -1,4 +1,9 @@
-CUBE SURVIVAL — FULL RENDER PROJECT — SERVER 483 / GAME 555 / RULES 555
+HOSTL — FULL RENDER PROJECT — SERVER 483 / GAME 555 / RULES 555
+
+Server branding:
+- Render service: hostl-multiplayer
+- Node package: hostl-full-multiplayer-server
+- Legacy browser storage keys intentionally remain unchanged so existing saved progress/settings continue to load.
 
 CURRENT GAME 555 PERFORMANCE / RIDING / COLLISION PASS
 
@@ -18,7 +23,7 @@ Collision / bug fixes:
 - Client and server mounted separation math now match to reduce multiplayer correction jitter.
 - Fixed log collision normals so a head/shoulder contact pushes from the exact contacting body circle instead of snapping from the animal center.
 - Hostl-vs-animal collision now uses tuned physical movement geometry rather than full combat/snout geometry.
-- Existing tight Boar, Wolf, Bear, Dog, Viper, Deer, and Sabertooth collision tuning remains intact; bite/damage reach was not enlarged.
+- Existing tight Boar, Wolf, Bear, Dog, Viper, Deer, and Saber collision tuning remains intact; bite/damage reach was not enlarged.
 
 Performance cleanup:
 - Removed several per-tick concat/filter/Array.from allocations in hot collision, rendering, wildlife cleanup, projectile, wall, pet-death, and resource-respawn paths.

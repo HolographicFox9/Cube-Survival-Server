@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: cube-survival-multiplayer
+    name: hostl-multiplayer
     runtime: node
     plan: free
     numInstances: 1

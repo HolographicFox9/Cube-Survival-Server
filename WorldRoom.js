@@ -1,5 +1,5 @@
 // WorldRoom.js
-// Cube Survival full multiplayer room.
+// HOSTL full multiplayer room.
 // Server-authoritative shared world: resources, gold, chests, wildlife, pets,
 // hostile cubes, walls, towers, projectiles, combat, taming, and day/night.
 
@@ -2108,7 +2108,7 @@ export class WorldRoom extends Room {
   wildAttackConnects(a,ref,target){
     if(!a||!ref||!target)return false;
     if(animalAttackContact(a,ref,target))return true;
-    // Match offline: sabertooth gets no invisible grace reach.
+    // Match offline: saber gets no invisible grace reach.
     if(a.type==="saber")return false;
     const tr=ref.kind==="player"?PLAYER_R:Math.max(10,Number(target.r)||16);
     const reach=Math.max(18,(a.r||18)*.78+tr*.72+10);
