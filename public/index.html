@@ -16669,7 +16669,7 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     const a=target?angTo(px,py,target.obj.x,target.obj.y):(Number.isFinite(Number(pet.angle))?Number(pet.angle):player.angle);
     const targetR=target?(target.obj.r||18):18,bestD=target?dist(px,py,target.obj.x,target.obj.y):120;
     const dashDist=target?Math.max(0,bestD-(pet.r+targetR)*.62):110;
-    abilityFx.push({type:"pounce",x:px,y:py,toX:px+Math.cos(a)*Math.min(dashDist,180),toY:py+Math.sin(a)*Math.min(dashDist,180),life:.55,maxLife:.55,r:pet.r});
+    abilityFx.push({type:"pounce",x:px,y:py,fromX:px,fromY:py,toX:px+Math.cos(a)*Math.min(dashDist,180),toY:py+Math.sin(a)*Math.min(dashDist,180),life:.95,maxLife:.95,r:pet.r});
     pet.x=clamp(px+Math.cos(a)*Math.min(dashDist,180),20,WORLD_W-20);pet.y=clamp(py+Math.sin(a)*Math.min(dashDist,180),20,WORLD_H-20);smoothTurn(pet,a,1,20);resolveAnimalWorld(pet);pet.attackAnim=.24;
     if(target&&dist(pet.x,pet.y,target.obj.x,target.obj.y)<=pet.r+targetR+28)damagePetAbilityTargetOffline(pet,target.obj,target.isAnimal,dmg);
     spark(px,py,"#d69355",10,140);spark(pet.x,pet.y,"#ffd08a",16,165);game.shake=6;
@@ -17778,63 +17778,7 @@ function updateAbilityFx(dt) {
     } else if (fx.type === "fireMuzzle" || fx.type === "poisonMuzzle") {
       const t=clamp(1-fx.life/(fx.maxLife||.5),0,1);ctx.globalAlpha=1-t;ctx.fillStyle=fx.type==="fireMuzzle"?"#ff8b36":"#69cf69";ctx.translate(fx.x,fx.y);ctx.rotate(fx.angle||0);ctx.beginPath();ctx.moveTo(8,0);ctx.lineTo(-26,-15*(1-t));ctx.lineTo(-18,0);ctx.lineTo(-26,15*(1-t));ctx.closePath();ctx.fill();
     } else if (fx.type === "pounce") {
-      const maxLife=(fx.maxLife||.55), t=clamp(1-fx.life/maxLife,0,1);
-      const sx=fx.x, sy=fx.y, ex=fx.toX||fx.x, ey=fx.toY||fx.y;
-      const dx=ex-sx, dy=ey-sy, len=Math.hypot(dx,dy)||1;
-      const nx=-dy/len, ny=dx/len;
-      const mx=lerp(sx,ex,0.5), my=lerp(sy,ey,0.5);
-      const trailAlpha=(1-t)*0.92;
-
-      // Deep red-orange shock lane from the launch point.
-      ctx.globalAlpha=trailAlpha;
-      const grad=ctx.createLinearGradient(sx,sy,ex,ey);
-      grad.addColorStop(0,"rgba(115,18,8,0.95)");
-      grad.addColorStop(0.22,"rgba(170,34,10,0.95)");
-      grad.addColorStop(0.55,"rgba(226,74,22,0.92)");
-      grad.addColorStop(0.82,"rgba(255,135,44,0.85)");
-      grad.addColorStop(1,"rgba(255,212,140,0.55)");
-      ctx.strokeStyle=grad;
-      ctx.lineCap="round";
-      ctx.lineWidth=(15*(1-t))+5;
-      ctx.beginPath();
-      ctx.moveTo(sx,sy);
-      ctx.lineTo(mx+nx*8*(1-t),my+ny*8*(1-t));
-      ctx.lineTo(ex,ey);
-      ctx.stroke();
-
-      // Inner hot core.
-      ctx.globalAlpha=trailAlpha*0.75;
-      ctx.strokeStyle="rgba(255,209,122,0.9)";
-      ctx.lineWidth=(5*(1-t))+2;
-      ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
-
-      // Launch shock bloom where the Saber started the pounce.
-      ctx.globalAlpha=trailAlpha*0.72;
-      ctx.fillStyle="rgba(175,38,12,0.35)";
-      ctx.beginPath(); ctx.arc(sx,sy,(fx.r||18)*(1.05+t*0.2)+14*(1-t),0,TAU); ctx.fill();
-      ctx.strokeStyle="rgba(255,111,34,0.9)";
-      ctx.lineWidth=4.5;
-      ctx.beginPath(); ctx.arc(sx,sy,(fx.r||18)*0.95 + 18*(1-t),0,TAU); ctx.stroke();
-
-      // Jagged shock streaks along the path.
-      for(let i=0;i<4;i++){
-        const q=0.18+i*0.2;
-        const px=lerp(sx,ex,q), py=lerp(sy,ey,q);
-        const amp=(12-2*i)*(1-t);
-        ctx.globalAlpha=(0.6-0.08*i)*trailAlpha;
-        ctx.strokeStyle=i%2?"rgba(255,96,28,0.95)":"rgba(132,22,7,0.9)";
-        ctx.lineWidth=Math.max(1.6,3.8-0.5*i);
-        ctx.beginPath();
-        ctx.moveTo(px-nx*amp*0.35, py-ny*amp*0.35);
-        ctx.lineTo(px+nx*amp, py+ny*amp);
-        ctx.lineTo(px+nx*amp*0.15+dx/len*8*(1-t), py+ny*amp*0.15+dy/len*8*(1-t));
-        ctx.stroke();
-      }
-
-      // Impact ember at the landing point.
-      ctx.globalAlpha=(1-t)*0.68;
-      ctx.fillStyle="rgba(255,154,58,0.34)";
-      ctx.beginPath(); ctx.arc(ex,ey,Math.max(10,(fx.r||18)*0.55 + 8*(1-t)),0,TAU); ctx.fill();
+      // Saber pounce visuals are rendered in drawAbilityFx().
     } else if (fx.followPet) {
       const pet = fx.followPet;
       if (pet && !pet.dead) {
@@ -21419,6 +21363,107 @@ function drawCatSonicBurstFx(fx) {
   ctx.restore();
 }
 
+function drawSaberPounceShockFx(fx) {
+  const maxLife=Math.max(.01,Number(fx.maxLife)||.95);
+  const elapsed=clamp(maxLife-(Number(fx.life)||0),0,maxLife);
+  const t=clamp(elapsed/maxLife,0,1);
+  const sx=Number.isFinite(Number(fx.fromX))?Number(fx.fromX):(Number(fx.x)||0);
+  const sy=Number.isFinite(Number(fx.fromY))?Number(fx.fromY):(Number(fx.y)||0);
+  const ex=Number.isFinite(Number(fx.toX))?Number(fx.toX):sx;
+  const ey=Number.isFinite(Number(fx.toY))?Number(fx.toY):sy;
+  const dx=ex-sx,dy=ey-sy,len=Math.max(1,Math.hypot(dx,dy));
+  const ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
+  const fade=Math.pow(1-t,.62);
+  const petR=Math.max(14,Number(fx.r)||18);
+
+  ctx.save();
+  ctx.lineCap="round";
+  ctx.lineJoin="round";
+  ctx.shadowColor="#ff5422";
+  ctx.shadowBlur=22*fade;
+
+  // Wide, dark red-orange shock lane left behind by the launch.
+  const lane=ctx.createLinearGradient(sx,sy,ex,ey);
+  lane.addColorStop(0,"rgba(92,8,4,0.98)");
+  lane.addColorStop(.22,"rgba(154,22,7,0.98)");
+  lane.addColorStop(.58,"rgba(229,58,14,0.95)");
+  lane.addColorStop(.84,"rgba(255,119,31,0.92)");
+  lane.addColorStop(1,"rgba(255,186,84,0.72)");
+  ctx.globalAlpha=.92*fade;
+  ctx.strokeStyle=lane;
+  ctx.lineWidth=Math.max(12,petR*.72)*(1-.20*t);
+  ctx.beginPath();
+  ctx.moveTo(sx,sy);
+  const bend=Math.sin(t*Math.PI)*petR*.32;
+  ctx.quadraticCurveTo((sx+ex)*.5+nx*bend,(sy+ey)*.5+ny*bend,ex,ey);
+  ctx.stroke();
+
+  // Bright molten core makes it readable over grass/night backgrounds.
+  ctx.shadowBlur=10*fade;
+  ctx.globalAlpha=.92*fade;
+  ctx.strokeStyle="#ffb14e";
+  ctx.lineWidth=Math.max(3.5,petR*.20);
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+  ctx.globalAlpha=.78*fade;
+  ctx.strokeStyle="#ffe0a1";
+  ctx.lineWidth=Math.max(1.8,petR*.075);
+  ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+  ctx.shadowBlur=0;
+
+  // Big launch shock at the exact point the Saber jumped from.
+  const shockR=petR*(1.05+t*1.9)+18*t;
+  ctx.globalAlpha=.34*fade;
+  ctx.fillStyle="#8e1808";
+  ctx.beginPath();ctx.arc(sx,sy,shockR,0,TAU);ctx.fill();
+  ctx.globalAlpha=.95*fade;
+  ctx.strokeStyle="#ff5b20";
+  ctx.lineWidth=Math.max(4,petR*.16);
+  ctx.beginPath();ctx.arc(sx,sy,shockR,0,TAU);ctx.stroke();
+  ctx.globalAlpha=.72*fade;
+  ctx.strokeStyle="#ffb24e";
+  ctx.lineWidth=Math.max(2.2,petR*.09);
+  ctx.beginPath();ctx.arc(sx,sy,shockR*.72,0,TAU);ctx.stroke();
+
+  // Radial cracks/energy spikes blast outward from the launch point.
+  for(let i=0;i<10;i++){
+    const a=i*TAU/10 + t*.18;
+    const inner=shockR*.58;
+    const outer=shockR*(.92+(i%3)*.11);
+    ctx.globalAlpha=(.68-(i%2)*.12)*fade;
+    ctx.strokeStyle=i%2?"#ff7428":"#b7270a";
+    ctx.lineWidth=i%2?2.4:3.4;
+    ctx.beginPath();
+    ctx.moveTo(sx+Math.cos(a)*inner,sy+Math.sin(a)*inner);
+    ctx.lineTo(sx+Math.cos(a+.04*(i%2?1:-1))*outer,sy+Math.sin(a+.04*(i%2?1:-1))*outer);
+    ctx.stroke();
+  }
+
+  // Shock slashes along the travelled path.
+  for(let i=1;i<=5;i++){
+    const q=i/6;
+    const px=sx+dx*q,py=sy+dy*q;
+    const span=petR*(.48+.10*(i%2))*fade;
+    ctx.globalAlpha=.68*fade;
+    ctx.strokeStyle=i%2?"#ff8a32":"#c82d0b";
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(px-nx*span,py-ny*span);
+    ctx.lineTo(px+nx*span,py+ny*span);
+    ctx.stroke();
+  }
+
+  // Landing impact flare.
+  const landR=petR*(.7+t*.9);
+  ctx.globalAlpha=.55*fade;
+  ctx.fillStyle="#ff7628";
+  ctx.beginPath();ctx.arc(ex,ey,landR,0,TAU);ctx.fill();
+  ctx.globalAlpha=.82*fade;
+  ctx.strokeStyle="#ffc06c";
+  ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(ex,ey,landR*1.18,0,TAU);ctx.stroke();
+  ctx.restore();
+}
+
 function drawAbilityFx() {
   for (const fx of abilityFx) {
     ctx.save();
@@ -21460,6 +21505,8 @@ function drawAbilityFx() {
       drawPersistentPetRingFx(fx);
     } else if (fx.type === "whirlpool") {
       drawPersistentWhirlpoolFx(fx);
+    } else if (fx.type === "pounce") {
+      drawSaberPounceShockFx(fx);
     } else if (fx.followPet) {
       if (fx.type === "fire") drawOrbitRing(fx, ["#ff6a2a", "#ffcc40", "#ff4020"], "flame");
       else if (fx.type === "sound") drawOrbitRing(fx, ["#a0e0ff", "#70c0ff", "#dff6ff"], "dot");
