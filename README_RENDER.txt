@@ -1,10 +1,5 @@
 HOSTL — FULL RENDER PROJECT — SERVER 483 / GAME 555 / RULES 555
 
-Server branding:
-- Render service: hostl-multiplayer
-- Node package: hostl-full-multiplayer-server
-- Legacy browser storage keys intentionally remain unchanged so existing saved progress/settings continue to load.
-
 CURRENT GAME 555 PERFORMANCE / RIDING / COLLISION PASS
 
 Gameplay fixes:
