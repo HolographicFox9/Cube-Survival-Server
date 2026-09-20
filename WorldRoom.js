@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "570";
+const CUBE_SHARED_RULES_VERSION = "573";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -824,7 +824,7 @@ function animalPhysicalCircles(a){
   if(!hits.length)return hits;
   const physical=hits.length>1?hits.slice(0,hits.length-1):hits.slice();
   let radiusMul=1;
-  if(collisionAnimal?.stage==="baby")radiusMul*=.70;
+  if(collisionAnimal?.stage==="baby")radiusMul*=.60;
   if(collisionAnimal?.type==="snake")radiusMul*=.72;
   if(collisionAnimal?.type==="wolf"){
     const ownedWolf=!!collisionAnimal?.ownerId;
@@ -867,8 +867,9 @@ function animalPhysicalCircles(a){
       rMul*=headMul;
     }
     const compactBoarHead=i===last&&collisionAnimal?.type==="boar"&&(collisionAnimal?.stage==="boss"||collisionAnimal?.stage==="superboss"||collisionAnimal?.stage==="bigmomma");
-    let minPhysicalR=4;
-    if(i===last&&collisionAnimal?.type==="boar"&&collisionAnimal?.stage==="baby")minPhysicalR=2.5;
+    let minPhysicalR=collisionAnimal?.stage==="baby"?3.0:4;
+    if(i===last&&collisionAnimal?.type==="boar"&&collisionAnimal?.stage==="baby")minPhysicalR=2.3;
+    else if(i===last&&collisionAnimal?.stage==="baby")minPhysicalR=2.6;
     else if(bossBoarFront)minPhysicalR=i===last?1.6:2.2;
     else if(compactBoarHead)minPhysicalR=3;
     const out={...h,r:Math.max(minPhysicalR,h.r*rMul)};
@@ -917,32 +918,35 @@ function animalFaceGeometry(a){
     r:Math.max(8,r*radiusMul*stageMul)
   };
 }
-function animalAttackContact(a,ref,target){
+function animalTargetDamageCircles(ref,target){
+  if(!target)return[];
+  if(ref?.kind==="animal"||ref?.kind==="pet"){
+    const hits=animalHitCircles(target).map(h=>({...h}));
+    const head=animalFaceGeometry(target);if(head)hits.push(head);
+    return hits;
+  }
+  const rr=ref?.kind==="player"?PLAYER_R*.82:Math.max(2,(target.r||16)*.78);
+  return[{x:target.x,y:target.y,r:rr}];
+}
+function animalAttackContact(a,ref,target,extraGrace=0){
   if(!a||!target)return false;
   if(ref?.kind==="player"&&(target.dead||target.health<=0))return false;
   if(ref?.kind==="pet"&&(target.dead||target.hp<=0))return false;
-
-  // Victim must actually be in front of the face.
-  const toward=angTo(a.x,a.y,target.x,target.y);
-  if(Math.abs(angleDiff(a.angle||0,toward))>1.20)return false;
-
-  const h=animalFaceGeometry(a);
-  // Bite contact is deliberately smaller than physical body collision.
-  // Damage requires the visible face/head to genuinely reach the victim.
-  const sourceR=ref?.kind==="player"?PLAYER_R*.82:Math.max(2,(target.r||16));
-  const tr=Math.max(2,sourceR*.78);
-  return dist(h.x,h.y,target.x,target.y)<=h.r+tr+3;
+  const h=animalFaceGeometry(a),grace=Math.max(0,Number(extraGrace)||0);
+  for(const th of animalTargetDamageCircles(ref,target)){
+    const toward=angTo(a.x,a.y,th.x,th.y);
+    if(Math.abs(angleDiff(a.angle||0,toward))>1.22)continue;
+    if(dist(h.x,h.y,th.x,th.y)<=h.r+th.r+3+grace)return true;
+  }
+  return false;
 }
 function petAttackContact(a,ref,target){
   if(animalAttackContact(a,ref,target))return true;
   if(!a||!target||a.stage!=="baby")return false;
   const toward=angTo(a.x,a.y,target.x,target.y);
   if(Math.abs(angleDiff(a.angle||0,toward))>.92)return false;
-  const h=animalFaceGeometry(a);
-  const sourceR=ref?.kind==="player"?PLAYER_R*.82:Math.max(2,(target.r||16));
-  const tr=Math.max(2,sourceR*.78);
-  const grace=clamp((a.r||18)*.30,4.5,7.5);
-  return dist(h.x,h.y,target.x,target.y)<=h.r+tr+3+grace;
+  const grace=clamp((a.r||18)*.22,3.2,5.8);
+  return animalAttackContact(a,ref,target,grace);
 }
 function animalTargetOverlap(a,ref,target){
   if(!a||!target)return 0;
@@ -2598,7 +2602,7 @@ export class WorldRoom extends Room {
       else this.queuePlayerHit(ref.id,hit);
       return true;
     }
-    if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(obj.hp<=0){obj.dead=true;this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
+    if(ref.kind==="pet"){if(obj.dead)return false;const amount=animalDamageTaken(obj.type,obj.stage,Math.max(0,Number(dmg)||0))*petUpgradeMultiplier(obj,"defense");if(amount<=0)return false;obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=6;if(attackerId&&!obj.dead){let threat=null;if(this.state.animals.has(attackerId))threat={kind:"animal",id:attackerId};else if(this.state.enemies.has(attackerId))threat={kind:"enemy",id:attackerId};if(threat&&obj.ownerId)this.ownerThreat.set(obj.ownerId,{...threat,until:this.state.worldTime+7});}if(obj.hp<=0){obj.dead=true;this.broadcastSpectateKill("pet",ref.id,attackerKind,attackerId);this.petDeathTimers.set(ref.id,3);}return true;}
     if(ref.kind==="animal"){
       // Wild animals only damage other wild animals that are normal prey.
       if(attackerKind==="animal"&&attackerId&&this.state.animals.has(attackerId)){
@@ -2754,8 +2758,21 @@ export class WorldRoom extends Room {
     if(!r.alive)p._blockingResourceId="";
     return true;
   }
+  wildResourceCombatInterrupt(id,a){
+    if(!a||a.hp<=0)return false;
+    const locked=this.animalAggro.get(id),lockedObj=this.targetObject(locked);
+    if(locked&&lockedObj&&!(locked.kind==="player"?(lockedObj.dead||lockedObj.health<=0):(lockedObj.dead||lockedObj.hp<=0))){a._blockingResourceId="";return true;}
+    const fleeRef=this.animalFleeFrom.get(id),fleeObj=this.targetObject(fleeRef);
+    if(a.fleeUntil&&this.state.worldTime<a.fleeUntil&&fleeObj){a._blockingResourceId="";return true;}
+    const info=PET_TYPES[a.type]||{},naturalChaser=a.stage!=="baby"&&!info.friendly;
+    const chaseRange=a.tameFailedAggro?620:a.desperateAggro?430:a.enraged?(a.stage==="bigmomma"?520:a.stage==="superboss"?420:300):(["boss","superboss","bigmomma"].includes(a.stage)?240:(a.type==="bear"?170:190));
+    if(naturalChaser){const near=this.nearestPlayer(a.x,a.y,chaseRange);if(near){this.animalAggro.set(id,{kind:"player",id:near.id});a.sleeping=false;a.enraged=true;a.combat=Math.max(a.combat||0,5);a._blockingResourceId="";return true;}}
+    return false;
+  }
   wildAttackBlockingResource(id,a){
-    if(!a||a.hp<=0)return false;let rid=a._blockingResourceId||"",r=rid?this.state.resources.get(rid):null;
+    if(!a||a.hp<=0)return false;
+    if(this.wildResourceCombatInterrupt(id,a))return false;
+    let rid=a._blockingResourceId||"",r=rid?this.state.resources.get(rid):null;
     if(!this.resourceBlocksCreaturePath(a,r)){const found=this.findBlockingResourceForCreature(a);rid=found?.id||"";r=found?.r||null;}
     if(!rid||!r){a._blockingResourceId="";return false;}
     a._blockingResourceId=rid;a.sleeping=false;smoothTurn(a,angTo(a.x,a.y,r.x,r.y),.12,8);
@@ -2766,7 +2783,7 @@ export class WorldRoom extends Room {
     if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));a._blockingResourceId="";}
     return true;
   }
-  mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);if(dist(face.x,face.y,target.obj.x,target.obj.y)>face.r+(target.obj.r||18)+16)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
+  mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);const contact=target.kind==="animal"?petAttackContact(pet,{kind:"animal",id:target.id},target.obj):dist(face.x,face.y,target.obj.x,target.obj.y)<=face.r+(target.obj.r||18)+16;if(!contact)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
 
   movePetChaseWithRecovery(id,p,target,speed,dt){
     if(!p||p.dead||!target||!Number.isFinite(speed)||!Number.isFinite(dt)||dt<=0)return;
@@ -2833,7 +2850,6 @@ export class WorldRoom extends Room {
         continue;
       }
       p._mountedCollision=false;
-      if(p._blockingResourceId&&this.petAttackStuckResource(p.ownerId,p)){this.resolveStatic(p,(p.r||18)*.72);continue;}
 
       let target=null;
       let targetSource="";
@@ -2897,6 +2913,15 @@ export class WorldRoom extends Room {
 
       // Follow / Defend / Set do not start random fights. Defend still responds
       // to ownerThreat above, and manual right-click focus remains allowed.
+
+      // Combat/defense has priority over obstacle chewing. Only keep attacking a
+      // resource when there is no live target worth reacting to.
+      if(target){
+        p._blockingResourceId="";
+      }else if(p._blockingResourceId&&this.petAttackStuckResource(p.ownerId,p)){
+        this.resolveStatic(p,(p.r||18)*.72);
+        continue;
+      }
 
       if(target){
         const a=angTo(p.x,p.y,target.obj.x,target.obj.y);
