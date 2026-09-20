@@ -4950,7 +4950,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "575";
+const CUBE_SHARED_RULES_VERSION = "577";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -7195,17 +7195,34 @@ function animalKnockbackScale(a) {
   // Light animals can take almost the full shove; very heavy animals barely budge.
   return clamp(animalPushMobility(a) * 1.22, 0.10, 1.00);
 }
+const ANIMAL_SPECIES_SPEED_PROFILE = Object.freeze({
+  // Species identity matters more than age alone. Fast/light species retain much
+  // more speed as they grow; heavy species trade speed for size and toughness.
+  dog:    { baby:1.08, adult:1.00, boss:0.96, superboss:0.93, bigmomma:0.90, massBlend:0.60 },
+  cat:    { baby:1.15, adult:1.08, boss:1.03, superboss:1.00, bigmomma:0.96, massBlend:0.45 },
+  dragon: { baby:1.00, adult:0.96, boss:0.92, superboss:0.88, bigmomma:0.84, massBlend:0.65 },
+  fox:    { baby:1.18, adult:1.12, boss:1.08, superboss:1.04, bigmomma:1.00, massBlend:0.40 },
+  wolf:   { baby:1.12, adult:1.08, boss:1.04, superboss:1.00, bigmomma:0.96, massBlend:0.55 },
+  bear:   { baby:0.95, adult:0.90, boss:0.84, superboss:0.78, bigmomma:0.72, massBlend:1.00 },
+  rabbit: { baby:1.22, adult:1.16, boss:1.12, superboss:1.08, bigmomma:1.04, massBlend:0.25 },
+  owl:    { baby:1.12, adult:1.10, boss:1.08, superboss:1.06, bigmomma:1.04, massBlend:0.30 },
+  snake:  { baby:1.28, adult:1.25, boss:1.22, superboss:1.20, bigmomma:1.18, massBlend:0.18 },
+  deer:   { baby:1.14, adult:1.10, boss:1.07, superboss:1.04, bigmomma:1.00, massBlend:0.50 },
+  boar:   { baby:1.03, adult:0.98, boss:0.93, superboss:0.88, bigmomma:0.84, massBlend:0.85 },
+  saber:  { baby:1.15, adult:1.12, boss:1.08, superboss:1.04, bigmomma:1.00, massBlend:0.55 },
+});
 function animalSpeed(type, stage, owned = false, extraWeightMul = 1) {
   const base = (PET_TYPES[type] && PET_TYPES[type].baseSpeed) || 60;
-  let stageMul = 1.08;
-  if (stage === "adult") stageMul = 0.95;
-  else if (stage === "boss") stageMul = 0.72;
-  else if (stage === "superboss") stageMul = 0.62;
-  else if (stage === "bigmomma") stageMul = 0.72;
-
+  const profile = ANIMAL_SPECIES_SPEED_PROFILE[type] || ANIMAL_SPECIES_SPEED_PROFILE.dog;
+  const stageMul = Number(profile[stage]) || 1;
   const followBoost = owned ? 1.55 : 1;
   const effectiveWeight = animalWeight(type, stage) * Math.max(0.55, Number(extraWeightMul) || 1);
-  return base * stageMul * followBoost * animalWeightSpeedFactor(effectiveWeight);
+  const rawMassFactor = animalWeightSpeedFactor(effectiveWeight);
+  // massBlend controls how strongly growing/heavier stages lose speed. A Viper
+  // barely cares about mass; a Bear gets the full heavy-body slowdown.
+  const massBlend = clamp(Number(profile.massBlend) || 0.6, 0, 1);
+  const speciesMassFactor = 1 + (rawMassFactor - 1) * massBlend;
+  return base * stageMul * followBoost * speciesMassFactor;
 }
 
 function animalAttackCooldown(type, stage, owned = false) {
@@ -8978,13 +8995,22 @@ function applyAbilityEvent(data={}) {
   const range=Math.max(r+24,Number(data.range)||r+44);
   const fxX=type==="lightningStrike"?(Number(data.targetX)||x):x;
   const fxY=type==="lightningStrike"?(Number(data.targetY)||y):y;
+  const fxStage=uploadedAnimalStageKey(data.stage||pet?.stage||"adult");
+  const pounceShockScale=Math.max(.35,Number(data.shockScale)||petAbilityStageSize(fxStage));
   abilityFx.push({
-    type,x:fxX,y:fxY,life,maxLife:life,r:range,baseR:range,petR:r,
+    type,x:fxX,y:fxY,life,maxLife:life,r:range,baseR:range,petR:r,stage:fxStage,shockScale:pounceShockScale,
     color:ELEM_GLOW[elem]||"#ffffff",phase:0,tick:0,angle:Number(data.angle)||0,
     fromX:Number(data.fromX)||x,fromY:Number(data.fromY)||y,toX:Number(data.targetX)||x,toY:Number(data.targetY)||y,
     anchorPet:(persistentRing||type==="sonicBurst")?pet:null,persistentRing
   });
   spark(x,y,ELEM_GLOW[elem]||"#ffffff",type==="sonicBurst"?20:12,type==="sonicBurst"?155:115);
+  if(type==="pounce"){
+    const sx=Number(data.fromX)||x,sy=Number(data.fromY)||y,tx=Number(data.targetX)||x,ty=Number(data.targetY)||y;
+    const nearD=Math.min(dist(player.x,player.y,sx,sy),dist(player.x,player.y,tx,ty));
+    const proximity=clamp(1-nearD/720,0,1);
+    if(proximity>0) game.shake=Math.max(game.shake||0,(4+pounceShockScale*4.5)*proximity);
+    spark(sx,sy,"#c83a12",Math.max(8,Math.round(8+pounceShockScale*4)),105+30*pounceShockScale);
+  }
   if(pet){pet.attackAnim=Math.max(Number(pet.attackAnim)||0,elem==="Combat"?.34:.24);pet.flash=Math.max(Number(pet.flash)||0,.18);pet._abilityFlashUntil=performance.now()+520;}
   if(data.ownerId===net.sessionId)sfx.ability();
 }
@@ -16434,6 +16460,19 @@ function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
 }
 function petAttackStuckResource(pet, targetX = null, targetY = null) {
   if (!pet || pet.dead || net.room) return false;
+  // Following the owner has priority over chewing a resource. The resource can
+  // still be bitten while the owner is nearby/stationary, but it must never turn
+  // into a state that makes the pet stop following a moving owner.
+  if (player.riding !== pet && pet.follow && pet.orderMode === "follow") {
+    const ownerDistance = dist(pet.x, pet.y, player.x, player.y);
+    const followRange = petFollowRangeFor(pet);
+    const ownerMoveSpeed = Math.hypot(Number(player._actualMoveVX) || 0, Number(player._actualMoveVY) || 0);
+    const ownerMoving = !!player._actualMoving || ownerMoveSpeed > 2.5 || movementInputActive();
+    if (ownerMoving || ownerDistance > followRange.stop + 18) {
+      pet._blockingResourceTarget = null;
+      return false;
+    }
+  }
   // Combat/defense always beats chewing a blocker. A resource is only a fallback
   // obstacle action, never a state that can trap a pet in an attack loop.
   if (combatTargetAlive(pet.forcedTarget) || pet.orderMode === "combat" || (pet.huntTarget && combatTargetAlive(pet.huntTarget.obj))) {
@@ -16741,10 +16780,11 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     const a=target?angTo(px,py,target.obj.x,target.obj.y):(Number.isFinite(Number(pet.angle))?Number(pet.angle):player.angle);
     const targetR=target?(target.obj.r||18):18,bestD=target?dist(px,py,target.obj.x,target.obj.y):120;
     const dashDist=target?Math.max(0,bestD-(pet.r+targetR)*.62):110;
-    abilityFx.push({type:"pounce",x:px,y:py,fromX:px,fromY:py,toX:px+Math.cos(a)*Math.min(dashDist,180),toY:py+Math.sin(a)*Math.min(dashDist,180),life:.95,maxLife:.95,r:pet.r});
+    const pounceShockScale=petAbilityStageSize(pet.stage);
+    abilityFx.push({type:"pounce",x:px,y:py,fromX:px,fromY:py,toX:px+Math.cos(a)*Math.min(dashDist,180),toY:py+Math.sin(a)*Math.min(dashDist,180),life:.95,maxLife:.95,r:pet.r,stage:uploadedAnimalStageKey(pet.stage),shockScale:pounceShockScale});
     pet.x=clamp(px+Math.cos(a)*Math.min(dashDist,180),20,WORLD_W-20);pet.y=clamp(py+Math.sin(a)*Math.min(dashDist,180),20,WORLD_H-20);smoothTurn(pet,a,1,20);resolveAnimalWorld(pet);pet.attackAnim=.24;
     if(target&&dist(pet.x,pet.y,target.obj.x,target.obj.y)<=pet.r+targetR+28)damagePetAbilityTargetOffline(pet,target.obj,target.isAnimal,dmg);
-    spark(px,py,"#d69355",10,140);spark(pet.x,pet.y,"#ffd08a",16,165);game.shake=6;
+    spark(px,py,"#c83a12",Math.max(8,Math.round(8+pounceShockScale*4)),105+30*pounceShockScale);spark(pet.x,pet.y,"#ff9a3a",Math.max(10,Math.round(10+pounceShockScale*5)),135+30*pounceShockScale);game.shake=Math.max(game.shake||0,4+pounceShockScale*4.5);
   }
   if (!inheritedFrom && !net.room) for (const child of bredChildrenOf(pet)) activatePetAbility(child, true, pet);
   if (!batchCast && !inheritedFrom) banner(`${petDisplayName(pet)} used ${info.elem}! (${info.abilityCd}s cd)`);
@@ -21447,13 +21487,17 @@ function drawSaberPounceShockFx(fx) {
   const dx=ex-sx,dy=ey-sy,len=Math.max(1,Math.hypot(dx,dy));
   const ux=dx/len,uy=dy/len,nx=-uy,ny=ux;
   const fade=Math.pow(1-t,.62);
-  const petR=Math.max(14,Number(fx.r)||18);
+  const petR=Math.max(8,Number(fx.r)||18);
+  const stageScale=Math.max(.35,Number(fx.shockScale)||petAbilityStageSize(fx.stage||"adult"));
+  // The effect itself has an explicit stage size, instead of depending only on
+  // the Saber's body radius. Baby is compact; every later stage is larger.
+  const shockBase=Math.max(8,18*stageScale+petR*.22);
 
   ctx.save();
   ctx.lineCap="round";
   ctx.lineJoin="round";
   ctx.shadowColor="#ff5422";
-  ctx.shadowBlur=22*fade;
+  ctx.shadowBlur=(10+10*stageScale)*fade;
 
   // Wide, dark red-orange shock lane left behind by the launch.
   const lane=ctx.createLinearGradient(sx,sy,ex,ey);
@@ -21464,75 +21508,77 @@ function drawSaberPounceShockFx(fx) {
   lane.addColorStop(1,"rgba(255,186,84,0.72)");
   ctx.globalAlpha=.92*fade;
   ctx.strokeStyle=lane;
-  ctx.lineWidth=Math.max(12,petR*.72)*(1-.20*t);
+  ctx.lineWidth=Math.max(5,shockBase*.62)*(1-.20*t);
   ctx.beginPath();
   ctx.moveTo(sx,sy);
-  const bend=Math.sin(t*Math.PI)*petR*.32;
+  const bend=Math.sin(t*Math.PI)*shockBase*.24;
   ctx.quadraticCurveTo((sx+ex)*.5+nx*bend,(sy+ey)*.5+ny*bend,ex,ey);
   ctx.stroke();
 
   // Bright molten core makes it readable over grass/night backgrounds.
-  ctx.shadowBlur=10*fade;
+  ctx.shadowBlur=(5+5*stageScale)*fade;
   ctx.globalAlpha=.92*fade;
   ctx.strokeStyle="#ffb14e";
-  ctx.lineWidth=Math.max(3.5,petR*.20);
+  ctx.lineWidth=Math.max(2.2,shockBase*.16);
   ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
   ctx.globalAlpha=.78*fade;
   ctx.strokeStyle="#ffe0a1";
-  ctx.lineWidth=Math.max(1.8,petR*.075);
+  ctx.lineWidth=Math.max(1.2,shockBase*.06);
   ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
   ctx.shadowBlur=0;
 
-  // Big launch shock at the exact point the Saber jumped from.
-  const shockR=petR*(1.05+t*1.9)+18*t;
+  // Launch shock grows with age/evolution stage.
+  const shockR=shockBase*(.82+t*1.35);
   ctx.globalAlpha=.34*fade;
   ctx.fillStyle="#8e1808";
   ctx.beginPath();ctx.arc(sx,sy,shockR,0,TAU);ctx.fill();
   ctx.globalAlpha=.95*fade;
   ctx.strokeStyle="#ff5b20";
-  ctx.lineWidth=Math.max(4,petR*.16);
+  ctx.lineWidth=Math.max(2.3,shockBase*.12);
   ctx.beginPath();ctx.arc(sx,sy,shockR,0,TAU);ctx.stroke();
   ctx.globalAlpha=.72*fade;
   ctx.strokeStyle="#ffb24e";
-  ctx.lineWidth=Math.max(2.2,petR*.09);
+  ctx.lineWidth=Math.max(1.5,shockBase*.065);
   ctx.beginPath();ctx.arc(sx,sy,shockR*.72,0,TAU);ctx.stroke();
 
   // Radial cracks/energy spikes blast outward from the launch point.
-  for(let i=0;i<10;i++){
-    const a=i*TAU/10 + t*.18;
+  const crackCount=Math.max(7,Math.min(14,Math.round(7+stageScale*3)));
+  for(let i=0;i<crackCount;i++){
+    const a=i*TAU/crackCount+t*.18;
     const inner=shockR*.58;
     const outer=shockR*(.92+(i%3)*.11);
     ctx.globalAlpha=(.68-(i%2)*.12)*fade;
     ctx.strokeStyle=i%2?"#ff7428":"#b7270a";
-    ctx.lineWidth=i%2?2.4:3.4;
+    ctx.lineWidth=Math.max(1.5,shockBase*(i%2?.055:.075));
     ctx.beginPath();
     ctx.moveTo(sx+Math.cos(a)*inner,sy+Math.sin(a)*inner);
     ctx.lineTo(sx+Math.cos(a+.04*(i%2?1:-1))*outer,sy+Math.sin(a+.04*(i%2?1:-1))*outer);
     ctx.stroke();
   }
 
-  // Shock slashes along the travelled path.
-  for(let i=1;i<=5;i++){
-    const q=i/6;
+  // Shock slashes along the travelled path scale with the Saber stage too.
+  const slashCount=Math.max(3,Math.min(7,Math.round(3+stageScale*2)));
+  for(let i=1;i<=slashCount;i++){
+    const q=i/(slashCount+1);
     const px=sx+dx*q,py=sy+dy*q;
-    const span=petR*(.48+.10*(i%2))*fade;
+    const span=shockBase*(.38+.08*(i%2))*fade;
     ctx.globalAlpha=.68*fade;
     ctx.strokeStyle=i%2?"#ff8a32":"#c82d0b";
-    ctx.lineWidth=3;
+    ctx.lineWidth=Math.max(1.7,shockBase*.075);
     ctx.beginPath();
     ctx.moveTo(px-nx*span,py-ny*span);
     ctx.lineTo(px+nx*span,py+ny*span);
     ctx.stroke();
   }
 
-  // Landing impact flare.
-  const landR=petR*(.7+t*.9);
+  // Landing impact flare also follows the age scale.
+  const landR=shockBase*(.55+t*.72);
   ctx.globalAlpha=.55*fade;
   ctx.fillStyle="#ff7628";
   ctx.beginPath();ctx.arc(ex,ey,landR,0,TAU);ctx.fill();
   ctx.globalAlpha=.82*fade;
   ctx.strokeStyle="#ffc06c";
-  ctx.lineWidth=3;
+  ctx.lineWidth=Math.max(1.8,shockBase*.075);
   ctx.beginPath();ctx.arc(ex,ey,landR*1.18,0,TAU);ctx.stroke();
   ctx.restore();
 }
