@@ -4950,7 +4950,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "573";
+const CUBE_SHARED_RULES_VERSION = "575";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -6910,6 +6910,27 @@ function petAbilityStats(pet) {
   if (Number.isFinite(row.ring)) out.ring = row.ring + levelBonus;
   return out;
 }
+// Ability geometry must grow with the animal stage. Baby effects used to use
+// adult-sized minimum radii, which made the smallest pets look like they had the
+// biggest abilities relative to their bodies.
+const PET_ABILITY_STAGE_SIZE = { baby:0.58, adult:1.00, boss:1.30, superboss:1.65, bigmomma:2.05 };
+const PET_PROJECTILE_STAGE_SIZE = { baby:0.64, adult:1.00, boss:1.24, superboss:1.48, bigmomma:1.76 };
+function petAbilityStageSize(stage) {
+  return PET_ABILITY_STAGE_SIZE[uploadedAnimalStageKey(stage || "baby")] || 1;
+}
+function petProjectileStageSize(stage) {
+  return PET_PROJECTILE_STAGE_SIZE[uploadedAnimalStageKey(stage || "baby")] || 1;
+}
+function petAbilityRangeFor(pet, adultBase, radiusMul = 0) {
+  // Stage growth is the primary range rule, so every evolution is guaranteed
+  // to have a visibly larger ability than the stage before it.
+  const stageScale = petAbilityStageSize(pet?.stage);
+  const stageBase = adultBase * stageScale;
+  // Larger bodies may add a little extra radius, but never replace/flatten the
+  // stage curve. Only the amount above an adult-sized 18px body contributes.
+  const bodyExtra = Math.max(0, (Number(pet?.r) || 18) - 18) * Math.max(0, Number(radiusMul) || 0) * 0.22;
+  return stageBase + bodyExtra;
+}
 function stoneFromBrokenSpikeWall(w) {
   return Math.max(2, Math.min(12, Math.round((Number(w?.maxHp) || 90) / 25)));
 }
@@ -8726,27 +8747,27 @@ function applyNetworkPlayerPositionCorrection(serverX, serverY) {
   const ml = Math.hypot(mv.x, mv.y);
   const moving = ml > 0.05;
 
-  // While the player is actively moving, tiny server lag must never act like an
-  // invisible wall. Remove backward correction along the intended movement vector;
-  // keep lateral correction so collision disagreement still converges cleanly.
+  // While the player is actively moving, do not let delayed server snapshots
+  // tug them backward OR forward along the movement axis. Local prediction already
+  // owns that axis. We only reconcile lateral drift while moving; very large errors
+  // retain a tiny axial component so a true desync can still recover gradually.
   if (moving) {
     if (error < 6.0) return;
     const ux = mv.x / ml, uy = mv.y / ml;
     const along = dx * ux + dy * uy;
-    if (along < 0) {
-      const keepBack = error > 90 ? 0.20 : 0.0;
-      const remove = along * (1 - keepBack);
-      dx -= ux * remove;
-      dy -= uy * remove;
-    }
+    const keepAlong = error > 120 ? 0.08 : 0.0;
+    dx -= ux * along * (1 - keepAlong);
+    dy -= uy * along * (1 - keepAlong);
+    const lateral = Math.hypot(dx, dy);
+    if (lateral < 2.25 && error < 120) return;
   } else if (error < 1.25) {
     return;
   }
 
   const usable = Math.hypot(dx, dy);
   if (usable <= 0.001) return;
-  const rate = moving ? (error > 90 ? 0.11 : 0.075) : 0.24;
-  const maxStep = moving ? (error > 90 ? 8.5 : 4.5) : 12;
+  const rate = moving ? (error > 120 ? 0.065 : 0.045) : 0.24;
+  const maxStep = moving ? (error > 120 ? 3.5 : 2.25) : 12;
   let sx = dx * rate, sy = dy * rate;
   const sl = Math.hypot(sx, sy);
   if (sl > maxStep) { sx = sx / sl * maxStep; sy = sy / sl * maxStep; }
@@ -9212,9 +9233,14 @@ async function connectMultiplayer() {
 
       const animalId = String(data.animalId || "");
       const a = animalId ? net.animalVisuals.get(animalId) : null;
+      // Push packets are batched on the server. If one arrives after the player
+      // already left contact, applying it creates the exact backward/forward jerk
+      // players feel as rubber-banding. Only honor it while the overlap still exists.
+      if (animalId && !a) return;
       if (a) {
         a._carryPending = false;
-        if (localMoveEscapingAnimal(a)) return;
+        const stillTouching = !!deepestAnimalPhysicalOverlap(a, player.x, player.y, PLAYER_R * 0.82);
+        if (!stillTouching || localMoveEscapingAnimal(a)) return;
       }
 
       const sx = Number(data.x), sy = Number(data.y);
@@ -16667,48 +16693,48 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     const wall={x:px+Math.cos(a)*wallDist,y:py+Math.sin(a)*wallDist,ttl:-1,r:wallR,hp:ws.hp,maxHp:ws.hp,kind:"stoneSpike",spiked:true,spikeDmg:ws.spikeDmg,spikeCd:0,sourcePet:pet,ownerId:"local"};
     walls.push(wall);bounceAnimalsFromNewDogWall(wall,pet);abilityFx.push({type:"stone",x:wall.x,y:wall.y,life:.8});spark(wall.x,wall.y,"#d5dde3",14,95);
   }else if(info.elem==="Sound"){
-    const range=Math.max(145,(pet.r||18)*3.35),dmg=stats.damage||15;
+    const range=petAbilityRangeFor(pet,145,3.35),dmg=stats.damage||15;
     petAbilityAreaOffline(pet,px,py,range,dmg,{knock:58});petDamageResourcesAround(pet,px,py,range,true);
     abilityFx.push({type:"sonicBurst",x:px,y:py,life:1.35,maxLife:1.35,r:range,baseR:range,petR:pet.r,color:"#dff8ff",anchorPet:pet});game.shake=5;
   }else if(info.elem==="Fire"){
-    const a=petAbilityAimAngleOffline(pet,620),dmg=stats.damage||11;
-    petBlasts.push({x:px+Math.cos(a)*(pet.r+8),y:py+Math.sin(a)*(pet.r+8),vx:Math.cos(a)*520,vy:Math.sin(a)*520,life:1.35,r:11,dmg,kind:"fire",color:"#ff6a2a",sourcePet:pet});
+    const a=petAbilityAimAngleOffline(pet,620),dmg=stats.damage||11,projScale=petProjectileStageSize(pet.stage);
+    petBlasts.push({x:px+Math.cos(a)*(pet.r+8),y:py+Math.sin(a)*(pet.r+8),vx:Math.cos(a)*520,vy:Math.sin(a)*520,life:1.35,r:11*projScale,dmg,kind:"fire",color:"#ff6a2a",sourcePet:pet});
     abilityFx.push({type:"fireMuzzle",x:px,y:py,life:.45,maxLife:.45,angle:a,r:pet.r+18});spark(px,py,"#ff9a45",14,120);
   }else if(info.elem==="Lightning"){
     const target=petAbilityTargetOffline(pet,520),dmg=stats.damage||5,stun=stats.stun||3,shockStun=stats.shockStun||2;
     const tx=target?.obj?.x ?? px+Math.cos(pet.angle||0)*150,ty=target?.obj?.y ?? py+Math.sin(pet.angle||0)*150;
     if(target){damagePetAbilityTargetOffline(pet,target.obj,target.isAnimal,dmg);applyOfflineAbilityStun(target.obj,stun);}
-    const shockR=Math.max(90,(pet.r||18)*2.25);
+    const shockR=petAbilityRangeFor(pet,90,2.25);
     for(const en of enemies){if(en.dead||en===target?.obj)continue;if(dist(tx,ty,en.x,en.y)<=shockR)applyOfflineAbilityStun(en,shockStun);}
     for(const wa of animals){if(wa.dead||wa.owned||wa===target?.obj)continue;if(dist(tx,ty,wa.x,wa.y)<=shockR+(wa.r||18)*.2)applyOfflineAbilityStun(wa,shockStun);}
     abilityFx.push({type:"lightningStrike",x:tx,y:ty,fromX:px,fromY:py,life:.75,maxLife:.75,r:shockR});spark(tx,ty,"#ffe66d",18,145);game.shake=6;
   }else if(info.elem==="Ice"){
-    const range=Math.max(130,(pet.r||18)*2.85),dmg=stats.damage||10;
+    const range=petAbilityRangeFor(pet,130,2.85),dmg=stats.damage||10;
     petAbilityAreaOffline(pet,px,py,range,dmg,{slowWeak:4,slowMul:.55,weakMul:.68});petDamageResourcesAround(pet,px,py,range,true);
     abilityFx.push({type:"iceRing",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});
   }else if(info.elem==="Water"){
-    const range=Math.max(185,(pet.r||18)*3.65),dmg=stats.damage||16,heal=dmg*.5;
+    const range=petAbilityRangeFor(pet,185,3.65),dmg=stats.damage||16,heal=dmg*.5;
     petAbilityAreaOffline(pet,px,py,range,dmg,{knock:18});pet.hp=clamp(pet.hp+heal,0,pet.maxHp);floatText(pet.x,pet.y-(pet.r||18)-10,`+${Math.round(heal)}`,"#7ad6ff");
     petDamageResourcesAround(pet,px,py,range,true);abilityFx.push({type:"whirlpool",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});game.shake=5;
   }else if(info.elem==="Plant"){
-    const a=petAbilityAimAngleOffline(pet,560),blast=stats.blast||5,ring=stats.ring||7,range=Math.max(120,(pet.r||18)*2.65);
-    petBlasts.push({x:px+Math.cos(a)*(pet.r+6),y:py+Math.sin(a)*(pet.r+6),vx:Math.cos(a)*430,vy:Math.sin(a)*430,life:1.25,r:8,dmg:blast,kind:"leaf",color:"#5cb85c",sourcePet:pet});
+    const a=petAbilityAimAngleOffline(pet,560),blast=stats.blast||5,ring=stats.ring||7,range=petAbilityRangeFor(pet,120,2.65),projScale=petProjectileStageSize(pet.stage);
+    petBlasts.push({x:px+Math.cos(a)*(pet.r+6),y:py+Math.sin(a)*(pet.r+6),vx:Math.cos(a)*430,vy:Math.sin(a)*430,life:1.25,r:8*projScale,dmg:blast,kind:"leaf",color:"#5cb85c",sourcePet:pet});
     petAbilityAreaOffline(pet,px,py,range,ring,{});petDamageResourcesAround(pet,px,py,range,true);healOfflinePetTeam(blast*.5,"#8eea9b");
     abilityFx.push({type:"plantRing",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});sfx.eat();
   }else if(info.elem==="Wind"){
-    const a=petAbilityAimAngleOffline(pet,650),dmg=stats.damage||10,stun=stats.stun||2;
-    petBlasts.push({x:px+Math.cos(a)*(pet.r+8),y:py+Math.sin(a)*(pet.r+8),vx:Math.cos(a)*560,vy:Math.sin(a)*560,life:1.25,r:18,dmg,kind:"owlSound",color:"#bdeaff",sourcePet:pet,stun});
-    abilityFx.push({type:"owlWave",x:px,y:py,life:.65,maxLife:.65,angle:a,r:Math.max(100,(pet.r||18)*2.2)});
+    const a=petAbilityAimAngleOffline(pet,650),dmg=stats.damage||10,stun=stats.stun||2,projScale=petProjectileStageSize(pet.stage);
+    petBlasts.push({x:px+Math.cos(a)*(pet.r+8),y:py+Math.sin(a)*(pet.r+8),vx:Math.cos(a)*560,vy:Math.sin(a)*560,life:1.25,r:18*projScale,dmg,kind:"owlSound",color:"#bdeaff",sourcePet:pet,stun});
+    abilityFx.push({type:"owlWave",x:px,y:py,life:.65,maxLife:.65,angle:a,r:petAbilityRangeFor(pet,100,2.2)});
   }else if(info.elem==="Poison"){
-    const a=petAbilityAimAngleOffline(pet,620),dmg=stats.damage||5;
-    petBlasts.push({x:px+Math.cos(a)*(pet.r+7),y:py+Math.sin(a)*(pet.r+7),vx:Math.cos(a)*500,vy:Math.sin(a)*500,life:1.3,r:9,dmg,kind:"poison",color:"#65cc65",sourcePet:pet,dotTime:5});
+    const a=petAbilityAimAngleOffline(pet,620),dmg=stats.damage||5,projScale=petProjectileStageSize(pet.stage);
+    petBlasts.push({x:px+Math.cos(a)*(pet.r+7),y:py+Math.sin(a)*(pet.r+7),vx:Math.cos(a)*500,vy:Math.sin(a)*500,life:1.3,r:9*projScale,dmg,kind:"poison",color:"#65cc65",sourcePet:pet,dotTime:5});
     abilityFx.push({type:"poisonMuzzle",x:px,y:py,life:.5,maxLife:.5,angle:a,r:pet.r+15});
   }else if(info.elem==="Light"){
-    const range=Math.max(155,(pet.r||18)*3.15),dmg=stats.damage||16,heal=dmg*.5;
+    const range=petAbilityRangeFor(pet,155,3.15),dmg=stats.damage||16,heal=dmg*.5;
     petAbilityAreaOffline(pet,px,py,range,dmg,{});petDamageResourcesAround(pet,px,py,range,true);healOfflinePetTeam(heal,"#ffe98a");
     abilityFx.push({type:"lightRingBurst",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});
   }else if(info.elem==="Earth"){
-    const range=Math.max(145,(pet.r||18)*2.95),dmg=stats.damage||20;
+    const range=petAbilityRangeFor(pet,145,2.95),dmg=stats.damage||20;
     petAbilityAreaOffline(pet,px,py,range,dmg,{knock:12});petDamageResourcesAround(pet,px,py,range,true);abilityFx.push({type:"earthRingBurst",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});game.shake=7;
   }else if(info.elem==="Combat"){
     const target=petAbilityTargetOffline(pet,430),dmg=stats.damage||34;
