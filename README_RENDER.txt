@@ -1,6 +1,6 @@
-HOSTL — FULL RENDER PROJECT — SERVER 483 / GAME 555 / RULES 555
+HOSTL — FULL RENDER PROJECT — SERVER 484 / GAME 556 / RULES 556
 
-CURRENT GAME 555 PERFORMANCE / RIDING / COLLISION PASS
+CURRENT GAME 556 MULTIPLAYER PERFORMANCE / RESOURCE DAMAGE PASS
 
 Gameplay fixes:
 - Ridden pets keep their normal movement animation, tail/body motion, and attack/head animation.
@@ -21,14 +21,18 @@ Collision / bug fixes:
 - Existing tight Boar, Wolf, Bear, Dog, Viper, Deer, and Saber collision tuning remains intact; bite/damage reach was not enlarged.
 
 Performance cleanup:
+- Browser download and Render public/index.html are kept byte-for-byte identical for each update so online and offline use the same client code.
+- Multiplayer player reconciliation no longer pulls an actively moving player backward toward a slightly stale server snapshot; lateral/server collision correction is preserved.
+- Full resource/gold topology scans are heavily throttled because live Colyseus netState objects already receive patch updates; nearby resource state still refreshes continuously.
+- Offline and online animal-vs-resource damage now share one stage-percentage rule: Baby 5%, Adult 10%, Boss 15%, Super Boss 20%, Big Momma 40%, scaled by species attack strength; pet abilities use a modest 1.25x resource multiplier.
 - Removed several per-tick concat/filter/Array.from allocations in hot collision, rendering, wildlife cleanup, projectile, wall, pet-death, and resource-respawn paths.
 - Added a cheap broad-phase distance test before Hostls do exact multi-circle animal collision checks.
 - Idle mounts no longer rescan every creature at 60 Hz; the world separation pass handles creatures moving into a stationary mount.
 - Distant wildlife throttling and spatial collision buckets remain active.
 
 FILES
-- public/index.html      Game 555
-- WorldRoom.js          Server 483 authoritative multiplayer room
+- public/index.html      Game 556
+- WorldRoom.js          Server 484 authoritative multiplayer room
 - index.js              Express + Colyseus launcher and /healthz + /status
 - package.json          Node dependencies/start command
 - render.yaml           Render service configuration
@@ -44,5 +48,5 @@ RENDER DEPLOYMENT
 6. Open the Render HTTPS service URL after deployment. It redirects to /index.html?server=self so the included game connects to the same server over WSS.
 
 BUILD CHECK
-/healthz reports serverBuild 483, gameBuild 555, rulesVersion 555.
+/healthz reports serverBuild 484, gameBuild 556, rulesVersion 556.
 /status reports the live connected-player count used by the home screen.

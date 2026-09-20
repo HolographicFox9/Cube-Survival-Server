@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "555";
+const CUBE_SHARED_RULES_VERSION = "556";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -470,6 +470,7 @@ const ANIMAL_BALANCE = {
 const ANIMAL_STAGE_HP = { baby:28, adult:100, boss:320, superboss:900, bigmomma:1900 };
 const ANIMAL_STAGE_ATTACK = { baby:0.55, adult:1.15, boss:1.80, superboss:2.45, bigmomma:3.00 };
 const ANIMAL_STAGE_DAMAGE_TAKEN = { baby:1.04, adult:1.00, boss:0.96, superboss:0.92, bigmomma:0.88 };
+const ANIMAL_RESOURCE_STAGE_PERCENT = Object.freeze({ baby:.05, adult:.10, boss:.15, superboss:.20, bigmomma:.40 });
 function animalBalance(type){ return ANIMAL_BALANCE[type]||{hpMul:1,babyHpMul:1,damageTaken:1,attack:7}; }
 function animalDamageTaken(type,stage,raw){raw=Math.max(0,Number(raw)||0);if(raw<=0)return 0;return Math.max(.1,raw*animalBalance(type).damageTaken*(ANIMAL_STAGE_DAMAGE_TAKEN[stage]??1));}
 function dogWallStats(stage,level=1){const lv=Math.max(1,Number(level)||1),t={baby:{hp:90,base:10,per:1.5},adult:{hp:120,base:15,per:2},boss:{hp:165,base:22,per:2.8},superboss:{hp:220,base:30,per:3.8},bigmomma:{hp:280,base:40,per:5}}[stage]||{hp:120,base:15,per:2};return{hp:t.hp,spikeDmg:t.base+(lv-1)*t.per};}
@@ -2681,8 +2682,9 @@ export class WorldRoom extends Room {
     }
   }
 
-  petResourceDamage(p,ability=false){const stageMul=p.stage==="baby"?1:p.stage==="adult"?1.35:p.stage==="boss"?1.9:p.stage==="superboss"?2.6:3;return(ability?5.5:3.2)*stageMul+Math.max(0,(p.level||1)-1)*(ability?.75:.45);}
-  petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));}return true;}
+  animalResourceStrengthMultiplier(a){const raw=animalBalance(a?.type).attack/7.5;return clamp(1+(raw-1)*.45,.72,1.35);}
+  petResourceDamage(p,r=null,ability=false){const maxHp=Math.max(1,Number(r?.maxHp)||Number(r?.hp)||1),pct=ANIMAL_RESOURCE_STAGE_PERCENT[p?.stage]??ANIMAL_RESOURCE_STAGE_PERCENT.adult,abilityMul=ability?1.25:1;return Math.max(.05,maxHp*pct*this.animalResourceStrengthMultiplier(p)*abilityMul);}
+  petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,r,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));}return true;}
   petDamageResourcesAround(ownerId,p,x,y,range,ability=true){for(const s of this.nearbySolids(x,y,range+120)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;if(dist(x,y,s.x,s.y)<=range+s.r)this.petHitResource(ownerId,p,s.id,r,ability);}}
   petAttackStuckResource(ownerId,p){
     if(!p||p.dead)return false;let rid=p._blockingResourceId||"",r=rid?this.state.resources.get(rid):null;
@@ -2702,8 +2704,7 @@ export class WorldRoom extends Room {
     a._blockingResourceId=rid;a.sleeping=false;smoothTurn(a,angTo(a.x,a.y,r.x,r.y),.12,8);
     if((a.atkCd||0)>0)return true;
     a.atkCd=animalAttackCooldown(a.type,a.stage,false);a.attackAnim=.22;
-    const stageMul=a.stage==="baby"?.75:a.stage==="adult"?1:a.stage==="boss"?1.45:a.stage==="superboss"?1.95:2.3;
-    const dmg=Math.max(1.5,2.1*stageMul+Math.max(0,(a.level||1)-1)*.28);
+    const dmg=this.petResourceDamage(a,r,false);
     r.hp=Math.max(0,(r.hp||1)-dmg);this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});
     if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));a._blockingResourceId="";}
     return true;
