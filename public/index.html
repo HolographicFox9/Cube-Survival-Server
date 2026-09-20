@@ -155,7 +155,9 @@
     gap:2px;padding:5px 4px 6px;user-select:none;pointer-events:auto;box-sizing:border-box;text-align:center;}
   .pet-card.ready{box-shadow:0 0 10px var(--glow, #f4c65f), inset 0 0 0 1px rgba(255,255,255,0.05);}
   .pet-card .pc-icon{font-size:18px;line-height:1;z-index:2;flex:0 0 auto;}
-  .pet-card .pc-name{font-size:7px;opacity:0.97;z-index:2;margin-top:0;max-width:42px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-weight:700;}
+  .pet-card .pc-name{font-size:7px;opacity:0.97;z-index:2;margin-top:0;max-width:42px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font-weight:800;}
+  .pet-card .pc-name.male{color:#4da3ff;text-shadow:0 1px 5px rgba(77,163,255,.28);}
+  .pet-card .pc-name.female{color:#ff79b0;text-shadow:0 1px 5px rgba(255,121,176,.28);}
   .pet-card .pc-type{font-size:5px;opacity:0.68;z-index:2;max-width:42px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;letter-spacing:0.2px;text-transform:uppercase;}
   .gender-dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-left:2px;vertical-align:middle;transform:translateY(-0.5px);}
   .gender-dot.male{background:#4da3ff;}
@@ -4948,7 +4950,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "556";
+const CUBE_SHARED_RULES_VERSION = "557";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -9579,8 +9581,9 @@ canvas.addEventListener("mousedown", e => {
       e.preventDefault();
       return;
     }
-    const clickedAnimal = animalUnderWorldPoint(wx, wy);
-    if (clickedAnimal && focusAllPetsOnAnimal(clickedAnimal)) {
+    const clickedTarget = petCombatTargetUnderWorldPoint(wx, wy);
+    if (clickedTarget && focusAllPetsOnTarget(clickedTarget.obj, clickedTarget.kind)) {
+      mouse.rdown = false;
       e.preventDefault();
       return;
     }
@@ -13584,14 +13587,17 @@ function wildCanPreyOn(predatorType, preyType) {
 function randomAnimalGender() { return Math.random() < 0.5 ? "Male" : "Female"; }
 function genderSymbol(gender) { return gender === "Male" ? "♂" : gender === "Female" ? "♀" : "?"; }
 function genderDotColor(gender) { return gender === "Male" ? "#4da3ff" : gender === "Female" ? "#ff79b0" : "#b8b8b8"; }
+function genderNameColor(gender) { return genderDotColor(gender); }
+function genderClass(gender) { return gender === "Male" ? "male" : gender === "Female" ? "female" : ""; }
 function genderDotHtml(gender) {
-  const cls = gender === "Male" ? "male" : gender === "Female" ? "female" : "";
+  const cls = genderClass(gender);
   return `<span class="gender-dot ${cls}" aria-hidden="true"></span>`;
 }
-function drawGenderLabelWithDot(text, x, y, gender) {
+function drawGenderLabelWithDot(text, x, y, gender, colorName = false) {
   const oldAlign = ctx.textAlign;
   const oldFill = ctx.fillStyle;
   ctx.textAlign = "center";
+  if (colorName) ctx.fillStyle = genderNameColor(gender);
   ctx.fillText(text, x, y);
   const w = ctx.measureText(text).width;
   const radius = 2.7;
@@ -15118,7 +15124,7 @@ function moveFacing(obj, speed, dt) {
 function combatTargetAlive(t) {
   if (!t) return false;
   if (t === player) return !player.dead && !game.over;
-  if (t.dead || (t.hp != null && t.hp <= 0)) return false;
+  if (t.dead || (t.hp != null && t.hp <= 0) || (t.health != null && t.health <= 0)) return false;
 
   // Online manual-focus targets can leave a stale visual object behind after the
   // authoritative server deletes the animal. An object reference is not enough:
@@ -15373,22 +15379,28 @@ function petLockedCombat(p, target, dt) {
     }
   }
 
-  const targetIsAnimal = target !== player && target.type && !enemies.includes(target);
+  const targetIsRemotePlayer = !!(net.room && target._netKind === "player");
+  const targetIsAnimal = !targetIsRemotePlayer && target !== player && target.type && !enemies.includes(target);
   const a = angTo(p.x, p.y, target.x, target.y);
   smoothTurn(p, a, dt, 5.2);
   const headOnTarget = petHeadTouchesTarget(p, target);
   if (!headOnTarget) {
-    moveFacing(p, p.speed * 1.28, dt);
+    movePetChaseWithRecovery(p, target, p.speed * 1.28, dt);
   } else if (p.atkCd <= 0) {
     const rawDmg = petAtkDmg(p);
+    p.atkCd = animalAttackCooldown(p.type, p.stage, true);
+    p.attackAnim = 0.18;
+    spark(target.x, target.y, "#7be08a", 5, 80);
+
+    // Other-player damage is server-authoritative. Locally animate the bite,
+    // but never invent an HP field on the interpolated remote-player visual.
+    if (targetIsRemotePlayer) return true;
+
     const dmg = targetIsAnimal ? animalDamageTaken(target.type, target.stage, rawDmg) : rawDmg;
     target.hp -= dmg;
     if (!targetIsAnimal) markPetXpContribution(target, p, dmg);
     target.flash = 0.12;
-    p.atkCd = animalAttackCooldown(p.type, p.stage, true);
-    p.attackAnim = 0.18;
-    spark(target.x, target.y, "#7be08a", 5, 80);
-    floatText(target.x, target.y - target.r - 6, Math.round(dmg), "#7be08a");
+    floatText(target.x, target.y - (target.r || PLAYER_R) - 6, Math.round(dmg), "#7be08a");
     if (targetIsAnimal) {
       wildlifeHitByPet(target, p, dmg);
     } else {
@@ -15965,15 +15977,47 @@ function animalUnderWorldPoint(wx, wy) {
   return best;
 }
 
-function focusAllPetsOnAnimal(target) {
-  if (!target || target.dead || target.owned) return false;
+function petCombatTargetUnderWorldPoint(wx, wy) {
+  let best = null;
+  let bestScore = Infinity;
+  const consider = (obj, kind, pickR) => {
+    if (!obj || obj.dead) return;
+    if (kind === "animal" && (obj.owned || (Number(obj.hp) || 0) <= 0)) return;
+    if (kind === "enemy" && (Number(obj.hp) || 0) <= 0) return;
+    if (kind === "player" && ((Number(obj.health) || 0) <= 0 || obj.netId === net.sessionId)) return;
+    const d = dist(wx, wy, obj.x, obj.y);
+    if (d > pickR) return;
+    const score = d / Math.max(1, pickR);
+    if (score < bestScore) { bestScore = score; best = { obj, kind }; }
+  };
+
+  const animalList = net.room ? net.animalVisuals.values() : animals;
+  for (const a of animalList) consider(a, "animal", Math.max(25, (Number(a?.r) || 18) * 1.42));
+
+  const enemyList = net.room ? net.enemyVisuals.values() : enemies;
+  for (const en of enemyList) consider(en, "enemy", Math.max(27, (Number(en?.r) || 17) * 1.55));
+
+  if (net.room) {
+    for (const remote of net.remoteVisuals.values()) consider(remote, "player", 31);
+  }
+  return best;
+}
+
+function petFocusTargetName(target, kind) {
+  if (kind === "player") return target.username || "player";
+  if (kind === "enemy") return target.moonMarked ? "Moonmarked " + (target.role || "Hostl") : (target.role || "Hostl");
+  return PET_TYPES[target.type]?.name || "animal";
+}
+
+function focusAllPetsOnTarget(target, kind) {
+  if (!target || !combatTargetAlive(target)) return false;
+  if (!['animal','enemy','player'].includes(kind)) return false;
   let commanded = 0;
 
   for (const p of player.pets) {
     if (!p || p.dead) continue;
     commanded++;
 
-    // Local/offline focus target.
     p.forcedTarget = target;
     p.forcedTargetAutoDefense = false;
     p.combat = Math.max(p.combat || 0, 9999);
@@ -15984,14 +16028,15 @@ function focusAllPetsOnAnimal(target) {
     p.follow = false;
     p.followReturning = false;
     p.orderMode = "defend";
+    p._combatStuckT = 0;
+    p._combatStuckTarget = null;
 
-    // Multiplayer server-authoritative focus target.
     if (net.room && p.netId && target.netId) {
       try {
         net.room.send("petOrder", {
           id: p.netId,
           mode: "focus",
-          targetKind: "animal",
+          targetKind: kind,
           targetId: target.netId
         });
       } catch (_) {}
@@ -15999,13 +16044,15 @@ function focusAllPetsOnAnimal(target) {
   }
 
   if (commanded > 0) {
-    const speciesName = PET_TYPES[target.type]?.name || "animal";
-    banner(`All pets targeting ${speciesName}`);
+    banner(`All pets targeting ${petFocusTargetName(target, kind)}`);
     return true;
   }
   return false;
 }
 
+function focusAllPetsOnAnimal(target) {
+  return focusAllPetsOnTarget(target, "animal");
+}
 
 const ANIMAL_RESOURCE_STAGE_PERCENT = Object.freeze({
   baby: 0.05,
@@ -16090,6 +16137,39 @@ function petAttackStuckResource(pet, targetX = null, targetY = null) {
   }
   return true;
 }
+function movePetChaseWithRecovery(pet, target, speed, dt) {
+  if (!pet || pet.dead || !target || !Number.isFinite(speed) || !Number.isFinite(dt) || dt <= 0) return;
+  const targetKey = target.netId || target;
+  if (pet._combatStuckTarget !== targetKey) {
+    pet._combatStuckTarget = targetKey;
+    pet._combatStuckT = 0;
+  }
+  const sx = pet.x, sy = pet.y;
+  moveOwnedPetSwept(pet, speed, dt);
+  const moved = dist(sx, sy, pet.x, pet.y);
+  const expected = Math.max(0.001, speed * dt);
+  if (moved >= Math.max(0.18, expected * 0.22)) {
+    pet._combatStuckT = Math.max(0, (Number(pet._combatStuckT) || 0) - dt * 3.2);
+    return;
+  }
+
+  pet._combatStuckT = (Number(pet._combatStuckT) || 0) + dt;
+  // If a resource is the blocker, the swept mover already selected it and the
+  // pet should keep biting it instead of endlessly steering into the same edge.
+  if (!net.room && pet._blockingResourceTarget && pet._combatStuckT > 0.16) return;
+  if (pet._combatStuckT < 0.11) return;
+
+  if (!Number.isFinite(pet._combatAvoidSide)) {
+    const key = String(pet.id || pet.netId || pet.type || "pet");
+    pet._combatAvoidSide = (key.length & 1) ? 1 : -1;
+  }
+  const direct = angTo(pet.x, pet.y, target.x, target.y);
+  pet.angle = direct + pet._combatAvoidSide * 0.76;
+  const ax = pet.x, ay = pet.y;
+  moveOwnedPetSwept(pet, speed * 0.88, dt);
+  if (dist(ax, ay, pet.x, pet.y) < Math.max(0.15, expected * 0.12)) pet._combatAvoidSide *= -1;
+}
+
 function wildAttackBlockingResource(a) {
   if (!a || a.dead || net.room) return false;
   const r = a._blockingResourceTarget;
@@ -16509,7 +16589,7 @@ function updateCombatHunt(p, dt) {
     if (!headOnTarget) {
       // Combat pets turn into the chase and then move where they are actually facing.
       const chaseBoost = d > 350 ? 1.45 : 1.28;
-      moveFacing(p, p.speed * chaseBoost, dt);
+      movePetChaseWithRecovery(p, target, p.speed * chaseBoost, dt);
     } else if (p.atkCd <= 0) {
       const rawDmg = petAtkDmg(p);
       const dmg = hunt.isAnimal ? animalDamageTaken(target.type, target.stage, rawDmg) : rawDmg;
@@ -16574,7 +16654,7 @@ function updateCombatHunt(p, dt) {
   }
   const a = angTo(p.x, p.y, p.huntTX, p.huntTY);
   smoothTurn(p, a, dt, 4.2);
-  moveFacing(p, p.speed * 0.85, dt);
+  moveOwnedPetSwept(p, p.speed * 0.85, dt);
 }
 
 function playerIsActivelyEscapingAnimal(a) {
@@ -17629,7 +17709,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 556;
+const RESET_CORE_BUILD = 557;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -18307,7 +18387,7 @@ function syncPetCards() {
     div.innerHTML =
       `<div class="pc-cdbar" style="height:${fillPct}%"></div>` +
       `<div class="pc-icon">${info.emoji}</div>` +
-      `<div class="pc-name">${name}</div>` +
+      `<div class="pc-name ${genderClass(pet.gender)}">${name}</div>` +
       `<div class="pc-type">${info.name} · ${stageDisplayName(pet.stage)} · ${genderSymbol(pet.gender)}${genderDotHtml(pet.gender)}${isOlderSiblingLeaderPet(pet) ? " · Older Sibling" : (pet.bredChild ? " · Family" : "")}</div>` +
       `<div class="pc-hp"><div class="pc-hp-fill" style="width:${Math.max(0,Math.min(100,(pet.hp/Math.max(1,pet.maxHp))*100))}%"></div></div>` +
       `<button class="pet-orders" type="button" title="Pet orders">⋯</button>` +
@@ -20119,7 +20199,7 @@ function drawAnimalUnsafe(a) {
     ctx.fillStyle = "#7be08a";
     ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
-    drawGenderLabelWithDot(`${petDisplayName(a)} ${stageDisplayName(a.stage)} ${genderSymbol(a.gender)}`, a.x, a.y - r - 22, a.gender);
+    drawGenderLabelWithDot(`${petDisplayName(a)} ${stageDisplayName(a.stage)} ${genderSymbol(a.gender)}`, a.x, a.y - r - 22, a.gender, true);
   } else {
     // Every wild animal always shows its species/type. Special tiers keep the
     // tier name in the same label so rare encounters are obvious at a glance.
@@ -20210,7 +20290,7 @@ function drawAnimalFallbackVisible(a) {
     ctx.fillStyle = "#7be08a";
     ctx.font = "10px sans-serif";
     ctx.textAlign = "center";
-    drawGenderLabelWithDot(`${petDisplayName(a)} ${stageDisplayName(a.stage)} ${genderSymbol(a.gender)}`, a.x, a.y - r - 22, a.gender);
+    drawGenderLabelWithDot(`${petDisplayName(a)} ${stageDisplayName(a.stage)} ${genderSymbol(a.gender)}`, a.x, a.y - r - 22, a.gender, true);
   }
 }
 
@@ -20730,7 +20810,7 @@ function drawAbilityFx() {
   }
 }
 
-function drawTopHealthBar(x, y, w, h, ratio, fill, label = "") {
+function drawTopHealthBar(x, y, w, h, ratio, fill, label = "", labelColor = "#fff7d6") {
   const left = x - w / 2;
   ctx.save();
   ctx.lineJoin = "round";
@@ -20754,7 +20834,7 @@ function drawTopHealthBar(x, y, w, h, ratio, fill, label = "") {
     ctx.strokeStyle = "rgba(0,0,0,0.72)";
     ctx.lineWidth = 3.5;
     ctx.strokeText(label, x, y - 3);
-    ctx.fillStyle = "#fff7d6";
+    ctx.fillStyle = labelColor;
     ctx.fillText(label, x, y - 3);
   }
   ctx.restore();
@@ -20933,7 +21013,7 @@ function drawTopHealthOverlays(viewResources = resources, viewGold = goldChunks,
     const fill = ratio > 0.6 ? "#7be08a" : ratio > 0.3 ? "#f4c65f" : "#f2836a";
     const w = Math.max(46, Math.min(150, p.r * 1.9));
     const y = p.y - p.r - 26;
-    drawTopHealthBar(p.x, y, w, 8, ratio, fill, petDisplayName(p));
+    drawTopHealthBar(p.x, y, w, 8, ratio, fill, `${petDisplayName(p)} ${genderSymbol(p.gender)}`, genderNameColor(p.gender));
   }
 
   // Your pets' leveling XP is drawn in this same LAST foreground overlay,

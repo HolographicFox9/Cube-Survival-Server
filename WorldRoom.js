@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "556";
+const CUBE_SHARED_RULES_VERSION = "557";
 
 // ---------- Game 388 multiplayer chat safety ----------
 const CHAT_MAX_LENGTH = 120;
@@ -1029,6 +1029,7 @@ export class WorldRoom extends Room {
     // Server-only idle-wander/follow state. Keeping this out of the Colyseus
     // schema avoids sending wander targets and stuck timers over the network.
     this.petFollowState=new Map();
+    this.petChaseState=new Map();
     this.playerRunShop=new Map(); this.tamePendingPlayers=new Set();
     this.playerCarryUntil=new Map(); this.playerCarryAnimal=new Map();
     this.wallSpikeNext=new Map(); this.wallEnemyNext=new Map();
@@ -1691,7 +1692,7 @@ export class WorldRoom extends Room {
     }
     p.health=clamp(p.health+amount,0,p.maxHealth);
   }
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   ensureStarterPetFor(client,type,stage,opts={}){
     if(!client||!PET_TYPES[type])return null;
@@ -1728,7 +1729,7 @@ export class WorldRoom extends Room {
     if(guardOwner){a.fleeUntil=0;a.tameFailedAggro=true;this.animalFleeFrom.delete(id);this.animalAggro.set(id,ref);}
     else this.setWildReactionToAttacker(id,a,ref);
     this.broadcastFx({kind:"hit",x:a.x,y:a.y,text:(crit?"CRIT ":"")+Math.round(dmg),color:crit?"#ffe08a":"#f2836a"});
-    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="animal"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
+    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="animal"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);this.petChaseState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
   }
   hitEnemy(id,en,dmg,attackerId,crit=false,attackerRef=null){
     if(!en||en.hp<=0)return;
@@ -1741,7 +1742,7 @@ export class WorldRoom extends Room {
     if(en.hp<=0){
       this.awardPetXpContributors("enemy",id,en,ref.kind==="pet"?ref.id:"");
       if(en.moonMarked&&attackerId){this.firstLightReadyPlayers.add(attackerId);const c=this.clientById(attackerId);if(c)c.send("moonmarkClaimed",{x:en.x,y:en.y,biome:en.moonBiome||CURRENT_BIOME_ID,boss:en.role||"Forest Warden"});}
-      for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="enemy"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}
+      for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="enemy"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);this.petChaseState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}
       this.broadcastSpectateKill("enemy",id,ref.kind,ref.id||attackerId);this.state.enemies.delete(id);this.enemyAggro.delete(id);this.detachEnemyGuard(id,attackerId,false);if(en.moonMarked)this.rewardMoonmarkKill(attackerId,en.x,en.y);else this.rewardKill(attackerId,"enemy",en.x,en.y);
     }
   }
@@ -1842,12 +1843,18 @@ export class WorldRoom extends Room {
     const id=String(data.id||""),p=this.ownedPet(client,id);if(!p||p.dead)return;
     const mode=String(data.mode||"follow");
     this.petFollowState.delete(id);
+    this.petChaseState.delete(id);
 
     if(mode==="focus"){
       const kind=String(data.targetKind||"");
       const targetId=String(data.targetId||"");
-      const obj=kind==="animal"?this.state.animals.get(targetId):kind==="enemy"?this.state.enemies.get(targetId):null;
-      if(obj&&((kind==="animal"&&obj.hp>0)||(kind==="enemy"&&!obj.dead&&obj.hp>0))){
+      const obj=kind==="animal"?this.state.animals.get(targetId):kind==="enemy"?this.state.enemies.get(targetId):kind==="player"?this.state.players.get(targetId):null;
+      const valid=!!obj&&(
+        (kind==="animal"&&obj.hp>0)||
+        (kind==="enemy"&&!obj.dead&&obj.hp>0)||
+        (kind==="player"&&targetId!==client.sessionId&&!obj.dead&&obj.health>0)
+      );
+      if(valid){
         this.petFocusTargets.set(id,{kind,id:targetId});
         p.orderMode="defend";
         p.targetX=-1;p.targetY=-1;
@@ -1862,7 +1869,7 @@ export class WorldRoom extends Room {
     }else if(mode!=="set"){p.targetX=-1;p.targetY=-1;}
   }
   handlePetRename(client,data){const p=this.ownedPet(client,data.id);if(!p)return;const name=String(data.name||"").replace(/[<>]/g,"").trim().slice(0,14);if(name)p.petName=name;}
-  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true,gender:p.gender,motherId:p.motherId,fatherId:p.fatherId,bredChild:p.bredChild});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
+  handlePetRelease(client,data){const id=String(data.id||""),p=this.ownedPet(client,id);if(!p)return;this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);const aid=this.addAnimal(p.type,p.stage,p.x,p.y,{releasedWild:true,hp:p.hp,level:p.level,exp:p.exp,petName:p.petName,enraged:true,tameFailedAggro:true,desperateAggro:true,gender:p.gender,motherId:p.motherId,fatherId:p.fatherId,bredChild:p.bredChild});const a=this.state.animals.get(aid);a.coat=p.coat;a.spotCol=p.spotCol;a.spotsJson=p.spotsJson;a.sleeping=false;this.animalAggro.set(aid,{kind:"player",id:client.sessionId});this.state.pets.delete(id);const owner=this.state.players.get(client.sessionId);if(owner?.ridingPetId===id)owner.ridingPetId="";client.send("petReleased",{id,animalId:aid,name:p.petName});}
 
   handlePetBreed(client,data={}){
     let motherId=String(data.motherId||""),fatherId=String(data.fatherId||"");
@@ -1894,7 +1901,7 @@ export class WorldRoom extends Room {
     const living=[];for(const[id,q]of this.state.pets)if(q&&!q.dead&&q.ownerId===p.ownerId)living.push([id,q]);
     if(living.length!==1||living[0][0]!==childId)return false;
     p.bredChild=false;p.motherId="";p.fatherId="";p.olderBrotherId="";p.olderSisterId="";
-    p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFocusTargets.delete(childId);this.petHuntState.delete(childId);this.petFollowState.delete(childId);
+    p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFocusTargets.delete(childId);this.petHuntState.delete(childId);this.petFollowState.delete(childId);this.petChaseState.delete(childId);
     const c=this.clientById(p.ownerId);if(c)c.send("familyPromotedNormal",{id:childId});
     return true;
   }
@@ -2711,6 +2718,26 @@ export class WorldRoom extends Room {
   }
   mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);if(dist(face.x,face.y,target.obj.x,target.obj.y)>face.r+(target.obj.r||18)+16)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
 
+  movePetChaseWithRecovery(id,p,target,speed,dt){
+    if(!p||p.dead||!target||!Number.isFinite(speed)||!Number.isFinite(dt)||dt<=0)return;
+    let cs=this.petChaseState.get(id);
+    const targetKey=String(target.netId||target.id||"")||target;
+    if(!cs||cs.targetKey!==targetKey){
+      let seed=11;for(const ch of String(id))seed=((seed*33)+ch.charCodeAt(0))|0;
+      cs={targetKey,stuckT:0,avoidSide:(Math.abs(seed)&1)?1:-1};this.petChaseState.set(id,cs);
+    }
+    const sx=p.x,sy=p.y;this.moveCreatureSwept(p,speed,dt);
+    const moved=dist(sx,sy,p.x,p.y),expected=Math.max(.001,speed*dt);
+    if(moved>=Math.max(.18,expected*.22)){cs.stuckT=Math.max(0,cs.stuckT-dt*3.2);return;}
+    cs.stuckT+=dt;
+    // Resource blockers are intentionally chewed on the next server tick.
+    if(p._blockingResourceId&&cs.stuckT>.14)return;
+    if(cs.stuckT<.11)return;
+    const direct=angTo(p.x,p.y,target.x,target.y);p.angle=direct+cs.avoidSide*.76;
+    const ax=p.x,ay=p.y;this.moveCreatureSwept(p,speed*.88,dt);
+    if(dist(ax,ay,p.x,p.y)<Math.max(.15,expected*.12))cs.avoidSide*=-1;
+  }
+
   safePetFollowPoint(p,tx,ty){
     let x=clamp(tx,24,WORLD_W-24),y=clamp(ty,24,WORLD_H-24);
     const pr=Math.max(10,(p.r||18)*.72+5),range=pr+130;
@@ -2762,12 +2789,13 @@ export class WorldRoom extends Room {
 
       const focus=this.petFocusTargets.get(id);
       if(focus){
-        const obj=focus.kind==="animal"?this.state.animals.get(focus.id):focus.kind==="enemy"?this.state.enemies.get(focus.id):null;
-        if(obj&&((focus.kind==="animal"&&obj.hp>0)||(focus.kind==="enemy"&&!obj.dead&&obj.hp>0))){
+        const obj=focus.kind==="animal"?this.state.animals.get(focus.id):focus.kind==="enemy"?this.state.enemies.get(focus.id):focus.kind==="player"?this.state.players.get(focus.id):null;
+        if(obj&&((focus.kind==="animal"&&obj.hp>0)||(focus.kind==="enemy"&&!obj.dead&&obj.hp>0)||(focus.kind==="player"&&!obj.dead&&obj.health>0))){
           target={kind:focus.kind,id:focus.id,obj,d:dist(p.x,p.y,obj.x,obj.y)};
           targetSource="manual";
         }else{
           this.petFocusTargets.delete(id);
+          this.petChaseState.delete(id);
           p.orderMode="follow";
           p.targetX=-1;p.targetY=-1;
           this.petHuntState.delete(id);
@@ -2810,7 +2838,7 @@ export class WorldRoom extends Room {
           if(!parentId)continue;
           const parent=this.state.pets.get(parentId);if(!parent||parent.dead)continue;
           const pf=this.petFocusTargets.get(parentId);
-          if(pf){const obj=pf.kind==="animal"?this.state.animals.get(pf.id):this.state.enemies.get(pf.id);if(obj&&obj.hp>0&&!obj.dead){target={kind:pf.kind,id:pf.id,obj,d:dist(p.x,p.y,obj.x,obj.y)};targetSource="family";break;}}
+          if(pf){const obj=pf.kind==="animal"?this.state.animals.get(pf.id):pf.kind==="enemy"?this.state.enemies.get(pf.id):pf.kind==="player"?this.state.players.get(pf.id):null;const alive=obj&&(pf.kind==="player"?!obj.dead&&obj.health>0:!obj.dead&&obj.hp>0);if(alive){target={kind:pf.kind,id:pf.id,obj,d:dist(p.x,p.y,obj.x,obj.y)};targetSource="family";break;}}
           const ph=this.petHuntState.get(parentId);
           if(ph&&ph.kind&&ph.targetId){const obj=ph.kind==="animal"?this.state.animals.get(ph.targetId):this.state.enemies.get(ph.targetId);if(obj&&obj.hp>0&&!obj.dead){target={kind:ph.kind,id:ph.targetId,obj,d:dist(p.x,p.y,obj.x,obj.y)};targetSource="family";break;}}
         }
@@ -2828,7 +2856,7 @@ export class WorldRoom extends Room {
         const touch=petAttackContact(p,{kind:target.kind,id:target.id},target.obj);
         if(!touch){
           const chaseBoost=targetSource==="combat"?(target.d>350?1.45:1.28):1.28;
-          this.moveCreatureSwept(p,p.speed*chaseBoost,dt);
+          this.movePetChaseWithRecovery(id,p,target.obj,p.speed*chaseBoost,dt);
         }else if(p.atkCd<=0){
           const rawDmg=petAtkDmg(p);
           const dmg=target.kind==="animal"?animalDamageTaken(target.obj.type,target.obj.stage,rawDmg):rawDmg;
@@ -2838,11 +2866,16 @@ export class WorldRoom extends Room {
             this.enemyAggro.set(target.id,{kind:"pet",id});
             const before=this.state.enemies.has(target.id);
             this.hitEnemy(target.id,target.obj,dmg,p.ownerId,false,{kind:"pet",id});
-            if(before&&!this.state.enemies.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
+            if(before&&!this.state.enemies.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
+          }else if(target.kind==="player"){
+            const aliveBefore=!target.obj.dead&&target.obj.health>0;
+            this.damageTarget({kind:"player",id:target.id},rawDmg,"pet",id);
+            this.broadcastFx({kind:"hit",x:target.obj.x,y:target.obj.y-8,text:Math.round(rawDmg),color:"#7be08a"});
+            if(aliveBefore&&(target.obj.dead||target.obj.health<=0)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
           }else{
             const before=this.state.animals.has(target.id);
             this.hitWild(target.id,target.obj,rawDmg,p.ownerId,false,{kind:"pet",id});
-            if(before&&!this.state.animals.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
+            if(before&&!this.state.animals.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
           }
         }
       }else if(p.orderMode==="combat"){
@@ -3007,7 +3040,7 @@ export class WorldRoom extends Room {
 
     for(const[id,left]of this.petDeathTimers){
       const n=left-dt;
-      if(n<=0){this.petFollowState.delete(id);this.petHuntState.delete(id);this.state.pets.delete(id);this.petDeathTimers.delete(id);}
+      if(n<=0){this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.state.pets.delete(id);this.petDeathTimers.delete(id);}
       else this.petDeathTimers.set(id,n);
     }
   }
@@ -3243,7 +3276,7 @@ export class WorldRoom extends Room {
     const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
   }
 
-  onLeave(client){const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
   onDispose(){for(const key of this.populationKeys.values())ACTIVE_CUBE_PLAYER_KEYS.delete(key);this.populationKeys.clear();}
 
 }

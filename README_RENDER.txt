@@ -1,6 +1,6 @@
-HOSTL — FULL RENDER PROJECT — SERVER 484 / GAME 556 / RULES 556
+HOSTL — FULL RENDER PROJECT — SERVER 485 / GAME 557 / RULES 557
 
-CURRENT GAME 556 MULTIPLAYER PERFORMANCE / RESOURCE DAMAGE PASS
+CURRENT GAME 557 PET TARGETING / GENDER / ANTI-STUCK PASS
 
 Gameplay fixes:
 - Ridden pets keep their normal movement animation, tail/body motion, and attack/head animation.
@@ -31,8 +31,8 @@ Performance cleanup:
 - Distant wildlife throttling and spatial collision buckets remain active.
 
 FILES
-- public/index.html      Game 556
-- WorldRoom.js          Server 484 authoritative multiplayer room
+- public/index.html      Game 557
+- WorldRoom.js          Server 485 authoritative multiplayer room
 - index.js              Express + Colyseus launcher and /healthz + /status
 - package.json          Node dependencies/start command
 - render.yaml           Render service configuration
@@ -48,5 +48,5 @@ RENDER DEPLOYMENT
 6. Open the Render HTTPS service URL after deployment. It redirects to /index.html?server=self so the included game connects to the same server over WSS.
 
 BUILD CHECK
-/healthz reports serverBuild 484, gameBuild 556, rulesVersion 556.
+/healthz reports serverBuild 485, gameBuild 557, rulesVersion 557.
 /status reports the live connected-player count used by the home screen.
