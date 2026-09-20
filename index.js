@@ -16,7 +16,7 @@ app.disable("x-powered-by");
 
 // Render health check. This also gives you a quick way to verify the server is awake.
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 485, gameBuild: 557, rulesVersion: "557", chat: true, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 498, gameBuild: 570, rulesVersion: "570", chat: true, ...getCubeServerStats() });
 });
 
 // Home-screen population check. CORS is intentionally open because players may

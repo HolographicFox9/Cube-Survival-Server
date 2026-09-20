@@ -1,4 +1,4 @@
-HOSTL — FULL RENDER PROJECT — SERVER 485 / GAME 557 / RULES 557
+HOSTL — FULL RENDER PROJECT — SERVER 498 / GAME 570 / RULES 570
 
 CURRENT GAME 557 PET TARGETING / GENDER / ANTI-STUCK PASS
 
@@ -48,5 +48,11 @@ RENDER DEPLOYMENT
 6. Open the Render HTTPS service URL after deployment. It redirects to /index.html?server=self so the included game connects to the same server over WSS.
 
 BUILD CHECK
-/healthz reports serverBuild 485, gameBuild 557, rulesVersion 557.
+/healthz reports serverBuild 498, gameBuild 570, rulesVersion 570.
 /status reports the live connected-player count used by the home screen.
+Game 561 cosmetic fix: Horned Owl awake parts now match the supplied assembled reference; torso/lower-wing mapping corrected, Y-only wing flap, tail/head motion.
+
+
+Game 567 / Server 495: redesigned stage/level-scaled pet abilities, smaller Deer hitboxes, stronger ability visuals, and matched offline/online ability rules.
+
+Game 570 / Server 498: all pet projectile/blast abilities now travel strictly in the pet's current facing direction; target selection no longer snaps Fire, Plant, Horned Owl sonic, or Viper poison shots toward a target.
