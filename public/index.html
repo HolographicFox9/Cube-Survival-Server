@@ -5136,7 +5136,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "582";
+const CUBE_SHARED_RULES_VERSION = "586";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -8630,7 +8630,7 @@ function updateNetAnimalVisual(v, s, id, owned = false) {
     }
   }
   v.r = Number(s.r) || animalRadius(v.type, v.stage);
-  v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
+  const incomingHp = Math.max(0, Number(s.hp) || 0); v.hp = damageLockedHp(v, incomingHp); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
   v.coat = s.coat || (PET_TYPES[v.type] && PET_TYPES[v.type].color) || "#c9a06a";
   v.spotCol = s.spotCol || shadeColor(v.coat, -30);
   if (v._spotsJson !== s.spotsJson) { v._spotsJson = s.spotsJson; v.spots = parseNetSpots(s); }
@@ -8899,7 +8899,7 @@ function updateNetEnemyVisual(v, s, id) {
   }
 
   v.r = Number(s.r) || 17; v.speed = Number(s.speed) || 60; v.weapon = s.weapon || "Fist";
-  v.dmg = Number(s.dmg) || 6; v.hp = Math.max(0, Number(s.hp) || 0); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
+  v.dmg = Number(s.dmg) || 6; const incomingHp = Math.max(0, Number(s.hp) || 0); v.hp = damageLockedHp(v, incomingHp); v.maxHp = Math.max(1, Number(s.maxHp) || 1);
   v.strong = !!s.strong; v.armed = !!s.armed; v.ranged = !!s.ranged; v.hue = s.hue || "#e0563f";
   v.role = s.role || (v.weapon === "Bow" ? "Ranger" : v.weapon === "Staff" ? "Chimest" : v.weapon === "Sword" ? "Swordsman" : "Brawler");
   v.moonMarked = !!s.moonMarked; v.moonBiome = s.moonBiome || (v.moonMarked ? CURRENT_BIOME_ID : "");
@@ -9060,7 +9060,7 @@ function syncNetworkFullWorld(force = false) {
     let v = net.chestVisuals.get(id);
     if (!v) { v = { netId:id }; net.chestVisuals.set(id, v); }
     v.x = Number(s.x)||0; v.y = Number(s.y)||0; v.r = Number(s.r)||18;
-    v.hp = Math.max(0, Number(s.hp)||0); v.maxHp = Math.max(1, Number(s.maxHp)||4);
+    v.hp = damageLockedHp(v, Math.max(0, Number(s.hp)||0)); v.maxHp = Math.max(1, Number(s.maxHp)||4);
     v.opened = !!s.opened; v.pulse = Number(s.pulse)||0; v.shine = Number(s.shine)||0; v.chipSide = s.chipSide||"wood";
   });
   for (const id of Array.from(net.chestVisuals.keys())) if (!chestSeen.has(id)) net.chestVisuals.delete(id);
@@ -9097,7 +9097,7 @@ function syncNetworkFullWorld(force = false) {
   enemies = Array.from(net.enemyVisuals.values());
 
   const wallSeen = new Set();
-  eachNetworkCollection("walls",(s,id)=>{wallSeen.add(id);let v=net.wallVisuals.get(id)||{netId:id};v.x=Number(s.x)||0;v.y=Number(s.y)||0;v.r=Number(s.r)||20;v.ttl=Number(s.ttl);if(!Number.isFinite(v.ttl))v.ttl=-1;v.ownerId=s.ownerId||"";v.hp=Math.max(0,Number(s.hp)||0);v.maxHp=Math.max(1,Number(s.maxHp)||1);v.kind=s.kind||"wood";v.spiked=!!s.spiked;v.spikeDmg=Number(s.spikeDmg)||0;v.sourcePetId=s.sourcePetId||"";net.wallVisuals.set(id,v);});
+  eachNetworkCollection("walls",(s,id)=>{wallSeen.add(id);let v=net.wallVisuals.get(id)||{netId:id};v.x=Number(s.x)||0;v.y=Number(s.y)||0;v.r=Number(s.r)||20;v.ttl=Number(s.ttl);if(!Number.isFinite(v.ttl))v.ttl=-1;v.ownerId=s.ownerId||"";v.hp=damageLockedHp(v,Math.max(0,Number(s.hp)||0));v.maxHp=Math.max(1,Number(s.maxHp)||1);v.kind=s.kind||"wood";v.spiked=!!s.spiked;v.spikeDmg=Number(s.spikeDmg)||0;v.sourcePetId=s.sourcePetId||"";net.wallVisuals.set(id,v);});
   for(const id of Array.from(net.wallVisuals.keys()))if(!wallSeen.has(id))net.wallVisuals.delete(id); walls=Array.from(net.wallVisuals.values());
 
   const towerSeen = new Set();
@@ -9460,6 +9460,24 @@ async function connectMultiplayer() {
         setKilledBy(player, killer);
         beginDeathCamera(killer, attackerKind, attackerId);
         sfx.die();
+      }
+    });
+    room.onMessage("entityHealth", (data = {}) => {
+      const kind = String(data.kind || "");
+      const id = String(data.id || "");
+      const hp = Math.max(0, Number(data.hp) || 0);
+      const maxHp = Math.max(1, Number(data.maxHp) || 1);
+      let obj = null;
+      if (kind === "animal") obj = net.animalVisuals.get(id);
+      else if (kind === "enemy") obj = net.enemyVisuals.get(id);
+      else if (kind === "pet") obj = net.petVisuals.get(id) || net.remotePetVisuals.get(id);
+      else if (kind === "resource") obj = net.resourceVisuals.get(id);
+      else if (kind === "chest") obj = net.chestVisuals.get(id);
+      else if (kind === "wall") obj = net.wallVisuals.get(id);
+      if (obj) {
+        applyAuthoritativeEntityHealthVisual(obj, hp, maxHp, !!data.dead, 1800);
+        if (kind === "resource" && hp <= 0) obj.alive = false;
+        if (kind === "chest" && hp <= 0) obj.opened = true;
       }
     });
     room.onMessage("spectateKill", (data = {}) => {
@@ -16295,9 +16313,32 @@ function updateTowers(dt) {
 let resourceSweepIndex = 0;
 let goldSweepIndex = 0;
 let chestSweepIndex = 0;
+function applyAuthoritativeEntityHealthVisual(obj, hp, maxHp, dead = false, lockMs = 1800) {
+  if (!obj) return;
+  hp = Math.max(0, Number(hp) || 0);
+  maxHp = Math.max(1, Number(maxHp) || obj.maxHp || 1);
+  obj.hp = hp; obj.maxHp = maxHp;
+  if (dead) obj.dead = true;
+  obj._serverDamageHp = hp;
+  obj._serverDamageLockUntil = performance.now() + lockMs;
+  if (hp < maxHp) obj._smoothDamageRatioAt = performance.now();
+}
+function damageLockedHp(obj, incomingHp) {
+  incomingHp = Math.max(0, Number(incomingHp) || 0);
+  if (!obj) return incomingHp;
+  const now = performance.now();
+  const lockUntil = Number(obj._serverDamageLockUntil) || 0;
+  const lockedHp = Number(obj._serverDamageHp);
+  if (now < lockUntil && Number.isFinite(lockedHp)) {
+    if (incomingHp > lockedHp + 0.01) return lockedHp;
+    obj._serverDamageHp = incomingHp;
+  }
+  return incomingHp;
+}
 function syncResourceNetState(r) {
   if (!r || !r.netState) return;
-  r.hp = Math.max(0, Number(r.netState.hp) || 0);
+  const incomingHp = Math.max(0, Number(r.netState.hp) || 0);
+  r.hp = damageLockedHp(r, incomingHp);
   r.maxHp = Math.max(0.01, Number(r.netState.maxHp) || r.maxHp || 1);
   r.alive = r.netState.alive !== false;
 }
