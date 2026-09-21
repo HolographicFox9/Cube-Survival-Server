@@ -4790,8 +4790,27 @@
   /* This class is controlled by the modal watcher below. It prevents mouse,
      touch and keyboard interaction with the visible home screen while any
      home menu is open, without hiding the home screen itself. */
+  /* Keep the HOME visible and non-clickable without disabling any modal that
+     happens to live inside #home (Friends is one of those modals). */
   #home.hostl-home-modal-locked{
+    pointer-events:auto !important;
+  }
+  #home.hostl-home-modal-locked > .home-shell,
+  #home.hostl-home-modal-locked > #friendsCorner,
+  #home.hostl-home-modal-locked > #accountSettingsFooter,
+  #home.hostl-home-modal-locked > .legal-support-footer{
     pointer-events:none !important;
+    user-select:none !important;
+  }
+
+  /* The themed UI rules use ID selectors with !important, so explicitly clear
+     these two full-screen backdrops at equal/higher specificity. The cards
+     themselves stay themed; only the blank screen-filling layer is removed. */
+  #expandedShopModal,
+  #accountSettingsModal{
+    background:transparent !important;
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
   }
 
 </style>
@@ -25527,8 +25546,9 @@ setTimeout(()=>{
 </script>
 
 <script>
-// Keep the home screen visible behind menus, but make it completely inert while
-// a menu is open. This also blocks keyboard activation/focus on home controls.
+// Keep the home screen visible behind menus while disabling only the HOME
+// controls. Do not inert #home itself because Friends lives inside #home and
+// would become impossible to click.
 (function setupTransparentHomeModalLock(){
   const ids=[
     'expandedShopModal','friendsModal','accountModal','accountSettingsModal',
@@ -25538,15 +25558,21 @@ setTimeout(()=>{
   const home=document.getElementById('home');
   if(!home) return;
   const nodes=ids.map(id=>document.getElementById(id)).filter(Boolean);
+  const homeBackgroundRoots=[
+    home.querySelector(':scope > .home-shell'),
+    document.getElementById('friendsCorner'),
+    document.getElementById('accountSettingsFooter'),
+    home.querySelector(':scope > .legal-support-footer')
+  ].filter(Boolean);
   const isOpen=(node)=>node.classList.contains('on') || node.classList.contains('show');
   const sync=()=>{
     const locked=nodes.some(isOpen);
     home.classList.toggle('hostl-home-modal-locked',locked);
-    if(locked){
-      home.setAttribute('inert','');
-    }else{
-      home.removeAttribute('inert');
-    }
+    // Inert only the actual background controls, never the modal layer.
+    homeBackgroundRoots.forEach(root=>{
+      if(locked) root.setAttribute('inert','');
+      else root.removeAttribute('inert');
+    });
   };
   nodes.forEach(node=>new MutationObserver(sync).observe(node,{attributes:true,attributeFilter:['class','style']}));
   sync();
