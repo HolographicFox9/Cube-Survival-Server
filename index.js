@@ -419,6 +419,100 @@ for (const a of Object.values(accountDb.byId || {})) {
   repairSpecialPromoEntitlements(a);
 }
 saveAccounts();
+
+// Deploy-safe account recovery backup.
+// Render's free web-service filesystem can be replaced during a deploy. HOSTL therefore
+// gives the browser an HMAC-signed snapshot of the account after every account response.
+// On the next Google sign-in, that snapshot can rebuild the SAME Google-linked account
+// if the server-side accounts.json disappeared. The browser cannot edit the snapshot
+// without invalidating the signature, and Google identity must still match before restore.
+function recoverySubHash(googleSub) {
+  return crypto.createHmac("sha256", SESSION_SECRET).update(`hostl-account-recovery-sub:${String(googleSub||"")}`).digest("base64url");
+}
+function accountRecoverySnapshot(a) {
+  ensureGoldCubits(a); ensureTitleState(a); ensureEconomyState(a); ensurePetProgressState(a); ensureSocialState(a); ensureStarterPetEntitlements(a); ensureShopPurchases(a); ensureRedeemedCodes(a);
+  const cloneObj = value => JSON.parse(JSON.stringify(value && typeof value === "object" ? value : {}));
+  return {
+    userId:String(a.userId||""),
+    username:cleanDisplayName(a.username||"").slice(0,14),
+    displayName:cleanDisplayName(a.displayName||""),
+    profileNamesInitialized:!!a.profileNamesInitialized,
+    goldCubits:ensureGoldCubits(a),
+    unlockedThemes:Array.isArray(a.unlockedThemes)?[...new Set(a.unlockedThemes.map(x=>safeText(x,40)).filter(Boolean))].slice(0,100):[],
+    achievements:cloneObj(a.achievements),
+    lastDailyCubits:safeText(a.lastDailyCubits||"",20),
+    lastDailyChest:safeText(a.lastDailyChest||"",20),
+    redeemedCodes:[...ensureRedeemedCodes(a)],
+    speciesCards:cloneObj(a.speciesCards),
+    ownedStarters:cloneObj(a.ownedStarters),
+    petStages:cloneObj(a.petStages),
+    petStatUpgrades:cloneObj(a.petStatUpgrades),
+    starterPetType:safeText(a.starterPetType||"",24).toLowerCase(),
+    starterPetName:safeText(a.starterPetName||"",20),
+    starterPetGender:a.starterPetGender==="Female"?"Female":"Male",
+    materials:cloneObj(a.materials),
+    craftedStarters:Array.isArray(a.craftedStarters)?[...a.craftedStarters]:[],
+    learnedSkills:Array.isArray(a.learnedSkills)?[...a.learnedSkills]:[],
+    title:safeText(a.title||"",32),
+    unlockedTitles:Array.isArray(a.unlockedTitles)?[...a.unlockedTitles]:[],
+    testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)),
+    ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)),
+    starterPetEntitlements:ensureStarterPetEntitlements(a).map(x=>({...x})),
+    starterPetEntitlement:a.starterPetEntitlement&&typeof a.starterPetEntitlement==="object"?{...a.starterPetEntitlement}:null,
+    specialRewardRepairs:cloneObj(a.specialRewardRepairs),
+    shopPurchases:cloneObj(a.shopPurchases),
+    friends:[...ensureSocialState(a).friends],
+    incomingFriendRequests:[...a.incomingFriendRequests],
+    outgoingFriendRequests:[...a.outgoingFriendRequests],
+    createdAt:safeText(a.createdAt||new Date().toISOString(),40)
+  };
+}
+function signAccountRecovery(a) {
+  if(!a?.googleSub) return "";
+  const payload={v:1,iat:Date.now(),subHash:recoverySubHash(a.googleSub),account:accountRecoverySnapshot(a)};
+  const body=b64url(JSON.stringify(payload));
+  const sig=crypto.createHmac("sha256",SESSION_SECRET).update(`hostl-recovery:${body}`).digest("base64url");
+  return `${body}.${sig}`;
+}
+function verifyAccountRecoveryToken(token,googleSub) {
+  try{
+    const [body,sig]=String(token||"").split(".");
+    if(!body||!sig)return null;
+    const expected=crypto.createHmac("sha256",SESSION_SECRET).update(`hostl-recovery:${body}`).digest("base64url");
+    const aa=Buffer.from(sig),bb=Buffer.from(expected); if(aa.length!==bb.length||!crypto.timingSafeEqual(aa,bb))return null;
+    const payload=JSON.parse(Buffer.from(body,"base64url").toString("utf8"));
+    if(Number(payload?.v)!==1 || payload?.subHash!==recoverySubHash(googleSub) || !payload?.account || typeof payload.account!=="object") return null;
+    return payload;
+  }catch(_){return null;}
+}
+function restoreAccountFromRecovery(payload,googleProfile) {
+  const snap=payload?.account||{};
+  const desired=/^\d{1,5}$/.test(String(snap.userId||""))?String(snap.userId):"";
+  let userId=desired && !accountDb.byId[desired] ? desired : allocateNumericUserId();
+  const a={
+    userId, googleSub:googleProfile.sub,
+    username:cleanDisplayName(snap.username||"").slice(0,14), displayName:cleanDisplayName(snap.displayName||""), profileNamesInitialized:!!snap.profileNamesInitialized,
+    email:safeText(googleProfile.email,120).toLowerCase(), picture:safeText(googleProfile.picture,500),
+    goldCubits:Math.max(0,Math.min(1000000000,Math.floor(Number(snap.goldCubits)||0))),
+    unlockedThemes:Array.isArray(snap.unlockedThemes)?snap.unlockedThemes:[], achievements:(snap.achievements&&typeof snap.achievements==="object"&&!Array.isArray(snap.achievements))?snap.achievements:{},
+    lastDailyCubits:safeText(snap.lastDailyCubits||"",20), lastDailyChest:safeText(snap.lastDailyChest||"",20), redeemedCodes:Array.isArray(snap.redeemedCodes)?snap.redeemedCodes:[],
+    speciesCards:(snap.speciesCards&&typeof snap.speciesCards==="object"&&!Array.isArray(snap.speciesCards))?snap.speciesCards:{}, ownedStarters:(snap.ownedStarters&&typeof snap.ownedStarters==="object"&&!Array.isArray(snap.ownedStarters))?snap.ownedStarters:{},
+    petStages:(snap.petStages&&typeof snap.petStages==="object"&&!Array.isArray(snap.petStages))?snap.petStages:{}, petStatUpgrades:(snap.petStatUpgrades&&typeof snap.petStatUpgrades==="object"&&!Array.isArray(snap.petStatUpgrades))?snap.petStatUpgrades:{},
+    starterPetType:safeText(snap.starterPetType||"",24).toLowerCase(), starterPetName:safeText(snap.starterPetName||"",20), starterPetGender:snap.starterPetGender==="Female"?"Female":"Male",
+    materials:(snap.materials&&typeof snap.materials==="object"&&!Array.isArray(snap.materials))?snap.materials:{}, craftedStarters:Array.isArray(snap.craftedStarters)?snap.craftedStarters:[], learnedSkills:Array.isArray(snap.learnedSkills)?snap.learnedSkills:[],
+    title:safeText(snap.title||"",32), unlockedTitles:Array.isArray(snap.unlockedTitles)?snap.unlockedTitles:[], testerRank:Math.max(0,Math.floor(Number(snap.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(snap.ownerRank)||0)),
+    starterPetEntitlements:Array.isArray(snap.starterPetEntitlements)?snap.starterPetEntitlements:[], starterPetEntitlement:snap.starterPetEntitlement&&typeof snap.starterPetEntitlement==="object"?snap.starterPetEntitlement:null,
+    specialRewardRepairs:(snap.specialRewardRepairs&&typeof snap.specialRewardRepairs==="object"&&!Array.isArray(snap.specialRewardRepairs))?snap.specialRewardRepairs:{},
+    shopPurchases:(snap.shopPurchases&&typeof snap.shopPurchases==="object"&&!Array.isArray(snap.shopPurchases))?snap.shopPurchases:{},
+    friends:Array.isArray(snap.friends)?snap.friends:[], incomingFriendRequests:Array.isArray(snap.incomingFriendRequests)?snap.incomingFriendRequests:[], outgoingFriendRequests:Array.isArray(snap.outgoingFriendRequests)?snap.outgoingFriendRequests:[],
+    createdAt:safeText(snap.createdAt||new Date().toISOString(),40), updatedAt:new Date().toISOString()
+  };
+  ensureGoldCubits(a); ensureTitleState(a); ensureEconomyState(a); ensurePetProgressState(a); ensureSocialState(a); ensureStarterPetEntitlements(a); ensureShopPurchases(a); ensureRedeemedCodes(a); repairSpecialPromoEntitlements(a);
+  accountDb.byId[userId]=a; accountDb.byGoogleSub[googleProfile.sub]=userId;
+  // Rebuild global one-use code ownership when its rightful signed account returns after storage loss.
+  for(const code of a.redeemedCodes){const def=PROMO_CODES.get(String(code).toUpperCase());if(def?.globalOnce&&!accountDb.globalCodeClaims[String(code).toUpperCase()])accountDb.globalCodeClaims[String(code).toUpperCase()]=userId;}
+  return a;
+}
 function publicAccount(a) {
   return {
     userId: a.userId,
@@ -448,7 +542,8 @@ function publicAccount(a) {
     learnedSkills: [...a.learnedSkills],
     starterPetEntitlements: ensureStarterPetEntitlements(a).map(x=>({...x})),
     starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? {...a.starterPetEntitlement} : null,
-    friendCount: ensureSocialState(a).friends.length
+    friendCount: ensureSocialState(a).friends.length,
+    recoveryToken: signAccountRecovery(a)
   };
 }
 function b64url(input) {
@@ -576,13 +671,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 556, gameBuild: 628, rulesVersion: "594", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 558, gameBuild: 630, rulesVersion: "594", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 556, gameBuild: 628 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 558, gameBuild: 630 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -602,6 +697,18 @@ app.post("/auth/google", async (req, res) => {
     let userId = accountDb.byGoogleSub[p.sub];
     let account = userId ? accountDb.byId[userId] : null;
     let created = false;
+    let recovered = false;
+    if (!account) {
+      const supplied = Array.isArray(req.body?.recoveryTokens) ? req.body.recoveryTokens.slice(0,8) : (req.body?.recoveryToken ? [req.body.recoveryToken] : []);
+      let bestRecovery = null;
+      for (const raw of supplied) {
+        const candidate=verifyAccountRecoveryToken(safeText(raw,180000),p.sub);
+        if(candidate && (!bestRecovery || Number(candidate.iat||0)>Number(bestRecovery.iat||0))) bestRecovery=candidate;
+      }
+      if(bestRecovery){
+        account=restoreAccountFromRecovery(bestRecovery,p); userId=account.userId; recovered=true;
+      }
+    }
     if (!account) {
       created = true;
       userId = allocateNumericUserId();
@@ -662,7 +769,7 @@ app.post("/auth/google", async (req, res) => {
     await saveAccounts();
     const sessionToken = signSession(userId);
     setSessionCookie(res, sessionToken);
-    res.json({ ok: true, created, dailyGranted, token: sessionToken, account: publicAccount(account) });
+    res.json({ ok: true, created, recovered, dailyGranted, token: sessionToken, account: publicAccount(account) });
   } catch (err) {
     console.error("Google login failed:", err?.message || err);
     res.status(401).json({ ok: false, error: "google_verification_failed" });

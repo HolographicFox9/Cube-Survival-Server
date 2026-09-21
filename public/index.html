@@ -5,51 +5,7 @@
 <title>HOSTL</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <script>
-// One-time HOSTL browser-data reset. Existing players are reset the next time they load this build.
-(function(){
-  const RESET_KEY = "hostlBrowserResetVersion";
-  const RESET_VERSION = "2026-09-21-reset-1";
-  try {
-    if (localStorage.getItem(RESET_KEY) === RESET_VERSION) return;
-  } catch (_) {}
-
-  try { localStorage.clear(); } catch (_) {}
-  try { sessionStorage.clear(); } catch (_) {}
-
-  // Clear same-origin cookies that are accessible to the game.
-  try {
-    document.cookie.split(";").forEach(function(cookie){
-      const eq = cookie.indexOf("=");
-      const name = (eq > -1 ? cookie.slice(0, eq) : cookie).trim();
-      if (!name) return;
-      document.cookie = name + "=; Max-Age=0; path=/; SameSite=Lax";
-    });
-  } catch (_) {}
-
-  // Clear Cache Storage / service workers if the browser supports them.
-  try {
-    if (window.caches && caches.keys) {
-      caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }).catch(function(){});
-    }
-  } catch (_) {}
-  try {
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-      navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); }).catch(function(){});
-    }
-  } catch (_) {}
-
-  // Clear IndexedDB databases owned by this HOSTL origin when the browser exposes the database list.
-  try {
-    if (window.indexedDB && indexedDB.databases) {
-      indexedDB.databases().then(function(dbs){
-        dbs.forEach(function(db){ if (db && db.name) { try { indexedDB.deleteDatabase(db.name); } catch (_) {} } });
-      }).catch(function(){});
-    }
-  } catch (_) {}
-
-  // Mark the reset after clearing so it only happens once per browser/profile.
-  try { localStorage.setItem(RESET_KEY, RESET_VERSION); } catch (_) {}
-})();
+// Browser storage is intentionally preserved. HOSTL account recovery backups live here.
 </script>
 <style>
   :root{
@@ -19083,7 +19039,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 557;
+const RESET_CORE_BUILD = 558;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -24557,6 +24513,21 @@ hideLoadingScreen();
 
 // ---------- account / Gold Cubits / expanded shop ----------
 const ACCOUNT_STORAGE_KEY = "hostlAccountSessionV2";
+const ACCOUNT_RECOVERY_STORAGE_KEY = "hostlAccountRecoveryTokensV1";
+function loadAccountRecoveryTokens(){
+  try{const raw=localStorage.getItem(ACCOUNT_RECOVERY_STORAGE_KEY);const v=raw?JSON.parse(raw):[];return Array.isArray(v)?v.filter(x=>typeof x==="string"&&x.includes(".")).slice(0,8):[];}catch(_){return[];}
+}
+function rememberAccountRecoveryToken(token){
+  token=String(token||""); if(!token.includes("."))return;
+  try{const list=loadAccountRecoveryTokens().filter(x=>x!==token);list.unshift(token);localStorage.setItem(ACCOUNT_RECOVERY_STORAGE_KEY,JSON.stringify(list.slice(0,8)));}catch(_){}
+}
+function recoveryTokenUserId(token){
+  try{const body=String(token||"").split(".")[0];if(!body)return"";const b64=body.replace(/-/g,"+").replace(/_/g,"/");const pad="=".repeat((4-b64.length%4)%4);const payload=JSON.parse(atob(b64+pad));return String(payload?.account?.userId||"");}catch(_){return"";}
+}
+function forgetRecoveryForUser(userId){
+  userId=String(userId||"");if(!userId)return;
+  try{const keep=loadAccountRecoveryTokens().filter(t=>recoveryTokenUserId(t)!==userId);localStorage.setItem(ACCOUNT_RECOVERY_STORAGE_KEY,JSON.stringify(keep));}catch(_){}
+}
 const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
@@ -24600,6 +24571,7 @@ function applyAccountGameEntitlements(){
 }
 
 function setAccountFromServer(p={}) {
+  if(p?.recoveryToken) rememberAccountRecoveryToken(p.recoveryToken);
   window.__hostlAccountSessionActive = true;
   accountState = {
     loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
@@ -25162,7 +25134,7 @@ async function handleGoogleCredential(response) {
   if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
   syncAccountUi("Signing in with Google…");
   try {
-    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:response.credential}) });
+    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:response.credential,recoveryTokens:loadAccountRecoveryTokens()}) });
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
     hostlSessionToken=data.token;
@@ -25170,7 +25142,8 @@ async function handleGoogleCredential(response) {
     saveAccountSession();
     syncAchievementAccountBridge();
     const bits=[];
-    if(data.created) bits.push("HOSTL account created with 500 Gold Cubits");
+    if(data.recovered) bits.push("HOSTL account recovered from your secure browser backup");
+    else if(data.created) bits.push("HOSTL account created with 500 Gold Cubits");
     if(data.dailyGranted) bits.push("+10 daily Gold Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
     startFriendsLoops();
@@ -25308,6 +25281,7 @@ async function deleteHostlAccount() {
   try {
     const r=await fetch("/api/account",{method:"DELETE",headers:accountAuthHeaders()});
     if(!r.ok) throw new Error();
+    forgetRecoveryForUser(accountState.userId);
     closeAccountSettings();
     logoutAccount(false); closeAccountModal();
     showGameMessage("Account Deleted", "Your HOSTL account has been deleted. Your Google account was not deleted.");

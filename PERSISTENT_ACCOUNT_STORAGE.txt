@@ -10,3 +10,9 @@ HOSTL_DATA_DIR=/var/data/hostl
 Keep HOSTL_SESSION_SECRET set to the same private value as well.
 
 After the disk is mounted and HOSTL_DATA_DIR is set, /healthz reports accountStoragePersistent:true.
+
+
+DEPLOY-LOSS RECOVERY FALLBACK
+HOSTL also stores an HMAC-signed account recovery snapshot in the player's browser. If accounts.json is missing after a deploy, signing in with the same Google account on that browser can restore the signed snapshot automatically. The snapshot cannot be edited without invalidating its server signature.
+
+This is a safety net, not a replacement for a persistent disk/database: cross-device recovery still needs durable server storage.
