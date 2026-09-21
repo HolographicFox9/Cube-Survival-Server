@@ -7806,7 +7806,7 @@ function loadMeta() {
     }
   } catch (e) {}
   return {
-    servs: 0, username: "Cube", color: COLORS[0],
+    servs: 5, username: "Cube", color: COLORS[0],
     ownedStarters: {},
     speciesCards: { dog: 0, cat: 0, dragon: 0, fox: 0, wolf: 0, bear: 0, rabbit: 0 },
     petStages: {},
@@ -7821,6 +7821,9 @@ function saveMeta() {
     // Achievement unlock records are account-only. Never put them in the general browser meta save.
     const saveCopy = {...meta};
     delete saveCopy.achievements;
+    // Account Cubits live on the HOSTL server. Never leak an account balance into the
+    // browser's guest save; a logged-out player always starts with 5 Cubits.
+    if (window.__hostlAccountSessionActive) saveCopy.servs = 5;
     localStorage.setItem(META_KEY, JSON.stringify(saveCopy));
   } catch (e) {}
   // If a HOSTL account is signed in, Gold Cubits live in the normal game Cubits counter
@@ -24128,6 +24131,7 @@ function applyAccountGameEntitlements(){
 }
 
 function setAccountFromServer(p={}) {
+  window.__hostlAccountSessionActive = true;
   accountState = {
     loggedIn:true, userId:p.userId||"", username:p.username||"Player", displayName:p.displayName||p.username||"Player", email:p.email||"", picture:p.picture||"",
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
@@ -24212,19 +24216,26 @@ function syncAchievementAccountBridge(){
 
 async function restoreAccountSession() {
   try { hostlSessionToken = localStorage.getItem(ACCOUNT_STORAGE_KEY) || ""; } catch (_) { hostlSessionToken=""; }
-  if (!hostlSessionToken) { syncAccountUi(); return; }
   try {
-    const r=await fetch("/api/account", { headers:accountAuthHeaders(), cache:"no-store" });
+    // The server also keeps an HttpOnly HOSTL session cookie. That cookie lets a player
+    // remain signed in after a normal reload even if the local token is unavailable.
+    const r=await fetch("/api/account", { headers:accountAuthHeaders(), cache:"no-store", credentials:"same-origin" });
     if (!r.ok) throw new Error("session expired");
     const data=await r.json();
     if (!data?.account) throw new Error("account missing");
+    if (data.token) hostlSessionToken=String(data.token);
     setAccountFromServer(data.account);
+    saveAccountSession();
     syncAchievementAccountBridge();
     syncAccountUi("Account restored.");
     startFriendsLoops();
+    return;
   } catch (_) {
     hostlSessionToken="";
+    window.__hostlAccountSessionActive = false;
     accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    // Guest mode has its own clean starting balance and must never inherit account Cubits.
+    try { meta.servs=5; saveMeta(); } catch (_) {}
     saveAccountSession();
     syncAccountUi();
   }
@@ -24264,6 +24275,10 @@ function syncAccountUi(msg="") {
   if(accountState.loggedIn){
     const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.cubits||0);
     const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.cubits||0);
+  } else {
+    // Logged-out home state is a fresh guest profile, not the last account balance.
+    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=5;
+    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=5;
   }
   const ds = document.getElementById("dailyCubitStatus");
   if (ds) ds.textContent = accountState.loggedIn
@@ -24556,7 +24571,7 @@ async function handleGoogleCredential(response) {
   if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
   syncAccountUi("Signing in with Google…");
   try {
-    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:response.credential}) });
+    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:response.credential}) });
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
     hostlSessionToken=data.token;
@@ -24577,11 +24592,15 @@ function logoutAccount(showMessage=true) {
   stopFriendsLoops(); closeFriendsModal();
   clearTimeout(accountSaveTimer);
   if(accountState.loggedIn) pushAccountProfileNow();
+  // Clear the server-side browser session cookie as well as the local token.
+  try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
+  window.__hostlAccountSessionActive = false;
   accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  try { meta.servs=5; saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
-  syncAccountUi(showMessage ? "Logged out. Guest progress will not be saved." : "");
+  syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Cubits." : "");
 }
 function populateTitleDropdown(){
   const sel=document.getElementById("settingsTitleSelect");

@@ -206,12 +206,35 @@ function verifySession(token) {
     return accountDb.byId[payload.uid] ? payload.uid : null;
   } catch (_) { return null; }
 }
-function requireAccount(req, res, next) {
+function cookieValue(req, name) {
+  const raw = String(req.headers.cookie || "");
+  for (const piece of raw.split(";")) {
+    const i = piece.indexOf("=");
+    if (i < 0) continue;
+    const k = piece.slice(0, i).trim();
+    if (k !== name) continue;
+    try { return decodeURIComponent(piece.slice(i + 1).trim()); } catch (_) { return piece.slice(i + 1).trim(); }
+  }
+  return "";
+}
+function requestSessionToken(req) {
   const auth = String(req.headers.authorization || "");
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7);
+  return cookieValue(req, "hostl_session");
+}
+function setSessionCookie(res, token) {
+  // HttpOnly keeps game JavaScript from accidentally deleting or exposing the session.
+  res.setHeader("Set-Cookie", `hostl_session=${encodeURIComponent(token)}; Max-Age=${60*60*24*30}; Path=/; HttpOnly; Secure; SameSite=Lax`);
+}
+function clearSessionCookie(res) {
+  res.setHeader("Set-Cookie", "hostl_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax");
+}
+function requireAccount(req, res, next) {
+  const token = requestSessionToken(req);
   const uid = verifySession(token);
   if (!uid) return res.status(401).json({ ok: false, error: "not_authenticated" });
   req.hostlUserId = uid;
+  req.hostlSessionToken = token;
   next();
 }
 function utcDayKey() {
@@ -253,13 +276,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 528, gameBuild: 600, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 531, gameBuild: 603, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 528, gameBuild: 600 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 531, gameBuild: 603 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -318,7 +341,9 @@ app.post("/auth/google", async (req, res) => {
     }
     const dailyGranted = applyDailyCubits(account);
     await saveAccounts();
-    res.json({ ok: true, created, dailyGranted, token: signSession(userId), account: publicAccount(account) });
+    const sessionToken = signSession(userId);
+    setSessionCookie(res, sessionToken);
+    res.json({ ok: true, created, dailyGranted, token: sessionToken, account: publicAccount(account) });
   } catch (err) {
     console.error("Google login failed:", err?.message || err);
     res.status(401).json({ ok: false, error: "google_verification_failed" });
@@ -327,7 +352,14 @@ app.post("/auth/google", async (req, res) => {
 
 app.get("/api/account", requireAccount, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json({ ok: true, account: publicAccount(accountDb.byId[req.hostlUserId]) });
+  // Returning the already-verified token lets the browser restore its local copy from
+  // the HttpOnly cookie after a reload without asking Google to sign in again.
+  res.json({ ok: true, token: req.hostlSessionToken, account: publicAccount(accountDb.byId[req.hostlUserId]) });
+});
+
+app.post("/auth/logout", (req, res) => {
+  clearSessionCookie(res);
+  res.json({ ok:true });
 });
 
 app.put("/api/account", requireAccount, async (req, res) => {
