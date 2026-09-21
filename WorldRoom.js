@@ -160,7 +160,6 @@ const CHAT_BLOCKED_BRAINROT_TERMS = [
   "sigma grindset","what the sigma","sigma boy",
   "fanum","fanum tax","fanum taxed",
   "only in ohio","ohio final boss",
-  "aura farming","negative aura","infinite aura",
   "mewing",
   "looksmaxxing","looks maxxing","looksmax",
   "67","6 7","6-7","six seven","six-seven",
@@ -395,12 +394,12 @@ function chatHasBrainrot(value) {
 }
 
 function chatBlockReason(value) {
+  // HOSTL public chat blocks profanity/sexual terms/brainrot, plus links and off-platform socials.
+  // Allowed exceptions include: aura, aura farming, unc, and gg.
   if (chatHasSexualContent(value)) return "sexual/adult content";
-  if (chatHasGroomingContent(value)) return "unsafe private-contact request";
   if (chatHasBrainrot(value)) return "brainrot/meme slang";
   if (chatHasLinkOrContact(value)) return "links/contact info";
   if (chatHasBlockedSocial(value)) return "social apps/sites";
-  if (chatHasBlockedContactPhrase(value)) return "contact/private-chat requests";
   if (chatHasBlockedWord(value)) return "language";
   return "";
 }
@@ -422,8 +421,6 @@ function cleanChatText(value) {
 function safeChatUsername(value) {
   const name = cleanChatText(value).slice(0, 14) || "Cube";
   return (
-    chatHasLinkOrContact(name) ||
-    chatHasBlockedSocial(name) ||
     chatHasSexualContent(name) ||
     chatHasBlockedWord(name)
   ) ? "Cube" : name;
