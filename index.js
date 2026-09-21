@@ -333,6 +333,10 @@ app.get("/api/account", requireAccount, (req, res) => {
 app.put("/api/account", requireAccount, async (req, res) => {
   const a = accountDb.byId[req.hostlUserId];
   const body = req.body || {};
+  if (typeof body.username === "string") {
+    const nextUsername = cleanDisplayName(body.username).slice(0, 14);
+    if (nextUsername.length >= 2) a.username = nextUsername;
+  }
   if (typeof body.displayName === "string") {
     const nextName = cleanDisplayName(body.displayName);
     if (nextName.length >= 2) a.displayName = nextName;

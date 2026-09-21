@@ -23827,7 +23827,13 @@ el("lootPopup").addEventListener("mousedown", (e) => {
 });
 
 el("username").addEventListener("change", () => {
-  meta.username = (el("username").value || "Cube").slice(0, 14);
+  meta.username = (el("username").value || "Cube").trim().replace(/\s+/g," ").slice(0, 14) || "Cube";
+  el("username").value = meta.username;
+  if(accountState?.loggedIn){
+    accountState.username=meta.username;
+    persistAccountProfile();
+    syncAccountUi();
+  }
   if (game.startPet) {
     game.startPetName = String(el("starterPetName")?.value || game.startPetName || "").trim().slice(0,14);
     game.startPetGender = el("starterPetGender")?.value === "Female" ? "Female" : "Male";
@@ -24069,7 +24075,7 @@ function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
   try {
     window.__hostlApplyAccountEntitlements?.({
-      username:accountState.displayName||accountState.username||"Player",
+      username:accountState.username||"Player",
       cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
       title:accountState.title||"",
@@ -24091,7 +24097,12 @@ function setAccountFromServer(p={}) {
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
-  try { applyAccountGameEntitlements(); } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
+  try {
+    meta.username=accountState.username||meta.username||"Cube";
+    player.username=meta.username;
+    const homeUser=document.getElementById("username"); if(homeUser && document.activeElement!==homeUser) homeUser.value=meta.username;
+    applyAccountGameEntitlements();
+  } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
   setTimeout(()=>{ if(accountState.loggedIn){ sendPresence(); refreshFriends(false); } },0);
 }
 function saveAccountSession() {
@@ -24110,7 +24121,7 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        displayName:accountState.displayName||accountState.username||"Player", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        username:accountState.username||"Player", displayName:accountState.displayName||accountState.username||"Player", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24144,7 +24155,7 @@ function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
     if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
     window.__cubeAchievementAccount = {
-      loggedIn:true, userId:accountState.userId, username:accountState.displayName||accountState.username||"Player", achievements:accountState.achievements,
+      loggedIn:true, userId:accountState.userId, username:accountState.username||"Player", achievements:accountState.achievements,
       persist(achievements){
         accountState.achievements = (achievements && typeof achievements==="object") ? achievements : {};
         persistAccountProfile();
@@ -24183,15 +24194,16 @@ function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.displayName||accountState.username}` : "Account";
+    btn.textContent = accountState.loggedIn ? `${accountState.username||"Player"}` : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
   if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
   const friendsCorner=document.getElementById("friendsCorner");
   if(friendsCorner) friendsCorner.classList.toggle("show", !!accountState.loggedIn);
-  const sUser=document.getElementById("settingsUsername"); if(sUser) sUser.textContent=accountState.username||"Player";
+  const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"Player";
   const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.displayName||accountState.username||"Player";
+  const homeUser=document.getElementById("username"); if(homeUser && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"Player";
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
@@ -24203,7 +24215,7 @@ function syncAccountUi(msg="") {
   const user = document.getElementById("accountUserView");
   if (guest) guest.style.display = accountState.loggedIn ? "none" : "";
   if (user) user.style.display = accountState.loggedIn ? "" : "none";
-  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.displayName || accountState.username || "Player";
+  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
   if(accountState.loggedIn){
@@ -24541,23 +24553,29 @@ function populateTitleDropdown(){
 }
 async function saveAccountSettings(){
   if(!accountState.loggedIn || !hostlSessionToken) return;
+  const usernameInput=document.getElementById("settingsUsername");
   const nameInput=document.getElementById("settingsDisplayName");
   const titleSelect=document.getElementById("settingsTitleSelect");
   const msg=document.getElementById("accountSettingsSaveMsg");
+  const rawUsername=String(usernameInput?.value||"").trim().replace(/\s+/g," ");
   const rawName=String(nameInput?.value||"").trim().replace(/\s+/g," ");
+  if(rawUsername.length<2 || rawUsername.length>14){ if(msg) msg.textContent="Username must be 2–14 characters."; return; }
   if(rawName.length<2 || rawName.length>20){ if(msg) msg.textContent="Display name must be 2–20 characters."; return; }
   const chosenTitle=String(titleSelect?.value||"");
   const btn=document.getElementById("saveAccountSettingsBtn");
   if(btn){btn.disabled=true;btn.textContent="Saving…";}
   if(msg) msg.textContent="Saving account settings…";
   try{
-    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({displayName:rawName,title:chosenTitle})});
+    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({username:rawUsername,displayName:rawName,title:chosenTitle})});
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
     setAccountFromServer(data.account);
     syncAccountUi();
     if(msg) msg.textContent="Account settings saved.";
-    showGameMessage("Account Updated", "Your display name and title have been saved. Your username stays separate.");
+    meta.username=accountState.username||meta.username||"Cube";
+    player.username=meta.username;
+    const homeUser=document.getElementById("username"); if(homeUser) homeUser.value=meta.username;
+    showGameMessage("Account Updated", "Your username, display name, and title have been saved.");
   }catch(err){
     if(msg) msg.textContent="Could not save account settings. Try again.";
   }finally{ if(btn){btn.disabled=false;btn.textContent="Save Changes";} }
@@ -24821,8 +24839,8 @@ syncAchievementAccountBridge();
     </div>
     <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
     <div class="account-detail-grid">
-      <div class="label">Username</div><div class="value"><span id="settingsUsername">—</span><div class="settings-hint">Your account username is separate from your display name.</div></div>
-      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is the name other players see.</div></div>
+      <div class="label">Username</div><div class="value"><input id="settingsUsername" class="settings-control" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Username"><div class="settings-hint">2–14 characters. This is your in-game name and the name other players see while playing.</div></div>
+      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is your social name shown to friends.</div></div>
       <div class="label">Choose title</div><div class="value"><select id="settingsTitleSelect" class="settings-control"><option value="">No title</option></select><div class="settings-hint">Titles come from achievements, codes, and special rewards.</div></div>
       <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>
       <div class="label">Google-linked email</div><div class="value" id="settingsEmail">—</div>
