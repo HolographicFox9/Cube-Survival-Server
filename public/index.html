@@ -24058,7 +24058,7 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 function utcDayKey() {
   const d = new Date();
@@ -24069,7 +24069,7 @@ function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
   try {
     window.__hostlApplyAccountEntitlements?.({
-      username:accountState.username||"Player",
+      username:accountState.displayName||accountState.username||"Player",
       cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
       title:accountState.title||"",
@@ -24083,7 +24083,7 @@ function applyAccountGameEntitlements(){
 
 function setAccountFromServer(p={}) {
   accountState = {
-    loggedIn:true, userId:p.userId||"", username:p.username||"Player", email:p.email||"", picture:p.picture||"",
+    loggedIn:true, userId:p.userId||"", username:p.username||"Player", displayName:p.displayName||p.username||"Player", email:p.email||"", picture:p.picture||"",
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
@@ -24110,7 +24110,7 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        username:accountState.username, title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        displayName:accountState.displayName||accountState.username||"Player", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24144,7 +24144,7 @@ function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
     if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
     window.__cubeAchievementAccount = {
-      loggedIn:true, userId:accountState.userId, username:accountState.username||"Player", achievements:accountState.achievements,
+      loggedIn:true, userId:accountState.userId, username:accountState.displayName||accountState.username||"Player", achievements:accountState.achievements,
       persist(achievements){
         accountState.achievements = (achievements && typeof achievements==="object") ? achievements : {};
         persistAccountProfile();
@@ -24170,7 +24170,7 @@ async function restoreAccountSession() {
     startFriendsLoops();
   } catch (_) {
     hostlSessionToken="";
-    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     saveAccountSession();
     syncAccountUi();
   }
@@ -24183,14 +24183,15 @@ function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.username}` : "Account";
+    btn.textContent = accountState.loggedIn ? `${accountState.displayName||accountState.username}` : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
   if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
   const friendsCorner=document.getElementById("friendsCorner");
   if(friendsCorner) friendsCorner.classList.toggle("show", !!accountState.loggedIn);
-  const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.username||"Player";
+  const sUser=document.getElementById("settingsUsername"); if(sUser) sUser.textContent=accountState.username||"Player";
+  const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.displayName||accountState.username||"Player";
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
@@ -24202,7 +24203,7 @@ function syncAccountUi(msg="") {
   const user = document.getElementById("accountUserView");
   if (guest) guest.style.display = accountState.loggedIn ? "none" : "";
   if (user) user.style.display = accountState.loggedIn ? "" : "none";
-  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
+  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.displayName || accountState.username || "Player";
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
   if(accountState.loggedIn){
@@ -24522,7 +24523,7 @@ function logoutAccount(showMessage=true) {
   clearTimeout(accountSaveTimer);
   if(accountState.loggedIn) pushAccountProfileNow();
   hostlSessionToken="";
-  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
   syncAccountUi(showMessage ? "Logged out. Guest progress will not be saved." : "");
@@ -24550,13 +24551,13 @@ async function saveAccountSettings(){
   if(btn){btn.disabled=true;btn.textContent="Saving…";}
   if(msg) msg.textContent="Saving account settings…";
   try{
-    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({username:rawName,title:chosenTitle})});
+    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({displayName:rawName,title:chosenTitle})});
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
     setAccountFromServer(data.account);
     syncAccountUi();
     if(msg) msg.textContent="Account settings saved.";
-    showGameMessage("Account Updated", "Your display name and title have been saved.");
+    showGameMessage("Account Updated", "Your display name and title have been saved. Your username stays separate.");
   }catch(err){
     if(msg) msg.textContent="Could not save account settings. Try again.";
   }finally{ if(btn){btn.disabled=false;btn.textContent="Save Changes";} }
@@ -24628,10 +24629,10 @@ function renderFriendsUi(){
   const req=document.getElementById("friendRequestsList"), list=document.getElementById("friendsList"); if(!req||!list)return;
   req.innerHTML=""; const incoming=friendsData.incoming||[], outgoing=friendsData.outgoing||[];
   if(!incoming.length&&!outgoing.length)req.innerHTML='<div class="friends-note">No pending requests.</div>';
-  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
-  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
+  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
+  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
   list.innerHTML=""; const fs=friendsData.friends||[]; if(!fs.length)list.innerHTML='<div class="friends-note">No friends yet.</div>';
-  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.username)} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
+  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.displayName||f.username)} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
   req.querySelectorAll("[data-accept]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.accept,true)); req.querySelectorAll("[data-decline]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.decline,false)); list.querySelectorAll("[data-openfriend]").forEach(b=>b.onclick=()=>selectFriend(b.dataset.openfriend));
   if(selectedFriendId){const f=fs.find(x=>String(x.userId)===String(selectedFriendId)); if(f)updateSelectedFriend(f); else {selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";}}
 }
@@ -24639,7 +24640,7 @@ function escapeFriendText(v){return String(v??"").replace(/[&<>\"']/g,c=>({"&":"
 async function sendFriendRequest(){const input=document.getElementById("friendIdInput"),msg=document.getElementById("friendActionMsg");const playerId=String(input?.value||"").trim();if(!/^\d{1,5}$/.test(playerId)){if(msg)msg.textContent="Enter a valid Player ID.";return;}try{const r=await friendApi("/api/friends/request",{method:"POST",body:JSON.stringify({playerId})});const d=await r.json().catch(()=>({}));if(msg)msg.textContent=r.ok?(d.accepted?"Friend added!":"Friend request sent."):(d.error==="player_not_found"?"That Player ID was not found.":d.error==="already_friends"?"You are already friends.":d.error==="cannot_friend_self"?"You cannot add yourself.":"Could not send request.");if(r.ok){if(input)input.value="";refreshFriends();}}catch(_){if(msg)msg.textContent="Could not reach the server.";}}
 async function respondFriend(playerId,accept){try{await friendApi("/api/friends/respond",{method:"POST",body:JSON.stringify({playerId,accept})});refreshFriends();}catch(_){}}
 function selectFriend(id){selectedFriendId=String(id);const f=(friendsData.friends||[]).find(x=>String(x.userId)===selectedFriendId);if(!f)return;document.getElementById("friendEmptyView").style.display="none";document.getElementById("friendDetailView")?.classList.add("on");updateSelectedFriend(f);setFriendSubview("chat");clearInterval(friendChatTimer);friendChatTimer=setInterval(()=>{if(document.getElementById("friendsModal")?.classList.contains("on"))refreshFriendChat(false);},3000);}
-function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.username}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
+function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.displayName||f.username}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
 async function removeSelectedFriend(){if(!selectedFriendId)return;const ok=await showGameConfirm("Remove Friend","Remove this player from your friends list?");if(!ok)return;try{await friendApi(`/api/friends/${encodeURIComponent(selectedFriendId)}`,{method:"DELETE"});selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";refreshFriends();}catch(_){}}
 async function refreshFriendChat(scroll=true){if(!selectedFriendId)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`);if(!r.ok)return;const d=await r.json();const log=document.getElementById("friendChatLog");if(!log)return;log.innerHTML=(d.messages||[]).map(m=>`<div class="friend-chat-msg ${String(m.from)===String(accountState.userId)?"mine":""}"><div class="friend-chat-meta">${String(m.from)===String(accountState.userId)?"You":"Friend"} · ${new Date(m.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div>${escapeFriendText(m.message)}</div>`).join("")||'<div class="friends-note">No messages yet.</div>';if(scroll)log.scrollTop=log.scrollHeight;}catch(_){}}
 async function sendFriendChat(){const i=document.getElementById("friendChatInput");const message=String(i?.value||"").trim();if(!selectedFriendId||!message)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`,{method:"POST",body:JSON.stringify({message})});if(r.ok){i.value="";refreshFriendChat();}}catch(_){}}
@@ -24820,6 +24821,7 @@ syncAchievementAccountBridge();
     </div>
     <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
     <div class="account-detail-grid">
+      <div class="label">Username</div><div class="value"><span id="settingsUsername">—</span><div class="settings-hint">Your account username is separate from your display name.</div></div>
       <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is the name other players see.</div></div>
       <div class="label">Choose title</div><div class="value"><select id="settingsTitleSelect" class="settings-control"><option value="">No title</option></select><div class="settings-hint">Titles come from achievements, codes, and special rewards.</div></div>
       <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>

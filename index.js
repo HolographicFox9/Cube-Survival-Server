@@ -113,9 +113,9 @@ function friendChatKey(a,b){ return [String(a),String(b)].sort((x,y)=>Number(x)-
 function areFriends(a,b){ const aa=accountDb.byId[String(a)]; return !!aa && ensureSocialState(aa).friends.includes(String(b)); }
 function friendPublicSummary(uid){
   const a=accountDb.byId[String(uid)]; if(!a)return null; ensureSocialState(a); const p=presenceFor(uid);
-  return { userId:a.userId, username:a.username||"Player", title:a.title||"", online:p.online, playing:p.playing, worldId:p.worldId };
+  return { userId:a.userId, username:a.username||"Player", displayName:a.displayName||a.username||"Player", title:a.title||"", online:p.online, playing:p.playing, worldId:p.worldId };
 }
-function socialRequestSummary(uid){ const a=accountDb.byId[String(uid)]; return a?{userId:a.userId,username:a.username||"Player",title:a.title||""}:null; }
+function socialRequestSummary(uid){ const a=accountDb.byId[String(uid)]; return a?{userId:a.userId,username:a.username||"Player",displayName:a.displayName||a.username||"Player",title:a.title||""}:null; }
 function normalizedTransferPart(raw){
   const obj=raw&&typeof raw==="object"?raw:{};
   const cubits=Math.max(0,Math.min(100000000,Math.floor(Number(obj.cubits)||0)));
@@ -144,6 +144,7 @@ function normalizeLoadedAccounts() {
     idMap.set(String(oldId), newId);
     a.userId = newId;
     a.username = cleanDisplayName(a.username) || "Player";
+    a.displayName = cleanDisplayName(a.displayName || a.username) || a.username;
     ensureTitleState(a);
     ensureSocialState(a);
     newById[newId] = a;
@@ -167,6 +168,7 @@ function publicAccount(a) {
   return {
     userId: a.userId,
     username: a.username || "Player",
+    displayName: a.displayName || a.username || "Player",
     email: a.email || "",
     picture: a.picture || "",
     cubits: Math.max(0, Math.floor(Number(a.cubits) || 0)),
@@ -285,6 +287,7 @@ app.post("/auth/google", async (req, res) => {
         userId,
         googleSub: p.sub,
         username: suggestedName,
+        displayName: suggestedName,
         email: safeText(p.email, 120).toLowerCase(),
         picture: safeText(p.picture, 500),
         cubits: 500,
@@ -308,6 +311,7 @@ app.post("/auth/google", async (req, res) => {
       account.email = safeText(p.email, 120).toLowerCase();
       account.picture = safeText(p.picture, 500);
       account.username = cleanDisplayName(account.username) || "Player";
+      account.displayName = cleanDisplayName(account.displayName || account.username) || account.username;
       ensureTitleState(account);
       ensureSocialState(account);
       account.updatedAt = new Date().toISOString();
@@ -329,9 +333,9 @@ app.get("/api/account", requireAccount, (req, res) => {
 app.put("/api/account", requireAccount, async (req, res) => {
   const a = accountDb.byId[req.hostlUserId];
   const body = req.body || {};
-  if (typeof body.username === "string") {
-    const nextName = cleanDisplayName(body.username);
-    if (nextName.length >= 2) a.username = nextName;
+  if (typeof body.displayName === "string") {
+    const nextName = cleanDisplayName(body.displayName);
+    if (nextName.length >= 2) a.displayName = nextName;
   }
   ensureTitleState(a);
   if (typeof body.title === "string") {
