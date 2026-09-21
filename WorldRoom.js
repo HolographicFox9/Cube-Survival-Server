@@ -648,18 +648,40 @@ class WorldState extends Schema {
     this.animals=new MapSchema(); this.pets=new MapSchema(); this.enemies=new MapSchema(); this.walls=new MapSchema();
     this.towers=new MapSchema(); this.projectiles=new MapSchema();
     this.dayPhase=0; this.phaseTimer=TIME_PHASES[0].duration; this.dayCount=1; this.wave=0; this.worldTime=0;
-    this.rulesVersion=CUBE_SHARED_RULES_VERSION;
+    this.rulesVersion=CUBE_SHARED_RULES_VERSION; this.worldId="world1";
   }
 }
 defineTypes(WorldState, {
   players:{map:PlayerState}, resources:{map:ResourceState}, gold:{map:GoldState}, chests:{map:ChestState},
   animals:{map:AnimalState}, pets:{map:PetState}, enemies:{map:EnemyState}, walls:{map:WallState}, towers:{map:TowerState}, projectiles:{map:ProjectileState},
-  dayPhase:"number", phaseTimer:"number", dayCount:"number", wave:"number", worldTime:"number", rulesVersion:"string"
+  dayPhase:"number", phaseTimer:"number", dayCount:"number", wave:"number", worldTime:"number", rulesVersion:"string", worldId:"string"
 });
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
 function randi(lo, hi) { return Math.floor(rand(lo, hi + 1)); }
+
+function normalizeWorldId(value) {
+  const id = String(value || "world1").trim().toLowerCase();
+  return /^world[1-4]$/.test(id) ? id : "world1";
+}
+function hashWorldSeed(text) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function makeSeededRandom(seed) {
+  let a = seed >>> 0;
+  return function() {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 function angTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
 function angleDiff(a,b) { return Math.atan2(Math.sin(b-a), Math.cos(b-a)); }
@@ -1063,8 +1085,10 @@ export function getCubeServerStats() {
 export class WorldRoom extends Room {
   maxClients=12;
 
-  onCreate() {
+  onCreate(options = {}) {
     this.setState(new WorldState());
+    this.worldId = normalizeWorldId(options?.worldId);
+    this.state.worldId = this.worldId;
     this.nextResourceId=1; this.nextGoldId=1; this.nextChestId=1; this.nextAnimalId=1; this.nextPetId=1;
     this.playerPetStatUpgrades=new Map();
     this.nextEnemyId=1; this.nextWallId=1; this.nextTowerId=1; this.nextProjectileId=1;
@@ -1089,7 +1113,12 @@ export class WorldRoom extends Room {
     this.fxQueue=[]; this.fxFlushAccum=0; this.pendingPlayerHits=new Map(); this.hitFlushAccum=0;
     this.pendingAnimalPushes=new Map(); this.pushFlushAccum=0;
     this.petDeathTimers=new Map(); this.abilityDots=new Map(); this.solidGrid=new Map(); this.dynamicGrid=new Map(); this.chestRewards=new Map(); this.chatLastSent=new Map(); this.waveTimer=4;
-    this.generateWorld();
+    // Every named HOSTL world has a permanent generation seed. This means a
+    // world rebuild/restart produces the exact same resource, gold, chest and
+    // starting-wildlife layout for every player who chooses that world.
+    const originalRandom = Math.random;
+    Math.random = makeSeededRandom(hashWorldSeed(`HOSTL:${this.worldId}:resources:v1`));
+    try { this.generateWorld(); } finally { Math.random = originalRandom; }
     this.rebuildDynamicGrid();
 
     // Keep combat/physics at 20 TPS, but send state patches at 10 Hz. The client

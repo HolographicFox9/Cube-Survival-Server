@@ -140,13 +140,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 509, gameBuild: 581, rulesVersion: "581", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 510, gameBuild: 582, rulesVersion: "582", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 509, gameBuild: 581 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 510, gameBuild: 582 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -313,7 +313,7 @@ app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
 
 const httpServer = createServer(app);
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });
-gameServer.define("world", WorldRoom);
+gameServer.define("world", WorldRoom).filterBy(["worldId"]);
 await gameServer.listen(port);
 
 console.log(`HOSTL multiplayer listening on port ${port}`);
