@@ -14,6 +14,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+// Account records are server-authoritative. For true persistence across Render deploys/restarts,
+// HOSTL_DATA_DIR should point at a mounted persistent disk (recommended: /var/data/hostl).
+// Without a persistent mount, the fallback project data folder can be replaced by the host.
 const DATA_DIR = String(process.env.HOSTL_DATA_DIR || path.join(__dirname, "data")).trim();
 const ACCOUNT_FILE = path.join(DATA_DIR, "accounts.json");
 const SESSION_SECRET = String(process.env.HOSTL_SESSION_SECRET || crypto.randomBytes(32).toString("hex"));
@@ -27,6 +30,10 @@ if (!GOOGLE_CLIENT_ID) {
 }
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
+const ACCOUNT_STORAGE_PERSISTENT = !!process.env.HOSTL_DATA_DIR;
+if (!ACCOUNT_STORAGE_PERSISTENT) {
+  console.warn("HOSTL account storage is using the local filesystem fallback. Set HOSTL_DATA_DIR to a mounted persistent disk path for deploy-safe permanent accounts.");
+}
 function loadAccounts() {
   try {
     if (!fs.existsSync(ACCOUNT_FILE)) return { byId: {}, byGoogleSub: {}, globalCodeClaims: {}, friendChats: {}, tradeOffers: {} };
@@ -141,7 +148,7 @@ function repairSpecialPromoEntitlements(a) {
   if(!a.specialRewardRepairs || typeof a.specialRewardRepairs!=="object" || Array.isArray(a.specialRewardRepairs)) a.specialRewardRepairs={};
   if(!a.speciesCards || typeof a.speciesCards!=="object" || Array.isArray(a.speciesCards)) a.speciesCards={};
   const codes=Array.isArray(a.redeemedCodes)?a.redeemedCodes.map(x=>String(x).toUpperCase()):[];
-  const hasTester=codes.includes("SCCTT") || Math.max(0,Math.floor(Number(a.testerRank)||0))===1;
+  const hasTester=codes.includes("SCCTT") || codes.includes("SCCTT2") || Math.max(0,Math.floor(Number(a.testerRank)||0))===1;
   if(hasTester){
     if(Math.max(0,Math.floor(Number(a.testerRank)||0))!==1){a.testerRank=1;changed=true;}
     ensureTitleState(a);
@@ -154,20 +161,33 @@ function repairSpecialPromoEntitlements(a) {
       a.specialRewardRepairs.sccttSaberCardsV1=Date.now(); changed=true;
     }
   }
-  const hasOwner=codes.includes("OVCC") || Math.max(0,Math.floor(Number(a.ownerRank)||0))===1;
+  const hasOwner=codes.includes("OVCC") || codes.includes("OVCC2") || Math.max(0,Math.floor(Number(a.ownerRank)||0))===1;
   if(hasOwner){
     if(Math.max(0,Math.floor(Number(a.ownerRank)||0))!==1){a.ownerRank=1;changed=true;}
     ensureTitleState(a);
     if(!a.unlockedTitles.includes("Owner")){a.unlockedTitles.push("Owner");changed=true;}
     const before=JSON.stringify(ensureStarterPetEntitlements(a)); grantStarterPetEntitlement(a,"snake","adult");
     if(JSON.stringify(a.starterPetEntitlements)!==before)changed=true;
-    if(!a.specialRewardRepairs.ovccViperCardsV1){
+    if(!a.specialRewardRepairs.ovccViperCardsV2){
       const old=Math.max(0,Math.floor(Number(a.speciesCards.snake)||0));
-      if(old<50){a.speciesCards.snake=50;changed=true;}
-      a.specialRewardRepairs.ovccViperCardsV1=Date.now(); changed=true;
+      if(old<500){a.speciesCards.snake=500;changed=true;}
+      a.specialRewardRepairs.ovccViperCardsV2=Date.now(); changed=true;
+    }
+  }
+  const hasSTC=codes.includes("STC");
+  if(hasSTC){
+    const before=JSON.stringify(ensureStarterPetEntitlements(a)); grantStarterPetEntitlement(a,"saber","adult");
+    if(JSON.stringify(a.starterPetEntitlements)!==before)changed=true;
+    if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
+    if(!a.unlockedThemes.includes("celestialCrown")){a.unlockedThemes.push("celestialCrown");changed=true;}
+    if(!a.specialRewardRepairs.stcSaberCardsV2){
+      const old=Math.max(0,Math.floor(Number(a.speciesCards.saber)||0));
+      if(old<500){a.speciesCards.saber=500;changed=true;}
+      a.specialRewardRepairs.stcSaberCardsV2=Date.now(); changed=true;
     }
   }
   ensureStarterPetEntitlements(a);
+  ensurePetProgressState(a);
   return changed;
 }
 
@@ -220,6 +240,26 @@ function ensureEconomyState(a){
   for(const id of Object.keys(MATERIAL_CATALOG))a.materials[id]=Math.max(0,Math.min(100000,Math.floor(Number(a.materials[id])||0)));
   if(!Array.isArray(a.craftedStarters))a.craftedStarters=[]; a.craftedStarters=[...new Set(a.craftedStarters.map(x=>safeText(x,32)).filter(x=>BUILD_RECIPES[x]))];
   if(!Array.isArray(a.learnedSkills))a.learnedSkills=[]; a.learnedSkills=[...new Set(a.learnedSkills.map(x=>safeText(x,32)).filter(x=>LEARN_RECIPES[x]))];
+  return a;
+}
+function ensurePetProgressState(a){
+  if(!a || typeof a!=="object") return a;
+  if(!a.speciesCards || typeof a.speciesCards!=="object" || Array.isArray(a.speciesCards)) a.speciesCards={};
+  for(const [k,v] of Object.entries(a.speciesCards)) a.speciesCards[safeText(k,24).toLowerCase()]=Math.max(0,Math.min(1000000,Math.floor(Number(v)||0)));
+  if(!a.ownedStarters || typeof a.ownedStarters!=="object" || Array.isArray(a.ownedStarters)) a.ownedStarters={};
+  for(const k of Object.keys(a.ownedStarters)) a.ownedStarters[k]=!!a.ownedStarters[k];
+  if(!a.petStages || typeof a.petStages!=="object" || Array.isArray(a.petStages)) a.petStages={};
+  const validStages=new Set(["baby","adult","boss","superboss","bigmomma"]);
+  for(const [k,v] of Object.entries(a.petStages)){ const s=safeText(v,20).toLowerCase(); a.petStages[k]=validStages.has(s)?s:"baby"; }
+  if(!a.petStatUpgrades || typeof a.petStatUpgrades!=="object" || Array.isArray(a.petStatUpgrades)) a.petStatUpgrades={};
+  for(const [species,stats0] of Object.entries(a.petStatUpgrades)){
+    const stats=(stats0&&typeof stats0==="object"&&!Array.isArray(stats0))?stats0:{};
+    const clean={}; for(const stat of ["health","defense","attack","weight","regen","speed"]) clean[stat]=Math.max(0,Math.min(10,Math.floor(Number(stats[stat])||0)));
+    a.petStatUpgrades[species]=clean;
+  }
+  a.starterPetType=safeText(a.starterPetType||"",24).toLowerCase();
+  a.starterPetName=safeText(a.starterPetName||"",20);
+  a.starterPetGender=a.starterPetGender==="Female"?"Female":"Male";
   return a;
 }
 function hasIngredients(a,ingredients){ensureEconomyState(a);return Object.entries(ingredients||{}).every(([id,n])=>(a.materials[id]||0)>=n);}
@@ -346,6 +386,7 @@ function normalizeLoadedAccounts() {
     a.displayName = cleanDisplayName(a.displayName || "");
     ensureTitleState(a);
     ensureEconomyState(a);
+    ensurePetProgressState(a);
     ensureSocialState(a);
     newById[newId] = a;
   }
@@ -365,6 +406,7 @@ function normalizeLoadedAccounts() {
 normalizeLoadedAccounts();
 for (const a of Object.values(accountDb.byId || {})) {
   ensureGoldCubits(a);
+  ensurePetProgressState(a);
   repairSpecialPromoEntitlements(a);
 }
 saveAccounts();
@@ -385,7 +427,13 @@ function publicAccount(a) {
     unlockedTitles: Array.isArray(a.unlockedTitles) ? a.unlockedTitles : [],
     testerRank: Math.max(0, Math.floor(Number(a.testerRank) || 0)),
     ownerRank: Math.max(0, Math.floor(Number(a.ownerRank) || 0)),
-    speciesCards: a.speciesCards && typeof a.speciesCards === "object" ? a.speciesCards : {},
+    speciesCards: ensurePetProgressState(a).speciesCards,
+    ownedStarters: {...a.ownedStarters},
+    petStages: {...a.petStages},
+    petStatUpgrades: JSON.parse(JSON.stringify(a.petStatUpgrades||{})),
+    starterPetType: a.starterPetType||"",
+    starterPetName: a.starterPetName||"",
+    starterPetGender: a.starterPetGender||"Male",
     materials: ensureEconomyState(a).materials,
     craftedStarters: [...a.craftedStarters],
     learnedSkills: [...a.learnedSkills],
@@ -471,21 +519,39 @@ const PROMO_CODES = new Map([
     globalOnce: true,
     label: "+14,000 Gold Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
   }],
+  ["SCCTT2", {
+    goldCubits: 14000,
+    speciesCards: { saber: 500 },
+    title: "#1 Tester",
+    testerRank: 1,
+    starterPetEntitlement: { type: "saber", stage: "adult" },
+    globalOnce: true,
+    label: "+14,000 Gold Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
+  }],
   ["OVCC", {
     goldCubits: 10000,
-    speciesCards: { snake: 50 },
+    speciesCards: { snake: 500 },
     title: "Owner",
     ownerRank: 1,
     starterPetEntitlement: { type: "snake", stage: "adult" },
     globalOnce: true,
-    label: "+10,000 Gold Cubits, +50 Viper Cards, Adult Viper starter access, and the Owner title"
+    label: "+10,000 Gold Cubits, +500 Viper Cards, Adult Viper starter access, and the Owner title"
+  }],
+  ["OVCC2", {
+    goldCubits: 10000,
+    speciesCards: { snake: 500 },
+    title: "Owner",
+    ownerRank: 1,
+    starterPetEntitlement: { type: "snake", stage: "adult" },
+    globalOnce: true,
+    label: "+10,000 Gold Cubits, +500 Viper Cards, Adult Viper starter access, and the Owner title"
   }],
   ["STC", {
-    speciesCards: { saber: 50 },
+    speciesCards: { saber: 500 },
     themes: ["celestialCrown"],
     starterPetEntitlement: { type: "saber", stage: "adult" },
     globalOnce: true,
-    label: "+50 Saber Cards, Adult Saber starter access, and the Celestial Crown theme"
+    label: "+500 Saber Cards, Adult Saber starter access, and the Celestial Crown theme"
   }]
 ]);
 function normalizePromoCode(value) {
@@ -501,13 +567,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 551, gameBuild: 623, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 553, gameBuild: 625, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 551, gameBuild: 623 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 553, gameBuild: 625 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -545,6 +611,7 @@ app.post("/auth/google", async (req, res) => {
         lastDailyChest: "",
         redeemedCodes: [],
         speciesCards: {},
+        ownedStarters: {}, petStages: {}, petStatUpgrades: {}, starterPetType:"", starterPetName:"", starterPetGender:"Male",
         materials: {}, craftedStarters: [], learnedSkills: [],
         title: "",
         unlockedTitles: [],
@@ -638,6 +705,20 @@ app.put("/api/account", requireAccount, async (req, res) => {
       if (key) a.speciesCards[key] = n;
     }
   }
+  if (body.ownedStarters && typeof body.ownedStarters === "object" && !Array.isArray(body.ownedStarters)) {
+    a.ownedStarters={}; for(const [k,v] of Object.entries(body.ownedStarters)) if(v) a.ownedStarters[safeText(k,40)]=true;
+  }
+  if (body.petStages && typeof body.petStages === "object" && !Array.isArray(body.petStages)) {
+    a.petStages={}; const valid=new Set(["baby","adult","boss","superboss","bigmomma"]);
+    for(const [k,v] of Object.entries(body.petStages)){const s=safeText(v,20).toLowerCase();a.petStages[safeText(k,24).toLowerCase()]=valid.has(s)?s:"baby";}
+  }
+  if (body.petStatUpgrades && typeof body.petStatUpgrades === "object" && !Array.isArray(body.petStatUpgrades)) {
+    a.petStatUpgrades={}; for(const [species,stats0] of Object.entries(body.petStatUpgrades)){const stats=(stats0&&typeof stats0==="object")?stats0:{};const clean={};for(const stat of ["health","defense","attack","weight","regen","speed"])clean[stat]=Math.max(0,Math.min(10,Math.floor(Number(stats[stat])||0)));a.petStatUpgrades[safeText(species,24).toLowerCase()]=clean;}
+  }
+  if(typeof body.starterPetType==="string") a.starterPetType=safeText(body.starterPetType,24).toLowerCase();
+  if(typeof body.starterPetName==="string") a.starterPetName=safeText(body.starterPetName,20);
+  if(typeof body.starterPetGender==="string") a.starterPetGender=body.starterPetGender==="Female"?"Female":"Male";
+  ensurePetProgressState(a);
   a.updatedAt = new Date().toISOString();
   await saveAccounts();
   res.json({ ok: true, account: publicAccount(a) });

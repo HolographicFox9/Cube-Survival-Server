@@ -8184,6 +8184,12 @@ function saveMeta() {
   // If a HOSTL account is signed in, Gold Cubits live in the normal game Gold Cubits counter
   // and are mirrored back to the account for cross-device persistence.
   try { window.__hostlAccountGoldCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
+  try {
+    window.__hostlAccountProgressChanged?.({
+      speciesCards:{...(meta.speciesCards||{})}, ownedStarters:{...(meta.ownedStarters||{})}, petStages:{...(meta.petStages||{})},
+      petStatUpgrades:JSON.parse(JSON.stringify(meta.petStatUpgrades||{})), starterPetType:meta.starterPetType||"", starterPetName:meta.starterPetName||"", starterPetGender:meta.starterPetGender||"Male"
+    });
+  } catch (_) {}
 }
 let meta = loadMeta();
 // Old browser-wide achievement records are intentionally ignored from this build onward.
@@ -24439,6 +24445,23 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
     if(!meta.speciesCards) meta.speciesCards={};
     if(!meta.ownedStarters) meta.ownedStarters={};
     if(!meta.petStages) meta.petStages={};
+    if(!meta.petStatUpgrades) meta.petStatUpgrades={};
+    const serverOwned=(payload.ownedStarters&&typeof payload.ownedStarters==="object")?payload.ownedStarters:{};
+    for(const [k,v] of Object.entries(serverOwned)) if(v) meta.ownedStarters[k]=true;
+    const serverStages=(payload.petStages&&typeof payload.petStages==="object")?payload.petStages:{};
+    const stageRank={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
+    for(const [species,stage] of Object.entries(serverStages)){
+      const old=String(meta.petStages[species]||"baby"), neu=String(stage||"baby");
+      if((stageRank[neu]??0)>(stageRank[old]??0))meta.petStages[species]=neu;
+    }
+    const serverUp=(payload.petStatUpgrades&&typeof payload.petStatUpgrades==="object")?payload.petStatUpgrades:{};
+    for(const [species,stats] of Object.entries(serverUp)){
+      if(!meta.petStatUpgrades[species])meta.petStatUpgrades[species]={};
+      for(const stat of ["health","defense","attack","weight","regen","speed"]) meta.petStatUpgrades[species][stat]=Math.max(Number(meta.petStatUpgrades[species][stat])||0,Number(stats?.[stat])||0);
+    }
+    if(!meta.starterPetType && payload.starterPetType)meta.starterPetType=String(payload.starterPetType);
+    if(!meta.starterPetName && payload.starterPetName)meta.starterPetName=String(payload.starterPetName);
+    if(payload.starterPetGender==="Female")meta.starterPetGender="Female";
     const cards=(payload.speciesCards && typeof payload.speciesCards==="object") ? payload.speciesCards : {};
     for(const [species,raw] of Object.entries(cards)){
       const n=Math.max(0,Math.floor(Number(raw)||0));
@@ -24449,7 +24472,7 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
     const entitlements=[];
     if(Array.isArray(payload.starterPetEntitlements)) entitlements.push(...payload.starterPetEntitlements);
     if(payload.starterPetEntitlement && typeof payload.starterPetEntitlement==="object") entitlements.push(payload.starterPetEntitlement);
-    const ranks={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
+    const ranks=stageRank;
     const seenEnt=new Set();
     for(const ent of entitlements){
       if(!ent || !PET_TYPES?.[ent.type] || seenEnt.has(ent.type)) continue;
@@ -24503,7 +24526,7 @@ let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
 let hostlServerDayKey = "";
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 function utcDayKey() {
   if (hostlServerDayKey) return hostlServerDayKey;
@@ -24518,6 +24541,8 @@ function applyAccountGameEntitlements(){
       username:accountState.username||"",
       goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
+      ownedStarters:accountState.ownedStarters||{}, petStages:accountState.petStages||{}, petStatUpgrades:accountState.petStatUpgrades||{},
+      starterPetType:accountState.starterPetType||"", starterPetName:accountState.starterPetName||"", starterPetGender:accountState.starterPetGender||"Male",
       craftedStarters:Array.isArray(accountState.craftedStarters)?accountState.craftedStarters:[],
       learnedSkills:Array.isArray(accountState.learnedSkills)?accountState.learnedSkills:[],
       title:accountState.title||"",
@@ -24538,6 +24563,8 @@ function setAccountFromServer(p={}) {
     goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
+    ownedStarters:(p.ownedStarters&&typeof p.ownedStarters==="object")?p.ownedStarters:{}, petStages:(p.petStages&&typeof p.petStages==="object")?p.petStages:{},
+    petStatUpgrades:(p.petStatUpgrades&&typeof p.petStatUpgrades==="object")?p.petStatUpgrades:{}, starterPetType:String(p.starterPetType||""), starterPetName:String(p.starterPetName||""), starterPetGender:p.starterPetGender==="Female"?"Female":"Male",
     materials:(p.materials && typeof p.materials==="object") ? p.materials : {},
     craftedStarters:Array.isArray(p.craftedStarters)?p.craftedStarters.map(String):[],
     learnedSkills:Array.isArray(p.learnedSkills)?p.learnedSkills.map(String):[],
@@ -24604,7 +24631,9 @@ async function pushAccountProfileNow() {
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
-        speciesCards:(meta.speciesCards && typeof meta.speciesCards==="object") ? meta.speciesCards : (accountState.speciesCards||{})
+        speciesCards:(meta.speciesCards && typeof meta.speciesCards==="object") ? meta.speciesCards : (accountState.speciesCards||{}),
+        ownedStarters:(meta.ownedStarters&&typeof meta.ownedStarters==="object")?meta.ownedStarters:{}, petStages:(meta.petStages&&typeof meta.petStages==="object")?meta.petStages:{},
+        petStatUpgrades:(meta.petStatUpgrades&&typeof meta.petStatUpgrades==="object")?meta.petStatUpgrades:{}, starterPetType:meta.starterPetType||"", starterPetName:meta.starterPetName||"", starterPetGender:meta.starterPetGender||"Male"
       })
     });
     if (r.status===401) { logoutAccount(false); return false; }
@@ -24628,6 +24657,17 @@ window.__hostlAccountGoldCubitsChanged = function(value){
   const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
   const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
   const as=document.getElementById("settingsCubits"); if(as) as.textContent=next;
+  persistAccountProfile();
+};
+window.__hostlAccountProgressChanged = function(progress={}){
+  if(!accountState.loggedIn) return;
+  if(progress.speciesCards&&typeof progress.speciesCards==="object") accountState.speciesCards={...progress.speciesCards};
+  if(progress.ownedStarters&&typeof progress.ownedStarters==="object") accountState.ownedStarters={...progress.ownedStarters};
+  if(progress.petStages&&typeof progress.petStages==="object") accountState.petStages={...progress.petStages};
+  if(progress.petStatUpgrades&&typeof progress.petStatUpgrades==="object") accountState.petStatUpgrades=JSON.parse(JSON.stringify(progress.petStatUpgrades));
+  accountState.starterPetType=String(progress.starterPetType||accountState.starterPetType||"");
+  accountState.starterPetName=String(progress.starterPetName||accountState.starterPetName||"");
+  accountState.starterPetGender=progress.starterPetGender==="Female"?"Female":"Male";
   persistAccountProfile();
 };
 function syncAchievementAccountBridge(){
@@ -24665,7 +24705,7 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
     try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
@@ -25099,7 +25139,7 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { meta.servs=5; saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}

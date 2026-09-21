@@ -1,0 +1,12 @@
+HOSTL PERMANENT ACCOUNT STORAGE
+
+HOSTL account/player progression is stored server-side in accounts.json. The game now saves species cards, pet unlocks, pet starting stages, pet stat upgrades, starter preference, Gold Cubits, themes, achievements, materials, titles, codes, and friends to the account.
+
+IMPORTANT FOR RENDER:
+A normal web-service filesystem can be replaced during deploy/restart. For deploy-safe permanent accounts, mount a Render persistent disk and set this environment variable to the mounted directory:
+
+HOSTL_DATA_DIR=/var/data/hostl
+
+Keep HOSTL_SESSION_SECRET set to the same private value as well.
+
+After the disk is mounted and HOSTL_DATA_DIR is set, /healthz reports accountStoragePersistent:true.
