@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "594";
+const CUBE_SHARED_RULES_VERSION = "595";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1133,6 +1133,9 @@ export class WorldRoom extends Room {
     this.firstLightReadyPlayers=new Set(); this.midnightMarkSpawned=false; this.petXpContrib=new Map();
     this.wildMateTargets=new Map(); this.wildLastBreedDay=new Map();
     this.populationKeys=new Map();this.playerAccountIds=new Map();
+    // Track input timing/sequence so fast mounts can send a position after a lag
+    // gap without the server clamping it back to an old fixed-distance limit.
+    this.playerInputNetState=new Map();
     this.fxQueue=[]; this.fxFlushAccum=0; this.pendingPlayerHits=new Map(); this.hitFlushAccum=0;
     this.pendingAnimalPushes=new Map(); this.pushFlushAccum=0;
     this.petDeathTimers=new Map(); this.abilityDots=new Map(); this.solidGrid=new Map(); this.dynamicGrid=new Map(); this.chestRewards=new Map(); this.chatLastSent=new Map(); this.waveTimer=4;
@@ -1733,6 +1736,18 @@ export class WorldRoom extends Room {
   handleInput(client,input){
     const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;
     const abilityStunned=(Number(p._abilityStunUntil)||0)>this.state.worldTime;
+
+    // Ignore duplicate/stale input packets and measure the actual gap since the
+    // previous accepted packet. WebSocket normally preserves order, but keeping a
+    // sequence guard also prevents an old queued position from pulling a fast rider back.
+    const seq=Number(input?.seq)||0,now=Number(this.state.worldTime)||0;
+    let ns=this.playerInputNetState.get(client.sessionId);
+    if(!ns){ns={seq:0,time:now};this.playerInputNetState.set(client.sessionId,ns);}
+    if(seq>0&&ns.seq>0&&seq<=ns.seq)return;
+    const packetDt=clamp(now-(Number(ns.time)||now),1/120,.35);
+    if(seq>0)ns.seq=seq;
+    ns.time=now;
+
     if(Number.isFinite(+input.moveX))p.moveX=clamp(+input.moveX,-1,1);
     if(Number.isFinite(+input.moveY))p.moveY=clamp(+input.moveY,-1,1);
     p.moving=typeof input.moving==="boolean"?input.moving:Math.hypot(p.moveX,p.moveY)>.05;
@@ -1747,6 +1762,17 @@ export class WorldRoom extends Room {
         const mount=this.state.pets.get(requested);
         p.ridingPetId=(mount&&mount.ownerId===client.sessionId&&!mount.dead&&["adult","boss","superboss"].includes(mount.stage))?requested:"";
       }
+    }
+
+    const rideMount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
+    if(rideMount&&!rideMount.dead&&Number.isFinite(+input.ridingAngle)){
+      const target=+input.ridingAngle;
+      let diff=Math.atan2(Math.sin(target-(Number(rideMount.angle)||0)),Math.cos(target-(Number(rideMount.angle)||0)));
+      // Allow normal client prediction plus a little latency tolerance, but never
+      // accept an impossible instant rotation from the client.
+      const maxTurn=mountedPetTurnSpeed(rideMount)*packetDt*2.35+.12;
+      diff=clamp(diff,-maxTurn,maxTurn);
+      rideMount.angle=(Number(rideMount.angle)||0)+diff;
     }
 
     // Escape input wins immediately over a stale carry window. This is the key
@@ -1764,13 +1790,23 @@ export class WorldRoom extends Room {
     if(abilityStunned){p.moveX=0;p.moveY=0;p.moving=false;return;}
     if(Number.isFinite(clientX)&&Number.isFinite(clientY)){
       let tx=clamp(clientX,PLAYER_R,WORLD_W-PLAYER_R),ty=clamp(clientY,PLAYER_R,WORLD_H-PLAYER_R);
-      // Bound correction distance so lag spikes cannot tunnel a player straight
-      // through a creature or wall in a single network packet.
-      let dx=tx-p.x,dy=ty-p.y;const len=Math.hypot(dx,dy),slowMul=(Number(p._abilitySlowUntil)||0)>this.state.worldTime?(Number(p._abilitySlowMul)||.55):1,maxStep=(p.ridingPetId?52:34)*slowMul;
+      // The previous fixed 52px mounted packet cap could lag behind a fast mount
+      // after a browser/network hitch, making the next state patch look like a
+      // backward push. Scale the allowed catch-up distance from the mount's real
+      // speed and actual packet gap, while still bounding impossible teleports.
+      const slowMul=(Number(p._abilitySlowUntil)||0)>this.state.worldTime?(Number(p._abilitySlowMul)||.55):1;
+      const inputMag=clamp(Math.hypot(p.moveX||0,p.moveY||0),0,1);
+      let expectedSpeed=148*inputMag;
+      if(rideMount&&!rideMount.dead)expectedSpeed=Math.max(24,Number(rideMount.speed)||148)*2.30*inputMag;
+      if(p.heldSpecial==="Wall")expectedSpeed*=.64;
+      expectedSpeed*=slowMul;
+      const minStep=rideMount?52:34;
+      const maxCap=rideMount?190:110;
+      const maxStep=clamp(expectedSpeed*packetDt*1.90+16,minStep,maxCap);
+      let dx=tx-p.x,dy=ty-p.y;const len=Math.hypot(dx,dy);
       if(len>maxStep){dx=dx/len*maxStep;dy=dy/len*maxStep;tx=p.x+dx;ty=p.y+dy;}
-      const steps=Math.max(1,Math.min(16,Math.ceil(Math.hypot(tx-p.x,ty-p.y)/5.5)));
+      const steps=Math.max(1,Math.min(24,Math.ceil(Math.hypot(tx-p.x,ty-p.y)/5.5)));
       const sx=(tx-p.x)/steps,sy=(ty-p.y)/steps;
-      const rideMount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
       if(rideMount&&!rideMount.dead)rideMount._lastResourceContactId="";
       for(let i=0;i<steps;i++){
         p.x=clamp(p.x+sx,PLAYER_R,WORLD_W-PLAYER_R);p.y=clamp(p.y+sy,PLAYER_R,WORLD_H-PLAYER_R);
@@ -3514,7 +3550,7 @@ export class WorldRoom extends Room {
     const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
   }
 
-  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
   onDispose(){for(const key of this.populationKeys.values())ACTIVE_CUBE_PLAYER_KEYS.delete(key);this.populationKeys.clear();}
 
 }
