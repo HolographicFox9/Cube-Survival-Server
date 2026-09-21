@@ -4349,6 +4349,19 @@
   .legal-support-footer{position:fixed;right:clamp(10px,2vw,22px);bottom:calc(clamp(10px,2vw,18px) + env(safe-area-inset-bottom, 0px));z-index:90;display:flex;justify-content:flex-end;align-items:center;padding:0;pointer-events:none;}
   #legalSupportBtn{pointer-events:auto;border:1px solid rgba(244,198,95,.48);background:linear-gradient(180deg,rgba(34,47,38,.96),rgba(16,24,19,.96));color:#f7e5b2;font:800 12px/1.2 inherit;letter-spacing:.035em;cursor:pointer;padding:10px 14px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.05);}
   #legalSupportBtn:hover,#legalSupportBtn:focus-visible{color:#fff1c5;background:linear-gradient(180deg,rgba(49,66,53,.98),rgba(23,33,26,.98));border-color:#f4c65f;outline:2px solid rgba(244,198,95,.22);outline-offset:2px;}
+  .account-settings-footer{position:fixed;left:clamp(10px,2vw,22px);bottom:calc(clamp(10px,2vw,18px) + env(safe-area-inset-bottom, 0px));z-index:90;display:none;align-items:center;padding:0;pointer-events:none;}
+  .account-settings-footer.show{display:flex;}
+  #accountSettingsBtn{pointer-events:auto;border:1px solid rgba(114,220,155,.48);background:linear-gradient(180deg,rgba(28,48,40,.96),rgba(14,27,22,.96));color:#dff8e9;font:800 12px/1.2 inherit;letter-spacing:.035em;cursor:pointer;padding:10px 14px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.05);}
+  #accountSettingsBtn:hover,#accountSettingsBtn:focus-visible{color:#fff;background:linear-gradient(180deg,rgba(39,66,53,.98),rgba(20,38,30,.98));border-color:#72dc9b;outline:2px solid rgba(114,220,155,.22);outline-offset:2px;}
+  .account-detail-grid{display:grid;grid-template-columns:140px 1fr;gap:8px 12px;margin:12px 0 16px;}
+  .account-detail-grid .label{opacity:.66;font-weight:700;}
+  .account-detail-grid .value{font-weight:800;overflow-wrap:anywhere;}
+  .danger-zone{margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,110,110,.28);}
+  .danger-zone h3{margin:0 0 8px;color:#ffb0b0;}
+  .danger-btn{border-color:rgba(255,110,110,.55)!important;color:#ffd6d6!important;}
+  .delete-confirm-box{display:none;margin-top:12px;padding:12px;border-radius:12px;border:1px solid rgba(255,110,110,.30);background:rgba(120,20,20,.10);}
+  .delete-confirm-box.on{display:block;}
+  .delete-confirm-box input{text-transform:uppercase;}
   #legalSupportOverlay{position:fixed;inset:0;z-index:12000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(5,9,7,.82);backdrop-filter:blur(7px);}
   #legalSupportOverlay.show{display:flex;}
   .legal-support-card{width:min(900px,96vw);max-height:min(86vh,820px);display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(24,34,28,.99),rgba(12,18,15,.99));border:1px solid rgba(244,198,95,.28);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.58);overflow:hidden;color:#efe6d2;}
@@ -4371,6 +4384,8 @@
   @media(max-width:700px){
     .legal-support-footer{right:10px;bottom:calc(10px + env(safe-area-inset-bottom, 0px));}
     #legalSupportBtn{font-size:11px;padding:9px 12px;}
+    .account-settings-footer{left:10px;bottom:calc(10px + env(safe-area-inset-bottom, 0px));}
+    #accountSettingsBtn{font-size:11px;padding:9px 12px;}
     #legalSupportOverlay{padding:8px;align-items:stretch;}
     .legal-support-card{width:100%;max-height:none;height:100%;border-radius:14px;}
     .legal-support-head{padding:13px 14px;}
@@ -4737,6 +4752,9 @@
         </div>
       </div>
 
+    </div>
+    <div id="accountSettingsFooter" class="account-settings-footer">
+      <button id="accountSettingsBtn" type="button">Account Settings</button>
     </div>
     <div class="legal-support-footer">
       <button id="legalSupportBtn" type="button">Legal &amp; Support</button>
@@ -23529,7 +23547,7 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, lastDailyCubits:"", lastDailyChest:"" };
+let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, lastDailyCubits:"", lastDailyChest:"", createdAt:"" };
 
 function utcDayKey() {
   const d = new Date();
@@ -23540,7 +23558,7 @@ function setAccountFromServer(p={}) {
     loggedIn:true, userId:p.userId||"", username:p.username||"Player", email:p.email||"", picture:p.picture||"",
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
-    lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||""
+    lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||""
   };
 }
 function saveAccountSession() {
@@ -23606,7 +23624,7 @@ async function restoreAccountSession() {
     syncAccountUi("Account restored.");
   } catch (_) {
     hostlSessionToken="";
-    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
+    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
     saveAccountSession();
     syncAccountUi();
   }
@@ -23621,6 +23639,15 @@ function syncAccountUi(msg="") {
   if (btn) {
     btn.textContent = accountState.loggedIn ? `${accountState.username} • ${accountState.cubits} Cubits` : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
+  }
+  const settingsFooter=document.getElementById("accountSettingsFooter");
+  if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
+  const sName=document.getElementById("settingsDisplayName"); if(sName) sName.textContent=accountState.username||"Player";
+  const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
+  const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
+  const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.cubits||0);
+  const sCreated=document.getElementById("settingsCreatedAt"); if(sCreated) {
+    let label="—"; try{ if(accountState.createdAt) label=new Date(accountState.createdAt).toLocaleString(); }catch(_){} sCreated.textContent=label;
   }
   const guest = document.getElementById("accountGuestView");
   const user = document.getElementById("accountUserView");
@@ -23867,20 +23894,57 @@ function logoutAccount(showMessage=true) {
   clearTimeout(accountSaveTimer);
   if(accountState.loggedIn) pushAccountProfileNow();
   hostlSessionToken="";
-  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
+  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
   syncAccountUi(showMessage ? "Logged out. Guest progress will not be saved." : "");
 }
+function openAccountSettings(){
+  if(!accountState.loggedIn){ openAccountModal(); return; }
+  syncAccountUi();
+  document.getElementById("accountSettingsModal")?.classList.add("on");
+  document.getElementById("deleteConfirmBox")?.classList.remove("on");
+  const input=document.getElementById("deleteConfirmInput"); if(input) input.value="";
+  const msg=document.getElementById("deleteSettingsMsg"); if(msg) msg.textContent="";
+}
+function closeAccountSettings(){
+  document.getElementById("accountSettingsModal")?.classList.remove("on");
+  document.getElementById("deleteConfirmBox")?.classList.remove("on");
+  const input=document.getElementById("deleteConfirmInput"); if(input) input.value="";
+}
+function beginDeleteHostlAccount(){
+  if(!accountState.loggedIn) return;
+  document.getElementById("deleteConfirmBox")?.classList.add("on");
+  const input=document.getElementById("deleteConfirmInput"); if(input){input.value=""; input.focus();}
+  const msg=document.getElementById("deleteSettingsMsg"); if(msg) msg.textContent="Type DELETE below to unlock the permanent-delete button.";
+  updateDeleteConfirmState();
+}
+function updateDeleteConfirmState(){
+  const input=document.getElementById("deleteConfirmInput");
+  const finalBtn=document.getElementById("confirmDeleteAccountBtn");
+  if(finalBtn) finalBtn.disabled=((input?.value||"").trim().toUpperCase()!=="DELETE");
+}
 async function deleteHostlAccount() {
   if(!accountState.loggedIn || !hostlSessionToken) return;
-  if(!confirm("Delete this HOSTL account and its saved Cubits, themes, and achievements? This cannot be undone.")) return;
+  const input=document.getElementById("deleteConfirmInput");
+  if((input?.value||"").trim().toUpperCase()!=="DELETE"){
+    const msg=document.getElementById("deleteSettingsMsg"); if(msg) msg.textContent="Type DELETE exactly before continuing.";
+    return;
+  }
+  const finalBtn=document.getElementById("confirmDeleteAccountBtn");
+  if(finalBtn){finalBtn.disabled=true; finalBtn.textContent="Deleting…";}
+  const msg=document.getElementById("deleteSettingsMsg"); if(msg) msg.textContent="Deleting your HOSTL account…";
   try {
     const r=await fetch("/api/account",{method:"DELETE",headers:accountAuthHeaders()});
     if(!r.ok) throw new Error();
+    closeAccountSettings();
     logoutAccount(false); closeAccountModal();
-    alert("Your HOSTL account data was deleted.");
-  } catch (_) { syncAccountUi("Account deletion failed. Please try again or contact HoloFox9 Studios."); }
+    alert("Your HOSTL account has been deleted. Your Google account was not deleted.");
+  } catch (_) {
+    if(msg) msg.textContent="Account deletion failed. Please try again or contact HoloFox9 Studios.";
+  } finally {
+    if(finalBtn){finalBtn.textContent="Permanently Delete Account"; updateDeleteConfirmState();}
+  }
 }
 
 function bindAccountAndShopUi() {
@@ -23895,7 +23959,12 @@ function bindAccountAndShopUi() {
   once(document.getElementById("accountBtn"), "click", openAccountModal);
   once(document.getElementById("accountClose"), "click", closeAccountModal);
   once(document.getElementById("logoutBtn"), "click", ()=>logoutAccount(true));
-  once(document.getElementById("deleteAccountBtn"), "click", deleteHostlAccount);
+  once(document.getElementById("accountSettingsBtn"), "click", openAccountSettings);
+  once(document.getElementById("accountSettingsClose"), "click", closeAccountSettings);
+  once(document.getElementById("openDeleteAccountBtn"), "click", beginDeleteHostlAccount);
+  once(document.getElementById("cancelDeleteAccountBtn"), "click", ()=>{ document.getElementById("deleteConfirmBox")?.classList.remove("on"); const m=document.getElementById("deleteSettingsMsg"); if(m)m.textContent=""; });
+  once(document.getElementById("deleteConfirmInput"), "input", updateDeleteConfirmState);
+  once(document.getElementById("confirmDeleteAccountBtn"), "click", deleteHostlAccount);
   once(document.getElementById("openShopFromAccount"), "click",
     ()=>{ closeAccountModal(); openExpandedShop("chests"); });
   once(document.getElementById("expandedShopClose"), "click", closeExpandedShop);
@@ -23916,6 +23985,9 @@ function bindAccountAndShopUi() {
   // Clicking the dark backdrop closes the popup, but clicking the card does not.
   once(document.getElementById("accountModal"), "pointerdown", e => {
     if (e.target === e.currentTarget) closeAccountModal();
+  });
+  once(document.getElementById("accountSettingsModal"), "pointerdown", e => {
+    if (e.target === e.currentTarget) closeAccountSettings();
   });
   once(document.getElementById("expandedShopModal"), "pointerdown", e => {
     if (e.target === e.currentTarget) closeExpandedShop();
@@ -23950,7 +24022,10 @@ if (document.readyState === "loading") {
 
 document.addEventListener("keydown", e => {
   if (e.key !== "Escape") return;
-  if (document.getElementById("accountModal")?.classList.contains("on")) {
+  if (document.getElementById("accountSettingsModal")?.classList.contains("on")) {
+    closeAccountSettings();
+    e.preventDefault();
+  } else if (document.getElementById("accountModal")?.classList.contains("on")) {
     closeAccountModal();
     e.preventDefault();
   } else if (document.getElementById("expandedShopModal")?.classList.contains("on")) {
@@ -23999,10 +24074,42 @@ syncAchievementAccountBridge();
       <div class="modal-row">
         <button id="openShopFromAccount" class="account-btn" type="button">Open Shop</button>
         <button id="logoutBtn" class="account-btn" type="button">Log Out</button>
-        <button id="deleteAccountBtn" class="account-btn" type="button" style="border-color:rgba(255,110,110,.45)">Delete Account</button>
+        <button id="openAccountSettingsFromAccount" class="account-btn" type="button" onclick="closeAccountModal();openAccountSettings();">Account Settings</button>
       </div>
     </div>
     <p id="accountMsg" class="muted"></p>
+  </div>
+</div>
+
+<div id="accountSettingsModal" class="account-modal" aria-hidden="true">
+  <div class="modal-card">
+    <div class="modal-row" style="justify-content:space-between">
+      <h2>Account Settings</h2>
+      <button id="accountSettingsClose" class="account-btn" type="button">Close</button>
+    </div>
+    <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
+    <div class="account-detail-grid">
+      <div class="label">Display name</div><div class="value" id="settingsDisplayName">—</div>
+      <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>
+      <div class="label">Google-linked email</div><div class="value" id="settingsEmail">—</div>
+      <div class="label">Gold Cubits</div><div class="value" id="settingsCubits">0</div>
+      <div class="label">Account created</div><div class="value" id="settingsCreatedAt">—</div>
+    </div>
+    <div class="danger-zone">
+      <h3>Delete account?</h3>
+      <p class="muted">Deleting your HOSTL account permanently erases its saved progress, Cubits, unlocked themes, achievements, and other account data. This does <strong>not</strong> delete your Google account.</p>
+      <button id="openDeleteAccountBtn" class="account-btn danger-btn" type="button">Delete Account?</button>
+      <div id="deleteConfirmBox" class="delete-confirm-box">
+        <strong>Are you sure?</strong>
+        <p>This cannot be undone. Type <b>DELETE</b> to confirm.</p>
+        <input id="deleteConfirmInput" type="text" autocomplete="off" spellcheck="false" placeholder="Type DELETE">
+        <div class="modal-row">
+          <button id="confirmDeleteAccountBtn" class="account-btn danger-btn" type="button" disabled>Permanently Delete Account</button>
+          <button id="cancelDeleteAccountBtn" class="account-btn" type="button">Cancel</button>
+        </div>
+      </div>
+      <p id="deleteSettingsMsg" class="muted"></p>
+    </div>
   </div>
 </div>
 

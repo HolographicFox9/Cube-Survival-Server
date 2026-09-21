@@ -113,7 +113,7 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 506, gameBuild: 578, rulesVersion: "578", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 507, gameBuild: 579, rulesVersion: "579", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
