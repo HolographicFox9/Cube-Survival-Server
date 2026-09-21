@@ -201,13 +201,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 527, gameBuild: 599, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 528, gameBuild: 600, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 527, gameBuild: 599 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 528, gameBuild: 600 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -215,82 +215,59 @@ app.get("/auth/config", (_req, res) => {
   res.json({ ok: true, googleClientId: GOOGLE_CLIENT_ID || "" });
 });
 
-
-async function finishGoogleLoginFromPayload(p, res) {
-  if (!p?.sub || !p?.email) return res.status(401).json({ ok: false, error: "invalid_google_account" });
-
-  let userId = accountDb.byGoogleSub[p.sub];
-  let account = userId ? accountDb.byId[userId] : null;
-  let created = false;
-  if (!account) {
-    created = true;
-    userId = allocateNumericUserId();
-    const suggestedName = cleanDisplayName(p.given_name || p.name || "Player") || "Player";
-    account = {
-      userId,
-      googleSub: p.sub,
-      username: suggestedName,
-      email: safeText(p.email, 120).toLowerCase(),
-      picture: safeText(p.picture, 500),
-      cubits: 500,
-      unlockedThemes: [],
-      achievements: {},
-      lastDailyCubits: "",
-      lastDailyChest: "",
-      redeemedCodes: [],
-      speciesCards: {},
-      title: "",
-      unlockedTitles: [],
-      testerRank: 0,
-      starterPetEntitlement: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    accountDb.byId[userId] = account;
-    accountDb.byGoogleSub[p.sub] = userId;
-  } else {
-    account.email = safeText(p.email, 120).toLowerCase();
-    account.picture = safeText(p.picture, 500);
-    account.username = cleanDisplayName(account.username) || "Player";
-    ensureTitleState(account);
-    account.updatedAt = new Date().toISOString();
-  }
-  const dailyGranted = applyDailyCubits(account);
-  await saveAccounts();
-  return res.json({ ok: true, created, dailyGranted, token: signSession(userId), account: publicAccount(account) });
-}
-
 app.post("/auth/google", async (req, res) => {
   if (!googleClient || !GOOGLE_CLIENT_ID) return res.status(503).json({ ok: false, error: "google_auth_not_configured" });
   const credential = safeText(req.body?.credential, 10000);
-  const accessToken = safeText(req.body?.accessToken, 10000);
-  if (!credential && !accessToken) return res.status(400).json({ ok: false, error: "missing_google_token" });
-
+  if (!credential) return res.status(400).json({ ok: false, error: "missing_credential" });
   try {
-    if (credential) {
-      const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
-      return await finishGoogleLoginFromPayload(ticket.getPayload(), res);
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID });
+    const p = ticket.getPayload();
+    if (!p?.sub || !p?.email) return res.status(401).json({ ok: false, error: "invalid_google_account" });
+
+    let userId = accountDb.byGoogleSub[p.sub];
+    let account = userId ? accountDb.byId[userId] : null;
+    let created = false;
+    if (!account) {
+      created = true;
+      userId = allocateNumericUserId();
+      const suggestedName = cleanDisplayName(p.given_name || p.name || "Player") || "Player";
+      account = {
+        userId,
+        googleSub: p.sub,
+        username: suggestedName,
+        email: safeText(p.email, 120).toLowerCase(),
+        picture: safeText(p.picture, 500),
+        cubits: 500,
+        unlockedThemes: [],
+        achievements: {},
+        lastDailyCubits: "",
+        lastDailyChest: "",
+        redeemedCodes: [],
+        speciesCards: {},
+        title: "",
+        unlockedTitles: [],
+        testerRank: 0,
+        starterPetEntitlement: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      accountDb.byId[userId] = account;
+      accountDb.byGoogleSub[p.sub] = userId;
+    } else {
+      account.email = safeText(p.email, 120).toLowerCase();
+      account.picture = safeText(p.picture, 500);
+      account.username = cleanDisplayName(account.username) || "Player";
+      ensureTitleState(account);
+      account.updatedAt = new Date().toISOString();
     }
-
-    // Alternate Google Identity Services browser flow. Verify that the access
-    // token was issued to this exact HOSTL OAuth client, then read OpenID profile data.
-    const tokenInfoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
-    const tokenInfo = await tokenInfoRes.json().catch(() => ({}));
-    if (!tokenInfoRes.ok) return res.status(401).json({ ok: false, error: "google_verification_failed" });
-    const audience = String(tokenInfo.aud || tokenInfo.azp || "");
-    if (audience !== GOOGLE_CLIENT_ID) return res.status(401).json({ ok: false, error: "google_client_mismatch" });
-
-    const userInfoRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const profile = await userInfoRes.json().catch(() => ({}));
-    if (!userInfoRes.ok) return res.status(401).json({ ok: false, error: "invalid_google_account" });
-    return await finishGoogleLoginFromPayload(profile, res);
+    const dailyGranted = applyDailyCubits(account);
+    await saveAccounts();
+    res.json({ ok: true, created, dailyGranted, token: signSession(userId), account: publicAccount(account) });
   } catch (err) {
     console.error("Google login failed:", err?.message || err);
     const msg = String(err?.message || "").toLowerCase();
     const error = msg.includes("audience") || msg.includes("wrong recipient") ? "google_client_mismatch" : "google_verification_failed";
-    return res.status(401).json({ ok: false, error });
+    res.status(401).json({ ok: false, error });
   }
 });
 

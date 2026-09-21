@@ -23845,7 +23845,6 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let googleTokenClient = null;
 let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"" };
 
 function utcDayKey() {
@@ -24249,78 +24248,55 @@ async function initializeGoogleSignIn() {
     const waitForGoogle=()=>new Promise((resolve,reject)=>{
       let tries=0;
       const tick=()=>{
-        if(window.google?.accounts?.oauth2) return resolve();
-        if(++tries>100) return reject(new Error("Google library did not load"));
+        if(window.google?.accounts?.id) return resolve();
+        if(++tries>80) return reject(new Error("Google library did not load"));
         setTimeout(tick,100);
       }; tick();
     });
     await waitForGoogle();
-
-    googleTokenClient = google.accounts.oauth2.initTokenClient({
+    try { google.accounts.id.cancel(); } catch (_) {}
+    window.handleGoogleCredential = handleGoogleCredential;
+    google.accounts.id.initialize({
       client_id: cfg.googleClientId,
-      scope: "openid email profile",
-      callback: handleGoogleAccessToken,
-      error_callback: (err)=>{
-        console.error("Google popup error:", err);
-        syncAccountUi("Google sign-in window closed or was blocked. Please try again.");
-      }
+      callback: handleGoogleCredential,
+      auto_select: false,
+      cancel_on_tap_outside: false,
+      use_fedcm_for_prompt: false,
+      use_fedcm_for_button: false
     });
-
     holder.innerHTML="";
-    const btn=document.createElement("button");
-    btn.type="button";
-    btn.className="account-btn google-hostl-btn";
-    btn.textContent="Continue with Google";
-    btn.style.minWidth="300px";
-    btn.style.minHeight="48px";
-    btn.style.fontSize="16px";
-    btn.style.fontWeight="800";
-    btn.addEventListener("click", ()=>{
-      if(!googleTokenClient){ syncAccountUi("Google Sign-In is still loading. Try again in a moment."); return; }
-      syncAccountUi("Opening Google account picker…");
-      try { googleTokenClient.requestAccessToken({prompt:"select_account"}); }
-      catch(err){ console.error(err); syncAccountUi("Could not open Google Sign-In. Please try again."); }
-    });
-    holder.appendChild(btn);
+    google.accounts.id.renderButton(holder,{ theme:"filled_blue",size:"large",shape:"pill",text:"continue_with",width:300,logo_alignment:"left" });
+    holder.addEventListener("pointerdown", () => {
+      googleCredentialReturned = false;
+      clearTimeout(googleSignInWatchdog);
+      googleSignInWatchdog = setTimeout(() => {
+        if (!googleCredentialReturned && !accountState.loggedIn) {
+          syncAccountUi("Google closed without returning the login to HOSTL. Please press Continue with Google and try once more.");
+        }
+      }, 7000);
+    }, true);
     googleAuthReady=true;
     if(status) status.textContent="Use Google to create or restore your HOSTL account.";
   } catch (err) {
-    console.error("Google Sign-In init failed:", err);
     if(status) status.textContent="Google Sign-In could not load. You can still play as a guest.";
   }
 }
-
-async function handleGoogleAccessToken(response) {
-  if (response?.error) {
-    console.error("Google token error:", response);
-    syncAccountUi(`Google sign-in failed (${response.error}).`);
-    return;
-  }
-  const accessToken=String(response?.access_token||"");
-  if(!accessToken){
-    syncAccountUi("Google did not return a login token. Please try again.");
-    return;
-  }
-  syncAccountUi("Google accepted your account. Finishing HOSTL sign-in…");
-  await completeHostlGoogleLogin({accessToken});
-}
-
 async function handleGoogleCredential(response) {
-  // Kept as a compatibility fallback for older cached copies of the Google button.
-  const credential=String(response?.credential||"");
-  if(!credential){ syncAccountUi("Google did not return a sign-in credential. Please try again."); return; }
+  googleCredentialReturned = true;
+  clearTimeout(googleSignInWatchdog);
+  if (!response?.credential) {
+    syncAccountUi("Google did not return a sign-in credential. Please try again.");
+    return;
+  }
   syncAccountUi("Google accepted your account. Finishing HOSTL sign-in…");
-  await completeHostlGoogleLogin({credential});
-}
 
-async function completeHostlGoogleLogin(payload) {
   async function finishLoginAttempt() {
     const r = await fetch("/auth/google", {
       method:"POST",
       headers:{"Content-Type":"application/json","Accept":"application/json"},
       cache:"no-store",
       credentials:"same-origin",
-      body:JSON.stringify(payload)
+      body:JSON.stringify({credential:response.credential})
     });
     const data = await r.json().catch(()=>({}));
     if (!r.ok || !data?.token || !data?.account) {
@@ -24332,39 +24308,44 @@ async function completeHostlGoogleLogin(payload) {
 
   try {
     let data;
-    try { data=await finishLoginAttempt(); }
-    catch(firstErr){
-      await new Promise(resolve=>setTimeout(resolve,650));
-      data=await finishLoginAttempt().catch(()=>{ throw firstErr; });
+    try {
+      data = await finishLoginAttempt();
+    } catch (firstErr) {
+      // One retry covers a brief Render wake/redeploy/network interruption after
+      // the Google account picker has already succeeded.
+      await new Promise(resolve=>setTimeout(resolve, 650));
+      data = await finishLoginAttempt().catch(()=>{ throw firstErr; });
     }
 
-    hostlSessionToken=String(data.token||"");
-    try { localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken); } catch(_) {}
+    // Save the signed session first. UI/game entitlement code must never be able
+    // to erase an otherwise successful Google login.
+    hostlSessionToken = String(data.token || "");
+    try { localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken); } catch (_) {}
 
-    try { setAccountFromServer(data.account); }
-    catch(uiErr){
+    try {
+      setAccountFromServer(data.account);
+    } catch (uiErr) {
       console.warn("HOSTL account UI hydration warning:", uiErr);
-      accountState.loggedIn=true;
-      accountState.userId=String(data.account?.userId||"");
-      accountState.username=String(data.account?.username||"Player");
-      accountState.email=String(data.account?.email||"");
-      accountState.cubits=Number(data.account?.cubits)||0;
+      // Keep a minimal signed-in state so reload can restore from the server.
+      accountState.loggedIn = true;
+      accountState.userId = String(data.account?.userId || "");
+      accountState.username = String(data.account?.username || "Player");
+      accountState.email = String(data.account?.email || "");
+      accountState.cubits = Number(data.account?.cubits) || 0;
     }
 
-    try { syncAchievementAccountBridge(); } catch(e){ console.warn(e); }
+    try { syncAchievementAccountBridge(); } catch (e) { console.warn(e); }
     const bits=[];
     if(data.created) bits.push("HOSTL account created with 500 Cubits");
     if(data.dailyGranted) bits.push("+10 daily Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
-  } catch(err){
+  } catch (err) {
     console.error("HOSTL Google sign-in completion failed:", err);
     const code=String(err?.message||"unknown_error");
     const messages={
       google_auth_not_configured:"HOSTL's Google Client ID is not configured on the server.",
       missing_credential:"Google did not send HOSTL a credential.",
-      missing_google_token:"Google did not send HOSTL a login token.",
       invalid_google_account:"Google returned an account HOSTL could not verify.",
-      google_client_mismatch:"The Google login belongs to a different OAuth client than HOSTL.",
       google_verification_failed:"HOSTL's server could not verify the Google login. Check Render logs and GOOGLE_CLIENT_ID.",
       not_authenticated:"HOSTL could not create the login session."
     };
