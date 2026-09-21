@@ -24168,7 +24168,9 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        username:accountState.username||"", displayName:accountState.displayName||"", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        // Username and Display Name are saved only by their dedicated profile editors.
+        // Background Cubit/theme saves must never overwrite a name the player just chose.
+        title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24613,6 +24615,38 @@ function populateTitleDropdown(){
   for(const t of titles){ const opt=document.createElement("option"); opt.value=t; opt.textContent=t; sel.appendChild(opt); }
   sel.value=current;
 }
+async function saveDisplayNameNow(){
+  if(!accountState.loggedIn || !hostlSessionToken) return false;
+  const input=document.getElementById("settingsDisplayName");
+  const msg=document.getElementById("accountSettingsSaveMsg");
+  const rawName=String(input?.value||"").trim().replace(/\s+/g," ");
+  if(rawName.length<2 || rawName.length>20){
+    if(msg) msg.textContent="Display name must be 2–20 characters.";
+    return false;
+  }
+  // Cancel any older background save before saving the social name.
+  clearTimeout(accountSaveTimer);
+  try{
+    const r=await fetch("/api/account",{
+      method:"PUT",
+      headers:{"Content-Type":"application/json",...accountAuthHeaders()},
+      body:JSON.stringify({displayName:rawName})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
+    setAccountFromServer(data.account);
+    window.__hostlDisplayNameDirty=false;
+    if(input) input.value=accountState.displayName||rawName;
+    if(msg) msg.textContent="Display name saved.";
+    renderFriendsUi?.();
+    return true;
+  }catch(_){
+    window.__hostlDisplayNameDirty=true;
+    if(msg) msg.textContent="Could not save display name yet. Your typed name was kept.";
+    return false;
+  }
+}
+
 async function saveAccountSettings(){
   if(!accountState.loggedIn || !hostlSessionToken) return;
   const usernameInput=document.getElementById("settingsUsername");
@@ -24628,6 +24662,7 @@ async function saveAccountSettings(){
   if(btn){btn.disabled=true;btn.textContent="Saving…";}
   if(msg) msg.textContent="Saving account settings…";
   try{
+    clearTimeout(accountSaveTimer);
     const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({username:rawUsername,displayName:rawName,title:chosenTitle})});
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
@@ -24712,10 +24747,10 @@ function renderFriendsUi(){
   const req=document.getElementById("friendRequestsList"), list=document.getElementById("friendsList"); if(!req||!list)return;
   req.innerHTML=""; const incoming=friendsData.incoming||[], outgoing=friendsData.outgoing||[];
   if(!incoming.length&&!outgoing.length)req.innerHTML='<div class="friends-note">No pending requests.</div>';
-  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
-  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
+  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.displayName||"No display name set")}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
+  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.displayName||"No display name set")}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
   list.innerHTML=""; const fs=friendsData.friends||[]; if(!fs.length)list.innerHTML='<div class="friends-note">No friends yet.</div>';
-  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.displayName||f.username)} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
+  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.displayName||"No display name set")} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
   req.querySelectorAll("[data-accept]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.accept,true)); req.querySelectorAll("[data-decline]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.decline,false)); list.querySelectorAll("[data-openfriend]").forEach(b=>b.onclick=()=>selectFriend(b.dataset.openfriend));
   if(selectedFriendId){const f=fs.find(x=>String(x.userId)===String(selectedFriendId)); if(f)updateSelectedFriend(f); else {selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";}}
 }
@@ -24723,7 +24758,7 @@ function escapeFriendText(v){return String(v??"").replace(/[&<>\"']/g,c=>({"&":"
 async function sendFriendRequest(){const input=document.getElementById("friendIdInput"),msg=document.getElementById("friendActionMsg");const playerId=String(input?.value||"").trim();if(!/^\d{1,5}$/.test(playerId)){if(msg)msg.textContent="Enter a valid Player ID.";return;}try{const r=await friendApi("/api/friends/request",{method:"POST",body:JSON.stringify({playerId})});const d=await r.json().catch(()=>({}));if(msg)msg.textContent=r.ok?(d.accepted?"Friend added!":"Friend request sent."):(d.error==="player_not_found"?"That Player ID was not found.":d.error==="already_friends"?"You are already friends.":d.error==="cannot_friend_self"?"You cannot add yourself.":"Could not send request.");if(r.ok){if(input)input.value="";refreshFriends();}}catch(_){if(msg)msg.textContent="Could not reach the server.";}}
 async function respondFriend(playerId,accept){try{await friendApi("/api/friends/respond",{method:"POST",body:JSON.stringify({playerId,accept})});refreshFriends();}catch(_){}}
 function selectFriend(id){selectedFriendId=String(id);const f=(friendsData.friends||[]).find(x=>String(x.userId)===selectedFriendId);if(!f)return;document.getElementById("friendEmptyView").style.display="none";document.getElementById("friendDetailView")?.classList.add("on");updateSelectedFriend(f);setFriendSubview("chat");clearInterval(friendChatTimer);friendChatTimer=setInterval(()=>{if(document.getElementById("friendsModal")?.classList.contains("on"))refreshFriendChat(false);},3000);}
-function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.displayName||f.username}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
+function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.displayName||"No display name set"}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
 async function removeSelectedFriend(){if(!selectedFriendId)return;const ok=await showGameConfirm("Remove Friend","Remove this player from your friends list?");if(!ok)return;try{await friendApi(`/api/friends/${encodeURIComponent(selectedFriendId)}`,{method:"DELETE"});selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";refreshFriends();}catch(_){}}
 async function refreshFriendChat(scroll=true){if(!selectedFriendId)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`);if(!r.ok)return;const d=await r.json();const log=document.getElementById("friendChatLog");if(!log)return;log.innerHTML=(d.messages||[]).map(m=>`<div class="friend-chat-msg ${String(m.from)===String(accountState.userId)?"mine":""}"><div class="friend-chat-meta">${String(m.from)===String(accountState.userId)?"You":"Friend"} · ${new Date(m.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div>${escapeFriendText(m.message)}</div>`).join("")||'<div class="friends-note">No messages yet.</div>';if(scroll)log.scrollTop=log.scrollHeight;}catch(_){}}
 async function sendFriendChat(){const i=document.getElementById("friendChatInput");const message=String(i?.value||"").trim();if(!selectedFriendId||!message)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`,{method:"POST",body:JSON.stringify({message})});if(r.ok){i.value="";refreshFriendChat();}}catch(_){}}
@@ -24766,8 +24801,9 @@ function bindAccountAndShopUi() {
   if(displayNameInput && !displayNameInput.dataset.hostlDisplayEditBound){
     displayNameInput.dataset.hostlDisplayEditBound="1";
     displayNameInput.addEventListener("input",()=>{ window.__hostlDisplayNameDirty=true; });
+    displayNameInput.addEventListener("change",()=>{ saveDisplayNameNow(); });
     displayNameInput.addEventListener("keydown",e=>{
-      if(e.key==="Enter"){ e.preventDefault(); saveAccountSettings(); displayNameInput.blur(); }
+      if(e.key==="Enter"){ e.preventDefault(); saveDisplayNameNow(); displayNameInput.blur(); }
     });
   }
   once(document.getElementById("openDeleteAccountBtn"), "click", beginDeleteHostlAccount);
