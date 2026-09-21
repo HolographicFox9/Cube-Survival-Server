@@ -4437,6 +4437,10 @@
       <span class="health-label">Health</span>
       <div class="bar-track"><div class="bar-fill" id="healthFill" style="width:100%"></div></div>
     </div>
+    <div class="health-row" id="shellHealthRow" style="display:none;">
+      <span class="health-label">Shell</span>
+      <div class="bar-track"><div class="bar-fill" id="shellHealthFill" style="width:100%;background:linear-gradient(90deg,#9aa7b5,#d7e0e8);"></div></div>
+    </div>
     <div class="res-row"><span>Wood</span><span class="w" id="resWood">0</span></div>
     <div class="res-row"><span>Stone</span><span class="s" id="resStone">0</span></div>
     <div class="res-row"><span>Gold</span><span class="g" id="resGold">0</span></div>
@@ -4623,7 +4627,7 @@
         <span id="starterShopServs">0</span>
       </div>
     </div>
-    <p class="lead">Starter gear and supplies. This screen is ready to grow as more shop items are added.</p>
+    <p class="lead">Permanent starter gear and supplies. Buy an unlock once and it will be ready at the beginning of future runs.</p>
     <div class="shop-grid" id="shopGrid"></div>
   </div>
 </div>
@@ -5136,7 +5140,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "586";
+const CUBE_SHARED_RULES_VERSION = "589";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
@@ -13556,11 +13560,25 @@ const RUN_SHOP_BY_ID = Object.fromEntries(RUN_SHOP_ITEMS.map(i=>[i.id,i]));
 function freshRunShopState(){return {purchased:new Set(),hat:"",cape:"",armor:""};}
 let runShop = freshRunShopState();
 function equippedRunItem(cat){return RUN_SHOP_BY_ID[runShop[cat]]||null;}
-function runGatherMul(){return runShop.hat==="minerHat"?1.25:1;}
+function runGatherMul(){
+  const hatMul = runShop.hat==="minerHat"?1.25:1;
+  const starterMul = meta?.ownedStarters?.gatherGloves ? 1.15 : 1;
+  return hatMul * starterMul;
+}
 function runRegenPerSec(){return runShop.hat==="healerHood"?0.7:0;}
-function runDamageMul(){return runShop.hat==="warriorHelm"?1.18:1;}
+function runDamageMul(){
+  const hatMul = runShop.hat==="warriorHelm"?1.18:1;
+  const starterMul = meta?.ownedStarters?.hunterWrap ? 1.10 : 1;
+  return hatMul * starterMul;
+}
 function runTameBonus(){return runShop.cape==="tamerCape"?0.10:0;}
-function runCardChanceMul(){return runShop.cape==="cardCape"?1.75:1;}
+function runCardChanceMul(){
+  const capeMul = runShop.cape==="cardCape"?1.75:1;
+  const starterMul = (meta?.ownedStarters?.animalWhisperer || meta?.ownedStarters?.luckyCharm) ? 1.30 : 1;
+  return capeMul * starterMul;
+}
+function starterMoveMul(){return meta?.ownedStarters?.speedyBoots ? 1.18 : 1;}
+function starterShellMax(){return meta?.ownedStarters?.ironShell ? 250 : 0;}
 function runPetXpMul(){return runShop.cape==="mentorCape"?1.50:1;}
 function runDefenseMul(){return runShop.armor==="guardianArmor"?.66:runShop.armor==="ironArmor"?.78:runShop.armor==="leatherArmor"?.88:1;}
 
@@ -13633,6 +13651,7 @@ function petFollowRangeFor(p){
 const player = {
   x: WORLD_W / 2 + 145, y: WORLD_H / 2, angle: 0,
   health: 100, maxHealth: 100,
+  shellHealth: 0, shellMaxHealth: 0,
   wood: 0, stone: 0, gold: 0, berries: 0,
   tool: "Fist", lastWeaponTool: "Fist", heldSpecial: null, owned: { Fist: true, Axe: false, Pickaxe: false, Sword: false, Bow: false },
   attackCd: 0, shootCd: 0, punchTimer: 0, punchSide: 1, swingWeapon: "Fist",
@@ -16187,7 +16206,14 @@ function hitPlayer(dmg, attacker = null) {
     return;
   }
   dmg = rawDamage * runDefenseMul();
-  player.health -= dmg;
+  if (player.shellHealth > 0 && dmg > 0) {
+    const absorbed = Math.min(player.shellHealth, dmg);
+    player.shellHealth = Math.max(0, player.shellHealth - absorbed);
+    dmg -= absorbed;
+    floatText(player.x, player.y - 34, `-${Math.round(absorbed)} SHELL`, "#cbd7e2");
+    if (player.shellHealth <= 0) floatText(player.x, player.y - 50, "SHELL BROKEN", "#eef5fb");
+  }
+  if (dmg > 0) player.health -= dmg;
   player.hurtFlash = 0.22;
   game.shake = 8;
   sfx.hurt();
@@ -18571,7 +18597,7 @@ function updatePlayer(dt) {
       mobileFacingAngle = Math.atan2(dy, dx);
       player.angle = mobileFacingAngle;
     }
-    let speed = 148;
+    let speed = 148 * starterMoveMul();
     if (player.riding && !player.riding.dead) {
       const mount = player.riding;
       const desired = Math.atan2(dy, dx);
@@ -18690,6 +18716,9 @@ function updateTameBtn() {
 function syncHud() {
   renderPlayerLeaderboard();
   if (el("healthFill")) el("healthFill").style.width = clamp(player.health / player.maxHealth, 0, 1) * 100 + "%";
+  const shellRow = el("shellHealthRow");
+  if (shellRow) shellRow.style.display = player.shellMaxHealth > 0 ? "flex" : "none";
+  if (el("shellHealthFill")) el("shellHealthFill").style.width = (player.shellMaxHealth > 0 ? clamp(player.shellHealth / player.shellMaxHealth, 0, 1) * 100 : 0) + "%";
   if (el("resWood")) el("resWood").textContent = player.wood;
   if (el("resStone")) el("resStone").textContent = player.stone;
   if (el("resGold")) el("resGold").textContent = player.gold;
@@ -22571,17 +22600,30 @@ function resetGame() {
   const previousRunY = player.y;
   player.x = WORLD_W / 2 + 145; player.y = WORLD_H / 2; player.angle = 0;
   player.health = 100; player.maxHealth = 100;
-  player.wood = meta.ownedStarters.wood50 ? 50 : 0;
-  player.stone = meta.ownedStarters.stone20 ? 20 : 0;
-  player.gold = meta.ownedStarters.gold5 ? 5 : 0;
+  player.shellMaxHealth = starterShellMax();
+  player.shellHealth = player.shellMaxHealth;
+  // Permanent starter-shop unlocks. Higher resource tiers replace lower tiers.
+  player.wood = meta.ownedStarters.wood100 ? 100 : (meta.ownedStarters.wood50 ? 50 : 0);
+  player.stone = meta.ownedStarters.stone50 ? 50 : (meta.ownedStarters.stone20 ? 20 : 0);
+  player.gold = meta.ownedStarters.gold15 ? 15 : (meta.ownedStarters.gold5 ? 5 : 0);
   net.goldFloor = Math.max(0, Number(player.gold) || 0);
-  player.berries = 0;
+  player.berries = meta.ownedStarters.berries10 ? 10 : 0;
   player.tool = "Fist";
   player.lastWeaponTool = "Fist";
   player.heldSpecial = null;
-  player.owned = { Fist: true, Axe: !!meta.ownedStarters.startAxe, Pickaxe: false, Sword: false, Bow: false };
+  player.owned = {
+    Fist: true,
+    Axe: !!meta.ownedStarters.startAxe,
+    Pickaxe: !!meta.ownedStarters.startPickaxe,
+    Sword: !!meta.ownedStarters.startSword,
+    Bow: !!meta.ownedStarters.startBow
+  };
   player.hotbarOrder = ["Fist"];
   if (meta.ownedStarters.startAxe) registerHotbarItem("Axe");
+  if (meta.ownedStarters.startPickaxe) registerHotbarItem("Pickaxe");
+  if (meta.ownedStarters.startSword) registerHotbarItem("Sword");
+  if (meta.ownedStarters.startBow) registerHotbarItem("Bow");
+  if (player.berries > 0) registerHotbarItem("Berry");
   mobileFacingAngle = player.angle;
   player.attackCd = 0; player.shootCd = 0; player.punchTimer = 0; player.punchSide = 1;
   player.hurtFlash = 0; player.dead = false; player.splitT = 0;
@@ -23203,6 +23245,8 @@ function setupHome() {
   refreshHomePlayerCount();
   drawHomePreview();
   if (!meta.ownedStarters) meta.ownedStarters = {};
+  // Migration: Lucky Charm was renamed to Animal Whisperer. Preserve ownership for existing players.
+  if (meta.ownedStarters.luckyCharm && !meta.ownedStarters.animalWhisperer) meta.ownedStarters.animalWhisperer = true;
   if (!meta.speciesCards) meta.speciesCards = {};
   if (!meta.petStages) meta.petStages = {};
   for (const k of Object.keys(PET_TYPES)) {
@@ -23242,11 +23286,23 @@ function setupHome() {
 
   // starter resource shop (not pet cards — those are in Other Pets)
   const shopItems = [
-    { id: "wood50", name: "Start with 50 Wood", price: 80 },
-    { id: "stone20", name: "Start with 20 Stone", price: 70 },
-    { id: "gold5", name: "Start with 5 Gold", price: 100 },
-    { id: "startAxe", name: "Start with Axe", price: 150 },
-    { id: "saddle", name: "Start with Saddle", price: 220 },
+    { id: "wood50", name: "Start with 50 Wood", price: 750, category: "Resource", desc: "A permanent supply of 50 wood at the start of every run." },
+    { id: "wood100", name: "Start with 100 Wood", price: 1800, category: "Resource", desc: "Upgrades your permanent wood start to 100." },
+    { id: "stone20", name: "Start with 20 Stone", price: 700, category: "Resource", desc: "A permanent supply of 20 stone at the start of every run." },
+    { id: "stone50", name: "Start with 50 Stone", price: 1700, category: "Resource", desc: "Upgrades your permanent stone start to 50." },
+    { id: "gold5", name: "Start with 5 Gold", price: 1200, category: "Resource", desc: "A small amount of run-only gold ready immediately." },
+    { id: "gold15", name: "Start with 15 Gold", price: 3200, category: "Resource", desc: "Upgrades your permanent run start to 15 gold." },
+    { id: "berries10", name: "Start with 10 Berries", price: 950, category: "Resource", desc: "Food and healing ready as soon as the run begins." },
+    { id: "startAxe", name: "Start with Axe", price: 2200, category: "Tool", desc: "Always begin with an Axe in your hotbar." },
+    { id: "startPickaxe", name: "Start with Pickaxe", price: 2500, category: "Tool", desc: "Always begin with a Pickaxe in your hotbar." },
+    { id: "startSword", name: "Start with Sword", price: 4200, category: "Combat", desc: "Always begin with a Sword for early combat." },
+    { id: "startBow", name: "Start with Bow", price: 5200, category: "Combat", desc: "Always begin with a Bow for ranged attacks." },
+    { id: "speedyBoots", name: "Speedy Boots", price: 6500, category: "Mobility", desc: "Move 18% faster on foot every run. Does not boost mounted speed." },
+    { id: "ironShell", name: "Iron Shell", price: 12000, category: "Defense", desc: "Start every run with a 250-HP protective shell. It absorbs damage before real health and cannot be healed." },
+    { id: "hunterWrap", name: "Hunter's Wrap", price: 8000, category: "Combat", desc: "Deal 10% more player damage every run. Stacks with temporary run-shop gear." },
+    { id: "gatherGloves", name: "Gatherer's Gloves", price: 6000, category: "Skill", desc: "Gain 15% more wood, stone, berries, and mined gold every run." },
+    { id: "animalWhisperer", name: "Animal Whisperer", price: 9500, category: "Skill", desc: "Increase pet and species-card drop chance by 30% every run." },
+    { id: "saddle", name: "Start with Saddle", price: 4800, category: "Utility", desc: "Always begin ready to ride a mountable pet." },
   ];
   const grid = el("shopGrid");
   if (el("starterShopServs")) el("starterShopServs").textContent = meta.servs;
@@ -23255,7 +23311,7 @@ function setupHome() {
     const owned = !!meta.ownedStarters[item.id];
     const div = document.createElement("div");
     div.className = "shop-item" + (owned ? " owned" : "");
-    div.innerHTML = `<b>${item.name}</b><div class="price">${owned ? "Owned" : item.price + " Gold Cubits"}</div>`;
+    div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;"><b>${item.name}</b><span style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border:1px solid rgba(189,233,242,.42);border-radius:999px;background:rgba(189,233,242,.08);white-space:nowrap;">${item.category || "Starter"}</span></div><div style="font-size:11px;opacity:.72;line-height:1.35;margin:5px 0 7px;">${item.desc || "Permanent starter unlock."}</div><div class="price">${owned ? "Owned" : item.price.toLocaleString() + " Gold Cubits"}</div>`;
     div.addEventListener("click", () => {
       if (owned) return;
       if (meta.servs < item.price) { alert("Not enough Gold Cubits!"); return; }
