@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "593";
+const CUBE_SHARED_RULES_VERSION = "594";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -501,7 +501,15 @@ function petProjectileStageSize(stage){return PET_PROJECTILE_STAGE_SIZE[["baby",
 function petAbilityRangeFor(p,adultBase,radiusMul=0){const stageBase=adultBase*petAbilityStageSize(p?.stage);const bodyExtra=Math.max(0,(Number(p?.r)||18)-18)*Math.max(0,Number(radiusMul)||0)*.22;return stageBase+bodyExtra;}
 function wallDamageForTool(toolName,w){const t=TOOL[toolName]||TOOL.Fist;return w?.kind==="stoneSpike"?(t.stoneWall||.5):(t.woodWall||1);}
 
-const WILD_SPECIES = Object.keys(PET_TYPES);
+// Keep online wildlife/card rarity in sync with the browser game.
+// Bearded Dragon remains a starter species and is not part of normal wild rarity spawning.
+const ANIMAL_RARITY={dog:"Common",cat:"Common",rabbit:"Common",wolf:"Uncommon",bear:"Uncommon",fox:"Uncommon",boar:"Rare",deer:"Rare",owl:"Rare",snake:"Legendary",saber:"Legendary",dragon:"Starter"};
+const RARITY_WILD_WEIGHT={Common:5.0,Uncommon:2.5,Rare:1.15,Legendary:.32,Starter:.45};
+const RARITY_CARD_WEIGHT={Common:2.4,Uncommon:1.5,Rare:.82,Legendary:.28,Starter:.55};
+const RARITY_TAME_CHANCE={Common:.50,Uncommon:.40,Rare:.28,Legendary:.18,Starter:.42};
+function animalRarity(type){return ANIMAL_RARITY[type]||"Common";}
+function randomWildSpecies(){return weighted(WILD_SPECIES.map(v=>({v,w:RARITY_WILD_WEIGHT[animalRarity(v)]||1})));}
+const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber"];
 const WILD_PREY = {
   fox:new Set(["rabbit"]), wolf:new Set(["rabbit","deer","boar"]), bear:new Set(["rabbit","deer","boar"]),
   cat:new Set(["rabbit","snake"]), dog:new Set(["rabbit"]), rabbit:new Set(), owl:new Set(["rabbit","snake"]),
@@ -687,6 +695,20 @@ function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 function angTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); }
 function angleDiff(a,b) { return Math.atan2(Math.sin(b-a), Math.cos(b-a)); }
 function smoothTurn(obj, target, dt, speed=8) { obj.angle += clamp(angleDiff(obj.angle, target), -speed*dt, speed*dt); }
+
+// Match the client riding rule: faster pets steer faster while slower pets
+// steer more gradually. Proportional scaling prevents high-speed mounts from
+// having much larger turning arcs than the slower species.
+function mountedPetTurnSpeed(pet) {
+  if(!pet)return 2.15;
+  // Use the live upgraded speed formula so both Speed and Weight upgrades
+  // immediately affect mounted steering in multiplayer as well.
+  const finalSpeed=Math.max(24,
+    animalSpeed(pet.type,pet.stage,true,petUpgradeMultiplier(pet,"weight"))*
+    petUpgradeMultiplier(pet,"speed")
+  );
+  return clamp(2.15*(finalSpeed/90),1.05,5.60);
+}
 function facing(px,py,pa,tx,ty,max=0.95) { return Math.abs(angleDiff(pa, angTo(px,py,tx,ty))) < max; }
 function segmentCircleT(x0,y0,x1,y1,cx,cy,r){
   const dx=x1-x0,dy=y1-y0,len2=dx*dx+dy*dy;
@@ -1054,7 +1076,7 @@ const RUN_SHOP_ITEMS = {
   tamerCape:{cat:"cape",cost:40},cardCape:{cat:"cape",cost:45},mentorCape:{cat:"cape",cost:50},
   leatherArmor:{cat:"armor",cost:30},ironArmor:{cat:"armor",cost:55},guardianArmor:{cat:"armor",cost:90}
 };
-const TAME_BASE_CHANCE={dog:.50,cat:.50,rabbit:.50,fox:.42,wolf:.42,deer:.42,dragon:.42,bear:.34,boar:.34,snake:.28,owl:.28,saber:.18};
+const TAME_BASE_CHANCE=Object.fromEntries(Object.keys(PET_TYPES).map(type=>[type,RARITY_TAME_CHANCE[animalRarity(type)]??.38]));
 const CURRENT_BIOME_ID="forest";
 const MOONMARK_BIOMES={forest:{id:"forest",name:"Forest Warden",element:"Forest",color:"#4fa35b",accent:"#d8ef8a",mapColor:"#0b542f",xp:320}};
 const PET_KILL_STAGE_XP={baby:3,adult:14,boss:38,superboss:86,bigmomma:155};
@@ -1601,7 +1623,7 @@ export class WorldRoom extends Room {
     for(let i=0;i<72;i++)for(let t=0;t<80;t++){const x=rand(130,WORLD_W-130),y=rand(130,WORLD_H-130);if(dist(x,y,WORLD_W/2,WORLD_H/2)<280||!this.canPlace(x,y,20))continue;this.addChest(x,y);break;}
     const randomGroupStage=()=>{const roll=Math.random();return roll<.50?"baby":roll<.90?"adult":roll<.98?"boss":"superboss";};
     const spawnWild=(forced=null,typeOverride=null,anchor=null)=>{
-      const type=typeOverride||pick(WILD_SPECIES);
+      const type=typeOverride||randomWildSpecies();
       let stage=forced;
       if(!stage){const roll=Math.random();stage=roll<.46?"baby":roll<.84?"adult":roll<.95?"boss":"superboss";}
       const footprint=animalSpawnFootprint(type,stage);
@@ -1629,7 +1651,7 @@ export class WorldRoom extends Room {
       return null;
     };
     const spawnWildCluster=(forced=null)=>{
-      const type=pick(WILD_SPECIES),anchor=spawnWild(forced,type,null);if(!anchor)return 0;
+      const type=randomWildSpecies(),anchor=spawnWild(forced,type,null);if(!anchor)return 0;
       let made=1,extras=randi(3,5);
       for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor))made++;
       return made;
@@ -1846,7 +1868,7 @@ export class WorldRoom extends Room {
   }
   rewardMoonmarkKill(ownerId,x,y){
     const owner=this.state.players.get(ownerId);if(!ownerId||!owner)return;
-    const goldReward=50,petXpReward=1200,cardReward=30,species=pick(WILD_SPECIES)||"dog";
+    const goldReward=50,petXpReward=1200,cardReward=30,species=randomWildSpecies()||"dog";
     owner.kills=Math.max(0,(owner.kills||0)+1);
     owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+goldReward));
     this.sendReward(ownerId,{kind:"resource",resource:"gold",amount:goldReward},{x,y,kill:true});
@@ -1876,7 +1898,7 @@ export class WorldRoom extends Room {
     let best=null,bestD=Infinity;for(const [id,c] of this.state.chests){if(c.opened)continue;const d=dist(p.x,p.y,c.x,c.y+8);if(d<t.range+c.r+8&&facing(p.x,p.y,angle,c.x,c.y+8,1.15)&&d<bestD){best={id,c};bestD=d;}}if(best)this.hitChest(client,best.id,best.c);
   }
   hitChest(client,id,c){if(!c||c.opened)return;c.hp=Math.max(0,c.hp-1);c.pulse=1;this.broadcastEntityHealth("chest",id,c);if(c.hp<=0){c.opened=true;const reward=this.chestRewards.get(id)||this.makeChestReward();this.chestRewards.delete(id);client.send("chestReward",{id,reward});this.broadcastFx({kind:"chest",x:c.x,y:c.y});}else{const first=c.chipSide||"wood",second=first==="wood"?"stone":"wood",bonus=Math.random()<.45;c.chipSide=second;client.send("worldReward",{kind:"resource",resource:first,amount:1,x:c.x,y:c.y});if(bonus)client.send("worldReward",{kind:"resource",resource:second,amount:1,x:c.x,y:c.y});}}
-  makeChestReward(){const roll=Math.random();if(roll<.34)return{kind:"goldCubits",amount:Math.random()<.1?randi(12,18):randi(5,10)};if(roll<.52)return{kind:"cards",species:weighted(WILD_SPECIES.map(v=>({v,w:v==="dog"||v==="cat"?2.2:v==="dragon"?.55:1}))),amount:Math.random()<.14?25:10};const res=weighted([{v:"wood",w:2.8},{v:"stone",w:2.3},{v:"berries",w:1.8},{v:"gold",w:1.1}]);const amount=res==="wood"?randi(16,28):res==="stone"?randi(12,22):res==="berries"?randi(6,12):randi(3,6);return{kind:"resource",resource:res,amount};}
+  makeChestReward(){const roll=Math.random();if(roll<.34)return{kind:"goldCubits",amount:Math.random()<.1?randi(12,18):randi(5,10)};if(roll<.52)return{kind:"cards",species:weighted(WILD_SPECIES.map(v=>({v,w:RARITY_CARD_WEIGHT[animalRarity(v)]||1}))),amount:Math.random()<.14?25:10};const res=weighted([{v:"wood",w:2.8},{v:"stone",w:2.3},{v:"berries",w:1.8},{v:"gold",w:1.1}]);const amount=res==="wood"?randi(16,28):res==="stone"?randi(12,22):res==="berries"?randi(6,12):randi(3,6);return{kind:"resource",resource:res,amount};}
 
   handleShoot(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead||(Number(p._abilityStunUntil)||0)>this.state.worldTime)return;const now=this.state.worldTime,next=this.playerShootCd.get(client.sessionId)||0;if(now<next)return;this.playerShootCd.set(client.sessionId,now+.45);const a=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=a;this.broadcast("playerAction",{playerId:client.sessionId,action:"shoot",tool:"Bow",angle:a,heldSpecial:""});this.mountedPetAttack(client.sessionId,p);this.addProjectile({x:p.x+Math.cos(a)*26,y:p.y+Math.sin(a)*26,vx:Math.cos(a)*640,vy:Math.sin(a)*640,life:1.15,r:5,hostile:false,kind:"arrow",color:"#7ec0ee",dmg:this.toolStats("Bow",data.tier).dmg*this.runPerks(client.sessionId).damageMul*((Number(p._abilityWeakUntil)||0)>this.state.worldTime?(Number(p._abilityWeakMul)||.68):1),ownerId:client.sessionId,petBlast:false,knock:0});}
 
@@ -2962,7 +2984,7 @@ export class WorldRoom extends Room {
       if(owner.ridingPetId===id){
         p._mountedCollision=true;p.x=owner.x;p.y=owner.y;
         const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
-        if(ml>.05)smoothTurn(p,Math.atan2(owner.moveY||0,owner.moveX||0),dt,2.15);
+        if(ml>.05)smoothTurn(p,Math.atan2(owner.moveY||0,owner.moveX||0),dt,mountedPetTurnSpeed(p));
         if(owner.moving&&p._blockingResourceId)this.petAttackStuckResource(p.ownerId,p);
         this.resolveStatic(p,(p.r||18)*.72);
         owner.x=p.x;owner.y=p.y;

@@ -5586,7 +5586,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "593";
+const CUBE_SHARED_RULES_VERSION = "594";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7516,7 +7516,7 @@ const PET_STAT_UPGRADE_INFO = {
   health:  { name:"Health",  icon:"❤", desc:"More maximum health.", per:0.08 },
   defense: { name:"Defense", icon:"🛡", desc:"Takes less damage from attacks.", per:0.045 },
   attack:  { name:"Attack",  icon:"⚔", desc:"Stronger normal attacks.", per:0.075 },
-  weight:  { name:"Weight",  icon:"◆", desc:"More mass: harder to push, but a little slower.", per:0.12 },
+  weight:  { name:"Weight",  icon:"◆", desc:"More mass: harder to push. Extra weight also reduces final movement speed and turning speed.", per:0.12 },
   regen:   { name:"Regen",   icon:"✚", desc:"Recovers health faster over time.", per:0.12 },
   speed:   { name:"Speed",   icon:"➜", desc:"Moves faster and naturally roams farther from you.", per:0.04 },
 };
@@ -7692,19 +7692,33 @@ function wallDamageForTool(toolName, wall) {
   return wall && wall.kind === "stoneSpike" ? (t.stoneWall || 0.5) : (t.woodWall || 1);
 }
 
+// One canonical animal rarity table.  Viper uses the internal species key `snake`.
+// Bearded Dragon stays Starter-only until its normal rarity is chosen.
+const PET_RARITY = Object.freeze({
+  dog:"Common", cat:"Common", rabbit:"Common",
+  wolf:"Uncommon", bear:"Uncommon", fox:"Uncommon",
+  boar:"Rare", deer:"Rare", owl:"Rare",
+  snake:"Legendary", saber:"Legendary",
+  dragon:"Starter"
+});
+const PET_RARITY_CARD_WEIGHT = Object.freeze({Common:2.4,Uncommon:1.5,Rare:.82,Legendary:.28,Starter:.55});
+const PET_RARITY_TAME_CHANCE = Object.freeze({Common:.50,Uncommon:.40,Rare:.28,Legendary:.18,Starter:.42});
+function petRarity(type){ return PET_RARITY[type] || "Common"; }
+function petCardRarityWeight(type){ return PET_RARITY_CARD_WEIGHT[petRarity(type)] || 1; }
+
 const PET_UNLOCK = {
-  dog:    { cards: 0,  servs: 0,    rarity: "Starter" },
-  cat:    { cards: 0,  servs: 0,    rarity: "Starter" },
-  dragon: { cards: 0,  servs: 0,    rarity: "Starter" },
-  rabbit: { cards: 55, servs: 600,  rarity: "Common" },
-  fox:    { cards: 55, servs: 650,  rarity: "Common" },
-  owl:    { cards: 60, servs: 750,  rarity: "Common" },
-  deer:   { cards: 70, servs: 900,  rarity: "Uncommon" },
-  wolf:   { cards: 80, servs: 1100, rarity: "Uncommon" },
-  snake:  { cards: 85, servs: 1200, rarity: "Uncommon" },
-  boar:   { cards: 95, servs: 1400, rarity: "Rare" },
-  bear:   { cards: 110,servs: 1800, rarity: "Rare" },
-  saber:  { cards: 120,servs: 2200, rarity: "Legendary" },
+  dog:    { cards: 0,  servs: 0,    rarity: PET_RARITY.dog },
+  cat:    { cards: 0,  servs: 0,    rarity: PET_RARITY.cat },
+  dragon: { cards: 0,  servs: 0,    rarity: PET_RARITY.dragon },
+  rabbit: { cards: 55, servs: 600,  rarity: PET_RARITY.rabbit },
+  fox:    { cards: 55, servs: 650,  rarity: PET_RARITY.fox },
+  owl:    { cards: 60, servs: 750,  rarity: PET_RARITY.owl },
+  deer:   { cards: 70, servs: 900,  rarity: PET_RARITY.deer },
+  wolf:   { cards: 80, servs: 1100, rarity: PET_RARITY.wolf },
+  snake:  { cards: 85, servs: 1200, rarity: PET_RARITY.snake },
+  boar:   { cards: 95, servs: 1400, rarity: PET_RARITY.boar },
+  bear:   { cards: 110,servs: 1800, rarity: PET_RARITY.bear },
+  saber:  { cards: 120,servs: 2200, rarity: PET_RARITY.saber },
 };
 const PET_CARD_STAGE_ORDER = ["baby", "adult", "boss", "superboss"];
 const PET_CARD_STAGE_COST = {
@@ -9306,7 +9320,7 @@ function updateNetworkPetInterpolation(dt) {
       const rideTarget = Number.isFinite(p._netAngle)
         ? p._netAngle
         : (rideLen > 0.05 ? Math.atan2(rideMove.y, rideMove.x) : p.angle);
-      if (Number.isFinite(rideTarget)) smoothTurn(p, rideTarget, dt, 2.15);
+      if (Number.isFinite(rideTarget)) smoothTurn(p, rideTarget, dt, mountedPetTurnSpeed(p));
       const rvx = Number(player._actualMoveVX) || 0, rvy = Number(player._actualMoveVY) || 0;
       p._renderVX = rvx; p._renderVY = rvy;
       const renderSpeed = Math.hypot(rvx, rvy);
@@ -14149,13 +14163,7 @@ function starterShellMax(){return meta?.ownedStarters?.ironShell ? 250 : 0;}
 function runPetXpMul(){return runShop.cape==="mentorCape"?1.50:1;}
 function runDefenseMul(){return runShop.armor==="guardianArmor"?.66:runShop.armor==="ironArmor"?.78:runShop.armor==="leatherArmor"?.88:1;}
 
-const TAME_BASE_CHANCE = {
-  dog:.50, cat:.50, rabbit:.50,
-  fox:.42, wolf:.42, deer:.42, dragon:.42,
-  bear:.34, boar:.34,
-  snake:.28, owl:.28,
-  saber:.18
-};
+const TAME_BASE_CHANCE = Object.fromEntries(Object.keys(PET_TYPES).map(type => [type, PET_RARITY_TAME_CHANCE[petRarity(type)] ?? .38]));
 function tameChanceFor(type){return clamp((TAME_BASE_CHANCE[type] ?? .38)+runTameBonus(),.08,.80);}
 
 const CURRENT_BIOME_ID = "forest";
@@ -14738,7 +14746,9 @@ function placeGoldChunks() {
 }
 
 const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber"];
-const WILD_TYPE_TARGETS = { fox: 1.28, wolf: 1.06, bear: 0.92, cat: 1.0, dog: 1.0, rabbit: 1.08, owl: 0.9, snake: 0.9, deer: 1.02, boar: 0.9, saber: 0.82 };
+// World population now follows the same rarity tiers shown in the pet/card UI.
+const WILD_RARITY_TARGET = Object.freeze({Common:1.45,Uncommon:.82,Rare:.44,Legendary:.16,Starter:.28});
+const WILD_TYPE_TARGETS = Object.fromEntries(WILD_SPECIES.map(type => [type, WILD_RARITY_TARGET[petRarity(type)] || .7]));
 
 // Wild animals only start animal-vs-animal fights against normal prey species.
 // Same-species wars are never chosen. Hostls/players are handled separately.
@@ -15447,11 +15457,7 @@ function showLootPopup(rewards) {
   lootPopupTimer = setTimeout(hideLootPopup, 2800);
 }
 function randomChestCardSpecies() {
-  return pickWeighted([
-    { v: "dog", w: 2.2 }, { v: "cat", w: 2.2 }, { v: "fox", w: 1.8 }, { v: "rabbit", w: 1.8 },
-    { v: "wolf", w: 1.25 }, { v: "bear", w: 1.05 }, { v: "owl", w: 1.1 }, { v: "snake", w: 1.15 },
-    { v: "deer", w: 1.1 }, { v: "boar", w: 1.0 }, { v: "saber", w: 0.8 }, { v: "dragon", w: 0.55 }
-  ]);
+  return pickWeighted(Object.keys(PET_TYPES).map(type => ({ v:type, w:petCardRarityWeight(type) })));
 }
 function makeChestReward() {
   const roll = Math.random();
@@ -16290,6 +16296,22 @@ function smoothTurn(obj, targetAngle, dt, turnSpeed = 9) {
   obj.angle += clamp(diff, -maxStep, maxStep);
   while (obj.angle > Math.PI) obj.angle -= TAU;
   while (obj.angle < -Math.PI) obj.angle += TAU;
+}
+
+// Riding rule: fast mounts turn faster and slow mounts turn slower.
+// Scaling turn rate from the pet's real owned speed keeps the turning arc
+// roughly consistent across species instead of making fast pets sweep in
+// huge circles. Speed upgrades therefore improve steering too.
+function mountedPetTurnSpeed(pet) {
+  if (!pet) return 2.15;
+  // Recalculate from the live pet upgrades instead of trusting a cached speed.
+  // Speed upgrades make the mount faster; Weight upgrades add mass and reduce
+  // that final speed. Steering then follows the final result, so changing either
+  // stat immediately changes the turning speed too.
+  const finalSpeed = Math.max(24, pet.owned
+    ? upgradedPetSpeed(pet.type, pet.stage)
+    : (Number(pet.speed) || animalSpeed(pet.type, pet.stage, true)));
+  return clamp(2.15 * (finalSpeed / 90), 1.05, 5.60);
 }
 function moveFacing(obj, speed, dt) {
   // Creatures actually travel in the direction they are looking instead of sliding sideways.
@@ -19168,7 +19190,7 @@ function updatePlayer(dt) {
     if (player.riding && !player.riding.dead) {
       const mount = player.riding;
       const desired = Math.atan2(dy, dx);
-      smoothTurn(mount, desired, dt, 2.15);
+      smoothTurn(mount, desired, dt, mountedPetTurnSpeed(mount));
       speed = Math.max(24, mount.speed || animalSpeed(mount.type, mount.stage, true)) * 2.30;
       // Arrow/joystick direction steers the mount, but motion is always along
       // the direction the animal is actually facing right now. This preserves
@@ -19280,6 +19302,18 @@ function updateTameBtn() {
   btn.classList.toggle("show", near);
 }
 
+function goldCubitsForUi() {
+  // Signed-in accounts have one authoritative Gold Cubits balance. Never let the
+  // browser guest fallback (5) flash over the account balance in the HUD.
+  try {
+    const accountValue = window.__hostlGetGoldCubits?.();
+    if (accountValue !== null && accountValue !== undefined && Number.isFinite(Number(accountValue))) {
+      return Math.max(0, Math.floor(Number(accountValue)));
+    }
+  } catch (_) {}
+  return Math.max(0, Math.floor(Number(meta.servs) || 0));
+}
+
 function syncHud() {
   renderPlayerLeaderboard();
   if (el("healthFill")) el("healthFill").style.width = clamp(player.health / player.maxHealth, 0, 1) * 100 + "%";
@@ -19289,12 +19323,13 @@ function syncHud() {
   if (el("resWood")) el("resWood").textContent = player.wood;
   if (el("resStone")) el("resStone").textContent = player.stone;
   if (el("resGold")) el("resGold").textContent = player.gold;
-  if (el("resServs")) el("resServs").textContent = meta.servs;
+  const goldCubits = goldCubitsForUi();
+  if (el("resServs")) el("resServs").textContent = goldCubits;
   if (el("resBerries")) el("resBerries").textContent = player.berries || 0;
   if (el("dockWood")) el("dockWood").textContent = player.wood;
   if (el("dockStone")) el("dockStone").textContent = player.stone;
   if (el("dockGold")) el("dockGold").textContent = player.gold;
-  if (el("dockServs")) el("dockServs").textContent = meta.servs;
+  if (el("dockServs")) el("dockServs").textContent = goldCubits;
   if (el("dockBerries")) el("dockBerries").textContent = player.berries || 0;
   syncHotbar();
   updatePetCardCooldowns();
@@ -23594,12 +23629,9 @@ el("tameBtn").addEventListener("touchstart", (e) => { e.preventDefault(); tryTam
 
 // ---------- home screen ----------
 function claimDailyServs() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (meta.lastDaily === today) return false;
-  meta.lastDaily = today;
-  meta.servs = (meta.servs || 0) + 5;
-  saveMeta();
-  return true;
+  // Legacy browser-side +5 reward is retired. Signed-in daily Gold Cubits are
+  // granted by the HOSTL server, and guests simply keep their normal 5-Gold-Cubit start.
+  return false;
 }
 function isPetUnlocked(type) {
   if (PET_TYPES[type] && PET_TYPES[type].startUnlock) return true;
@@ -23636,7 +23668,7 @@ function buildPetShop() {
         <b>${info.emoji} ${info.name}</b>
         ${unlocked ? `<span class="pet-shop-stage">${stageDisplayName(stage)}</span>` : ""}
       </div>
-      <div style="font-size:11px;opacity:0.7;margin-top:4px">${info.elem} · ${unlock.rarity}</div>
+      <div style="font-size:11px;opacity:0.9;margin-top:4px">${info.elem} · <span class="rarity-${unlock.rarity}" style="font-weight:900">${unlock.rarity}</span></div>
       <div style="font-size:11px;margin-top:6px">${status}</div>
       <div class="pet-shop-actions"></div>
     `;
@@ -23735,7 +23767,7 @@ function buildCardInventory() {
     row.innerHTML = `
       <div>
         <div class="card-prog-name">${info.emoji} ${info.name}</div>
-        <div class="card-prog-meta">${unlocked ? `Owned · ${stageDisplayName(stage)} · ${spentLevels} stat upgrade level${spentLevels===1?"":"s"}` : "Locked · View its card page"}</div>
+        <div class="card-prog-meta"><span class="rarity-${petRarity(type)}" style="font-weight:900">${petRarity(type)}</span> · ${unlocked ? `Owned · ${stageDisplayName(stage)} · ${spentLevels} stat upgrade level${spentLevels===1?"":"s"}` : "Locked · View its card page"}</div>
       </div>
       <div class="card-prog-count">${count} card${count===1?"":"s"} ›</div>`;
     row.addEventListener("click", () => { cardInventoryFocus = type; buildCardInventory(); });
@@ -23768,7 +23800,7 @@ function buildPetUpgradePage(type) {
   root.innerHTML = `
     <div class="pet-upgrade-hero">
       <div><div class="pet-upgrade-title">${info.emoji} ${info.name}</div>
-      <div class="card-prog-meta">${unlocked ? `Owned · Starting stage: ${stageDisplayName(stage)}` : "This pet is locked."}</div></div>
+      <div class="card-prog-meta"><span class="rarity-${petRarity(type)}" style="font-weight:900">${petRarity(type)}</span> · ${unlocked ? `Owned · Starting stage: ${stageDisplayName(stage)}` : "This pet is locked."}</div></div>
       <div class="pet-upgrade-cards">${cards} ${info.name} Card${cards===1?"":"s"}</div>
     </div>
     <div class="pet-upgrade-stage" id="petUpgradeStageBox"></div>
@@ -23927,16 +23959,12 @@ function setupHome() {
   restoreStarterPetPreference();
   buildCardInventory();
 
-  // daily +5 servs
-  const gotDaily = claimDailyServs();
-  el("homeServs").textContent = meta.servs;
+  // Gold Cubits are account-authoritative when signed in; guest mode starts at 5.
+  claimDailyServs();
+  el("homeServs").textContent = goldCubitsForUi();
   updateAchievementUI();
   const dailyEl = el("dailyServsHint");
-  if (dailyEl) {
-    dailyEl.textContent = gotDaily
-      ? "+5 daily Gold Cubits"
-      : "Daily bonus already claimed";
-  }
+  if (dailyEl) dailyEl.textContent = "";
 
   // colors
   const sw = el("colorSwatches");
@@ -24440,6 +24468,14 @@ el("homeBtn").addEventListener("click", () => {
 // Safe bridge used by the account layer (which lives outside this main game scope).
 // Keeping all direct access to meta/player/PET_TYPES inside this scope prevents a
 // successful Google login from failing after the account has already loaded.
+window.__hostlSetGameGoldCubits = function(value) {
+  const next = Math.max(0, Math.floor(Number(value) || 0));
+  meta.servs = next;
+  const ids = ["resServs", "dockServs", "homeServs", "petShopServs", "starterShopServs"];
+  for (const id of ids) { const node = document.getElementById(id); if (node) node.textContent = next; }
+  return next;
+};
+
 window.__hostlApplyAccountEntitlements = function(payload={}) {
   try {
     if(!meta.speciesCards) meta.speciesCards={};
@@ -24489,7 +24525,7 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
       if(nm){ meta.username=nm; player.username=nm; }
     }
     if(Number.isFinite(Number(payload.goldCubits ?? payload.cubits))){
-      meta.servs=Math.max(0,Math.floor(Number(payload.goldCubits ?? payload.cubits)||0));
+      window.__hostlSetGameGoldCubits?.(payload.goldCubits ?? payload.cubits);
     }
     player.title=String(payload.title||"");
     player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
@@ -24527,6 +24563,13 @@ let accountSaveTimer = 0;
 let googleAuthReady = false;
 let hostlServerDayKey = "";
 let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+
+// Single source of truth used by the in-game HUD. Null means guest mode, so the
+// gameplay layer may use its local guest balance.
+window.__hostlGetGoldCubits = function(){
+  if(!accountState.loggedIn) return null;
+  return Math.max(0,Math.floor(Number(accountState.goldCubits)||0));
+};
 
 function utcDayKey() {
   if (hostlServerDayKey) return hostlServerDayKey;
@@ -24573,6 +24616,9 @@ function setAccountFromServer(p={}) {
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
+  // Push the server balance into gameplay immediately, before any HUD/home redraw can
+  // render the guest fallback value.
+  try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
   window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
   try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
   try {
@@ -24653,6 +24699,7 @@ window.__hostlAccountGoldCubitsChanged = function(value){
   const next=Math.max(0,Math.floor(Number(value)||0));
   if(next===Math.floor(Number(accountState.goldCubits)||0)) return;
   accountState.goldCubits=next;
+  try { window.__hostlSetGameGoldCubits?.(next); } catch(_) {}
   const hs=document.getElementById("homeServs"); if(hs) hs.textContent=next;
   const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
   const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
@@ -24709,7 +24756,7 @@ async function restoreAccountSession() {
     window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
     try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
-    try { meta.servs=5; saveMeta(); } catch (_) {}
+    try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
     saveAccountSession();
     syncAccountUi();
   }
@@ -24749,6 +24796,7 @@ function syncAccountUi(msg="") {
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.goldCubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.goldCubits||0);
   if(accountState.loggedIn){
+    try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
     const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.goldCubits||0);
     const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.goldCubits||0);
   } else {
@@ -25140,7 +25188,7 @@ function logoutAccount(showMessage=true) {
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
   accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
-  try { meta.servs=5; saveMeta(); } catch (_) {}
+  try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
   syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Gold Cubits." : "");

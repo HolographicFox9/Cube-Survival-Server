@@ -215,7 +215,16 @@ const BUILD_RECIPES = {
   saddle:{chance:.92,ingredients:{leather:5,swiftFiber:2,ironBuckle:1}}
 };
 const LEARN_RECIPES = { animalWhisperer:{ingredients:{beastBook:1,animalNotes:5,predatorStudy:2,sharpFang:1}} };
+const ANIMAL_RARITY={dog:"Common",cat:"Common",rabbit:"Common",wolf:"Uncommon",bear:"Uncommon",fox:"Uncommon",boar:"Rare",deer:"Rare",owl:"Rare",snake:"Legendary",saber:"Legendary",dragon:"Starter"};
 const CHEST_SPECIES=["dog","cat","dragon","fox","wolf","bear","rabbit","owl","snake","deer","boar","saber"];
+const CHEST_SPECIES_RARITY_WEIGHT={Common:2.4,Uncommon:1.5,Rare:.82,Legendary:.28,Starter:.55};
+function chestSpeciesRarity(type){return ANIMAL_RARITY[type]||"Common";}
+function randomChestSpecies(){
+  const rows=CHEST_SPECIES.map(v=>({v,w:CHEST_SPECIES_RARITY_WEIGHT[chestSpeciesRarity(v)]||1}));
+  let total=rows.reduce((n,x)=>n+x.w,0),roll=Math.random()*total;
+  for(const row of rows){roll-=row.w;if(roll<=0)return row.v;}
+  return rows[0]?.v||"dog";
+}
 const CHEST_THEMES=["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement","arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus","dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
 const THEME_GUEST_FREE=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
 const THEME_ACCOUNT_FREE=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
@@ -567,13 +576,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 553, gameBuild: 625, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 556, gameBuild: 628, rulesVersion: "594", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 553, gameBuild: 625 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 556, gameBuild: 628 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -800,7 +809,7 @@ app.post("/api/open-chest", requireAccount, async (req,res)=>{
   const materialRolls=daily?rand(1,2):rand(2,4);
   const matRewards={}; for(let i=0;i<materialRolls;i++){const id=randomMaterialId(); const rarity=MATERIAL_CATALOG[id]?.rarity||"Common"; const qty=(rarity==="Common"||rarity==="Uncommon")?(daily?rand(1,2):rand(1,3)):1; addMaterial(a,id,qty); matRewards[id]=(matRewards[id]||0)+qty;}
   for(const [id,qty] of Object.entries(matRewards))rewards.push(`+${qty} ${MATERIAL_CATALOG[id].name}`);
-  const species=CHEST_SPECIES[rand(0,CHEST_SPECIES.length-1)]; const cards=daily?rand(3,8):rand(8,20); a.speciesCards[species]=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)+cards); rewards.push(`+${cards} ${species.charAt(0).toUpperCase()+species.slice(1)} Cards`);
+  const species=randomChestSpecies(); const cards=daily?rand(3,8):rand(8,20); a.speciesCards[species]=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)+cards); rewards.push(`+${cards} ${species.charAt(0).toUpperCase()+species.slice(1)} Cards`);
   const themeChance=daily?.10:.35; if(Math.random()<themeChance){const choices=CHEST_THEMES.filter(t=>!a.unlockedThemes.includes(t)); if(choices.length){const t=choices[rand(0,choices.length-1)];a.unlockedThemes.push(t);rewards.push(`${t} theme unlocked permanently`);}}
   if(daily)a.lastDailyChest=day; a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,rewards,account:publicAccount(a)});
 });
