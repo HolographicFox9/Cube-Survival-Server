@@ -23786,6 +23786,39 @@ el("homeBtn").addEventListener("click", () => {
   setupHome();
 });
 
+// Safe bridge used by the account layer (which lives outside this main game scope).
+// Keeping all direct access to meta/player/PET_TYPES inside this scope prevents a
+// successful Google login from failing after the account has already loaded.
+window.__hostlApplyAccountEntitlements = function(payload={}) {
+  try {
+    if(!meta.speciesCards) meta.speciesCards={};
+    if(!meta.ownedStarters) meta.ownedStarters={};
+    if(!meta.petStages) meta.petStages={};
+    const cards=(payload.speciesCards && typeof payload.speciesCards==="object") ? payload.speciesCards : {};
+    for(const [species,raw] of Object.entries(cards)){
+      const n=Math.max(0,Math.floor(Number(raw)||0));
+      meta.speciesCards[species]=Math.max(Number(meta.speciesCards[species])||0,n);
+    }
+    const ent=payload.starterPetEntitlement;
+    if(ent && PET_TYPES?.[ent.type]){
+      meta.ownedStarters["start_"+ent.type]=true;
+      const ranks={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
+      const newRank=ranks[String(ent.stage||"baby")] ?? 0;
+      const oldRank=ranks[String(meta.petStages[ent.type]||"baby")] ?? 0;
+      if(newRank>oldRank) meta.petStages[ent.type]=ent.stage;
+      if(!meta.starterPetType) meta.starterPetType=ent.type;
+      if(!game.startPet) game.startPet=ent.type;
+    }
+    if(payload.title){ player.title=String(payload.title); player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0)); }
+    saveMeta();
+    try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
+    return {ok:true};
+  } catch(err) {
+    console.error("HOSTL account entitlement bridge failed:", err);
+    return {ok:false,error:String(err?.message||err)};
+  }
+};
+
 // boot
 setLoadingScreen("Building the world…", 18, false);
 initWorld();
@@ -23816,23 +23849,16 @@ function utcDayKey() {
 function petStageRank(stage){ return {baby:0,adult:1,boss:2,superboss:3,bigmomma:4}[String(stage||"baby")] ?? 0; }
 function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
-  if(!meta.speciesCards) meta.speciesCards={};
-  if(!meta.ownedStarters) meta.ownedStarters={};
-  if(!meta.petStages) meta.petStages={};
-  for(const [species,raw] of Object.entries(accountState.speciesCards||{})){
-    const n=Math.max(0,Math.floor(Number(raw)||0));
-    meta.speciesCards[species]=Math.max(Number(meta.speciesCards[species])||0,n);
+  try {
+    window.__hostlApplyAccountEntitlements?.({
+      speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
+      title:accountState.title||"",
+      testerRank:accountState.testerRank||0,
+      starterPetEntitlement:accountState.starterPetEntitlement||null
+    });
+  } catch (err) {
+    console.warn("HOSTL account game-entitlement sync skipped:", err);
   }
-  const ent=accountState.starterPetEntitlement;
-  if(ent && PET_TYPES[ent.type]){
-    meta.ownedStarters["start_"+ent.type]=true;
-    if(petStageRank(ent.stage)>petStageRank(meta.petStages[ent.type])) meta.petStages[ent.type]=ent.stage;
-    if(!meta.starterPetType) meta.starterPetType=ent.type;
-    if(!game.startPet) game.startPet=ent.type;
-  }
-  if(accountState.title){ player.title=accountState.title; player.testerRank=accountState.testerRank||0; }
-  saveMeta();
-  try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
 }
 
 function setAccountFromServer(p={}) {
@@ -23845,7 +23871,7 @@ function setAccountFromServer(p={}) {
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||""
   };
-  applyAccountGameEntitlements();
+  try { applyAccountGameEntitlements(); } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
 }
 function saveAccountSession() {
   try {
@@ -24247,7 +24273,8 @@ async function handleGoogleCredential(response) {
     if(data.dailyGranted) bits.push("+10 daily Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
   } catch (err) {
-    syncAccountUi("Google sign-in failed. Check the Render Google Client ID and authorized website origin.");
+    console.error("HOSTL Google sign-in completion failed:", err);
+    syncAccountUi("Google sign-in could not finish. Please try again.");
   }
 }
 function logoutAccount(showMessage=true) {
