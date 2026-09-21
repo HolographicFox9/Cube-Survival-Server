@@ -24254,7 +24254,7 @@ async function initializeGoogleSignIn() {
       }; tick();
     });
     await waitForGoogle();
-    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback:handleGoogleCredential, use_fedcm_for_prompt:true });
+    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback:handleGoogleCredential });
     holder.innerHTML="";
     google.accounts.id.renderButton(holder,{ theme:"filled_blue",size:"large",shape:"pill",text:"continue_with",width:300,logo_alignment:"left" });
     googleAuthReady=true;
@@ -24264,23 +24264,72 @@ async function initializeGoogleSignIn() {
   }
 }
 async function handleGoogleCredential(response) {
-  if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
-  syncAccountUi("Signing in with Google…");
+  if (!response?.credential) {
+    syncAccountUi("Google did not return a sign-in credential. Please try again.");
+    return;
+  }
+  syncAccountUi("Google accepted your account. Finishing HOSTL sign-in…");
+
+  async function finishLoginAttempt() {
+    const r = await fetch("/auth/google", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      cache:"no-store",
+      credentials:"same-origin",
+      body:JSON.stringify({credential:response.credential})
+    });
+    const data = await r.json().catch(()=>({}));
+    if (!r.ok || !data?.token || !data?.account) {
+      const code = String(data?.error || `http_${r.status}`);
+      throw new Error(code);
+    }
+    return data;
+  }
+
   try {
-    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:response.credential}) });
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
-    hostlSessionToken=data.token;
-    setAccountFromServer(data.account);
-    saveAccountSession();
-    syncAchievementAccountBridge();
+    let data;
+    try {
+      data = await finishLoginAttempt();
+    } catch (firstErr) {
+      // One retry covers a brief Render wake/redeploy/network interruption after
+      // the Google account picker has already succeeded.
+      await new Promise(resolve=>setTimeout(resolve, 650));
+      data = await finishLoginAttempt().catch(()=>{ throw firstErr; });
+    }
+
+    // Save the signed session first. UI/game entitlement code must never be able
+    // to erase an otherwise successful Google login.
+    hostlSessionToken = String(data.token || "");
+    try { localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken); } catch (_) {}
+
+    try {
+      setAccountFromServer(data.account);
+    } catch (uiErr) {
+      console.warn("HOSTL account UI hydration warning:", uiErr);
+      // Keep a minimal signed-in state so reload can restore from the server.
+      accountState.loggedIn = true;
+      accountState.userId = String(data.account?.userId || "");
+      accountState.username = String(data.account?.username || "Player");
+      accountState.email = String(data.account?.email || "");
+      accountState.cubits = Number(data.account?.cubits) || 0;
+    }
+
+    try { syncAchievementAccountBridge(); } catch (e) { console.warn(e); }
     const bits=[];
     if(data.created) bits.push("HOSTL account created with 500 Cubits");
     if(data.dailyGranted) bits.push("+10 daily Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
   } catch (err) {
     console.error("HOSTL Google sign-in completion failed:", err);
-    syncAccountUi("Google sign-in could not finish. Please try again.");
+    const code=String(err?.message||"unknown_error");
+    const messages={
+      google_auth_not_configured:"HOSTL's Google Client ID is not configured on the server.",
+      missing_credential:"Google did not send HOSTL a credential.",
+      invalid_google_account:"Google returned an account HOSTL could not verify.",
+      google_verification_failed:"HOSTL's server could not verify the Google login. Check Render logs and GOOGLE_CLIENT_ID.",
+      not_authenticated:"HOSTL could not create the login session."
+    };
+    syncAccountUi(messages[code] || `HOSTL sign-in failed (${code}).`);
   }
 }
 function logoutAccount(showMessage=true) {

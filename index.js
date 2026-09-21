@@ -201,13 +201,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 525, gameBuild: 597, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 526, gameBuild: 598, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 525, gameBuild: 597 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 526, gameBuild: 598 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -265,7 +265,9 @@ app.post("/auth/google", async (req, res) => {
     res.json({ ok: true, created, dailyGranted, token: signSession(userId), account: publicAccount(account) });
   } catch (err) {
     console.error("Google login failed:", err?.message || err);
-    res.status(401).json({ ok: false, error: "google_verification_failed" });
+    const msg = String(err?.message || "").toLowerCase();
+    const error = msg.includes("audience") || msg.includes("wrong recipient") ? "google_client_mismatch" : "google_verification_failed";
+    res.status(401).json({ ok: false, error });
   }
 });
 
