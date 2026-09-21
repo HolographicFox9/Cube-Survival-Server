@@ -12,11 +12,12 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "592";
-let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
+const CUBE_SHARED_RULES_VERSION = "593";
+let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
   if (typeof hooks.rewardTesterKill === "function") HOSTL_ACCOUNT_HOOKS.rewardTesterKill = hooks.rewardTesterKill;
+  if (typeof hooks.rewardOwnerKill === "function") HOSTL_ACCOUNT_HOOKS.rewardOwnerKill = hooks.rewardOwnerKill;
   if (typeof hooks.rewardGameplayMaterial === "function") HOSTL_ACCOUNT_HOOKS.rewardGameplayMaterial = hooks.rewardGameplayMaterial;
   if (typeof hooks.onPresenceJoin === "function") HOSTL_ACCOUNT_HOOKS.onPresenceJoin = hooks.onPresenceJoin;
   if (typeof hooks.onPresenceLeave === "function") HOSTL_ACCOUNT_HOOKS.onPresenceLeave = hooks.onPresenceLeave;
@@ -526,13 +527,13 @@ class PlayerState extends Schema {
     this.health = 100; this.maxHealth = 100; this.dead = false;
     this.color = "#3fa7ff"; this.tool = "Fist"; this.heldSpecial = ""; this.ridingPetId = "";
     this.moveX = 0; this.moveY = 0; this.moving = false; this.animalCarryT = 0;
-    this.kills = 0; this.gold = 0; this.title = ""; this.testerRank = 0;
+    this.kills = 0; this.gold = 0; this.title = ""; this.testerRank = 0; this.ownerRank = 0;
   }
 }
 defineTypes(PlayerState, {
   id:"string", username:"string", x:"number", y:"number", angle:"number",
   health:"number", maxHealth:"number", dead:"boolean", color:"string", tool:"string", heldSpecial:"string", ridingPetId:"string",
-  moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number", title:"string", testerRank:"number"
+  moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number", title:"string", testerRank:"number", ownerRank:"number"
 });
 
 class ResourceState extends Schema {
@@ -2688,6 +2689,17 @@ export class WorldRoom extends Room {
             }
             this.broadcast("testerDown",{victimName:obj.username||"Tester",killerName:killer?.username||"Player",testerRank:1});
           }
+          if (Number(obj.ownerRank)===1) {
+            const killerAccountId=this.playerAccountIds?.get(killerSessionId)||"";
+            const c=this.clientById(killerSessionId);
+            if (killerAccountId && c) {
+              Promise.resolve(HOSTL_ACCOUNT_HOOKS.rewardOwnerKill(killerAccountId)).then(result=>{
+                if(result?.granted) c.send("ownerKillReward",{...result,victimName:obj.username||"Owner",ownerRank:1});
+                else if(result?.account) c.send("ownerKillReward",{...result,victimName:obj.username||"Owner",ownerRank:1});
+              }).catch(()=>{});
+            }
+            this.broadcast("ownerDown",{victimName:obj.username||"Owner",killerName:killer?.username||"Player",ownerRank:1});
+          }
         }
       }
       if(attackerId&&!obj.dead){
@@ -3472,7 +3484,7 @@ export class WorldRoom extends Room {
     this.populationKeys.set(client.sessionId,populationKey);ACTIVE_CUBE_PLAYER_KEYS.add(populationKey);
     const s=this.safeSpawn(),p=new PlayerState();p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
     let verifiedAccount=null;try{verifiedAccount=HOSTL_ACCOUNT_HOOKS.resolveSession(String(options.accountToken||""));}catch(_){verifiedAccount=null;}
-    if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
+    if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));p.ownerRank=Math.max(0,Math.floor(Number(verifiedAccount.ownerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
     let upgrades={};try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}
     this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.state.players.set(client.sessionId,p);
     const clientRules=String(options.rulesVersion||"");

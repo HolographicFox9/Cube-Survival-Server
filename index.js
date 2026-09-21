@@ -87,16 +87,88 @@ function allocateNumericUserId(used = new Set(Object.keys(accountDb?.byId || {})
 function ensureTitleState(a) {
   if (!Array.isArray(a.unlockedTitles)) a.unlockedTitles = [];
   a.unlockedTitles = [...new Set(a.unlockedTitles.map(x => safeText(x, 32)).filter(Boolean))].slice(0, 100);
-  // Migrate the original tester title to its final public name.
+  // Migrate special staff titles to their final public names.
   if (Math.max(0, Math.floor(Number(a.testerRank)||0)) === 1) {
     a.unlockedTitles = a.unlockedTitles.filter(t => t !== "Tester");
     if (!a.unlockedTitles.includes("#1 Tester")) a.unlockedTitles.push("#1 Tester");
     if (safeText(a.title,32) === "Tester" || !safeText(a.title,32)) a.title = "#1 Tester";
   }
+  if (Math.max(0, Math.floor(Number(a.ownerRank)||0)) === 1) {
+    if (!a.unlockedTitles.includes("Owner")) a.unlockedTitles.push("Owner");
+    if (!safeText(a.title,32)) a.title = "Owner";
+  }
   const current = safeText(a.title, 32);
   if (current && !a.unlockedTitles.includes(current)) a.unlockedTitles.push(current);
   if (current && !a.unlockedTitles.includes(current)) a.title = "";
   return a;
+}
+
+const STARTER_PET_STAGE_RANK = { baby:0, adult:1, boss:2, superboss:3, bigmomma:4 };
+function ensureStarterPetEntitlements(a) {
+  if (!a || typeof a !== "object") return [];
+  const raw = Array.isArray(a.starterPetEntitlements) ? [...a.starterPetEntitlements] : [];
+  if (a.starterPetEntitlement && typeof a.starterPetEntitlement === "object") raw.push(a.starterPetEntitlement);
+  const byType = new Map();
+  for (const ent of raw) {
+    if (!ent || typeof ent !== "object") continue;
+    const type = safeText(ent.type,24).toLowerCase();
+    const stage = safeText(ent.stage,24).toLowerCase();
+    if (!type) continue;
+    const cleanStage = Object.prototype.hasOwnProperty.call(STARTER_PET_STAGE_RANK,stage) ? stage : "baby";
+    const old = byType.get(type);
+    if (!old || STARTER_PET_STAGE_RANK[cleanStage] > STARTER_PET_STAGE_RANK[old.stage]) byType.set(type,{type,stage:cleanStage});
+  }
+  a.starterPetEntitlements = [...byType.values()];
+  // Legacy field is kept so older clients still receive at least one entitlement.
+  a.starterPetEntitlement = a.starterPetEntitlements[0] || null;
+  return a.starterPetEntitlements;
+}
+function grantStarterPetEntitlement(a,type,stage="baby") {
+  const t=safeText(type,24).toLowerCase();
+  const st=safeText(stage,24).toLowerCase();
+  if(!t)return;
+  const cleanStage=Object.prototype.hasOwnProperty.call(STARTER_PET_STAGE_RANK,st)?st:"baby";
+  ensureStarterPetEntitlements(a);
+  const found=a.starterPetEntitlements.find(x=>x.type===t);
+  if(found){ if(STARTER_PET_STAGE_RANK[cleanStage]>STARTER_PET_STAGE_RANK[found.stage]) found.stage=cleanStage; }
+  else a.starterPetEntitlements.push({type:t,stage:cleanStage});
+  // Prefer the newly granted entitlement in the legacy field for older clients.
+  a.starterPetEntitlement={type:t,stage:(a.starterPetEntitlements.find(x=>x.type===t)||{}).stage||cleanStage};
+}
+function repairSpecialPromoEntitlements(a) {
+  if(!a || typeof a!=="object") return false;
+  let changed=false;
+  if(!a.specialRewardRepairs || typeof a.specialRewardRepairs!=="object" || Array.isArray(a.specialRewardRepairs)) a.specialRewardRepairs={};
+  if(!a.speciesCards || typeof a.speciesCards!=="object" || Array.isArray(a.speciesCards)) a.speciesCards={};
+  const codes=Array.isArray(a.redeemedCodes)?a.redeemedCodes.map(x=>String(x).toUpperCase()):[];
+  const hasTester=codes.includes("SCCTT") || Math.max(0,Math.floor(Number(a.testerRank)||0))===1;
+  if(hasTester){
+    if(Math.max(0,Math.floor(Number(a.testerRank)||0))!==1){a.testerRank=1;changed=true;}
+    ensureTitleState(a);
+    if(!a.unlockedTitles.includes("#1 Tester")){a.unlockedTitles.push("#1 Tester");changed=true;}
+    const before=JSON.stringify(ensureStarterPetEntitlements(a)); grantStarterPetEntitlement(a,"saber","adult");
+    if(JSON.stringify(a.starterPetEntitlements)!==before)changed=true;
+    if(!a.specialRewardRepairs.sccttSaberCardsV1){
+      const old=Math.max(0,Math.floor(Number(a.speciesCards.saber)||0));
+      if(old<500){a.speciesCards.saber=500;changed=true;}
+      a.specialRewardRepairs.sccttSaberCardsV1=Date.now(); changed=true;
+    }
+  }
+  const hasOwner=codes.includes("OVCC") || Math.max(0,Math.floor(Number(a.ownerRank)||0))===1;
+  if(hasOwner){
+    if(Math.max(0,Math.floor(Number(a.ownerRank)||0))!==1){a.ownerRank=1;changed=true;}
+    ensureTitleState(a);
+    if(!a.unlockedTitles.includes("Owner")){a.unlockedTitles.push("Owner");changed=true;}
+    const before=JSON.stringify(ensureStarterPetEntitlements(a)); grantStarterPetEntitlement(a,"snake","adult");
+    if(JSON.stringify(a.starterPetEntitlements)!==before)changed=true;
+    if(!a.specialRewardRepairs.ovccViperCardsV1){
+      const old=Math.max(0,Math.floor(Number(a.speciesCards.snake)||0));
+      if(old<50){a.speciesCards.snake=50;changed=true;}
+      a.specialRewardRepairs.ovccViperCardsV1=Date.now(); changed=true;
+    }
+  }
+  ensureStarterPetEntitlements(a);
+  return changed;
 }
 
 
@@ -291,7 +363,10 @@ function normalizeLoadedAccounts() {
   accountDb.globalCodeClaims = newClaims;
 }
 normalizeLoadedAccounts();
-for (const a of Object.values(accountDb.byId || {})) ensureGoldCubits(a);
+for (const a of Object.values(accountDb.byId || {})) {
+  ensureGoldCubits(a);
+  repairSpecialPromoEntitlements(a);
+}
 saveAccounts();
 function publicAccount(a) {
   return {
@@ -309,11 +384,13 @@ function publicAccount(a) {
     title: a.title || "",
     unlockedTitles: Array.isArray(a.unlockedTitles) ? a.unlockedTitles : [],
     testerRank: Math.max(0, Math.floor(Number(a.testerRank) || 0)),
+    ownerRank: Math.max(0, Math.floor(Number(a.ownerRank) || 0)),
     speciesCards: a.speciesCards && typeof a.speciesCards === "object" ? a.speciesCards : {},
     materials: ensureEconomyState(a).materials,
     craftedStarters: [...a.craftedStarters],
     learnedSkills: [...a.learnedSkills],
-    starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? a.starterPetEntitlement : null,
+    starterPetEntitlements: ensureStarterPetEntitlements(a).map(x=>({...x})),
+    starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? {...a.starterPetEntitlement} : null,
     friendCount: ensureSocialState(a).friends.length
   };
 }
@@ -393,6 +470,15 @@ const PROMO_CODES = new Map([
     starterPetEntitlement: { type: "saber", stage: "adult" },
     globalOnce: true,
     label: "+14,000 Gold Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
+  }],
+  ["OVCC", {
+    goldCubits: 10000,
+    speciesCards: { snake: 50 },
+    title: "Owner",
+    ownerRank: 1,
+    starterPetEntitlement: { type: "snake", stage: "adult" },
+    globalOnce: true,
+    label: "+10,000 Gold Cubits, +50 Viper Cards, Adult Viper starter access, and the Owner title"
   }]
 ]);
 function normalizePromoCode(value) {
@@ -408,13 +494,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 548, gameBuild: 620, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 550, gameBuild: 622, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 548, gameBuild: 620 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 550, gameBuild: 622 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -456,6 +542,7 @@ app.post("/auth/google", async (req, res) => {
         title: "",
         unlockedTitles: [],
         testerRank: 0,
+        ownerRank: 0,
         starterPetEntitlement: null,
         friends: [], incomingFriendRequests: [], outgoingFriendRequests: [],
         createdAt: new Date().toISOString(),
@@ -485,6 +572,7 @@ app.post("/auth/google", async (req, res) => {
       ensureTitleState(account);
       ensureEconomyState(account);
       ensureSocialState(account);
+      repairSpecialPromoEntitlements(account);
       account.updatedAt = new Date().toISOString();
     }
     const dailyGranted = applyDailyCubits(account);
@@ -498,11 +586,13 @@ app.post("/auth/google", async (req, res) => {
   }
 });
 
-app.get("/api/account", requireAccount, (req, res) => {
+app.get("/api/account", requireAccount, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
+  const a=accountDb.byId[req.hostlUserId];
+  if(repairSpecialPromoEntitlements(a)){a.updatedAt=new Date().toISOString();await saveAccounts();}
   // Returning the already-verified token lets the browser restore its local copy from
   // the HttpOnly cookie after a reload without asking Google to sign in again.
-  res.json({ ok: true, token: req.hostlSessionToken, account: publicAccount(accountDb.byId[req.hostlUserId]) });
+  res.json({ ok: true, token: req.hostlSessionToken, account: publicAccount(a) });
 });
 
 app.post("/auth/logout", (req, res) => {
@@ -702,7 +792,11 @@ app.post("/api/redeem-code", requireAccount, async (req, res) => {
   const reward = PROMO_CODES.get(code);
   if (!reward) return res.status(404).json({ ok:false, error:"invalid_code" });
   const redeemed = ensureRedeemedCodes(a);
-  if (redeemed.includes(code)) return res.status(409).json({ ok:false, error:"already_redeemed" });
+  if (redeemed.includes(code)) {
+    const repaired=repairSpecialPromoEntitlements(a);
+    if(repaired){a.updatedAt=new Date().toISOString();await saveAccounts();}
+    return res.status(409).json({ ok:false, error:"already_redeemed", repaired, account:publicAccount(a) });
+  }
   if (!accountDb.globalCodeClaims || typeof accountDb.globalCodeClaims !== "object") accountDb.globalCodeClaims = {};
   const existingGlobalClaim = accountDb.globalCodeClaims[code];
   if (reward.globalOnce && existingGlobalClaim && existingGlobalClaim !== a.userId) return res.status(409).json({ ok:false, error:"code_already_claimed" });
@@ -728,9 +822,17 @@ app.post("/api/redeem-code", requireAccount, async (req, res) => {
     if (!a.title && grantedTitle) a.title = grantedTitle;
   }
   if (Number(reward.testerRank)>0) a.testerRank=Math.max(0,Math.floor(Number(reward.testerRank)||0));
-  if (reward.starterPetEntitlement && typeof reward.starterPetEntitlement === "object") {
-    a.starterPetEntitlement={type:safeText(reward.starterPetEntitlement.type,24).toLowerCase(),stage:safeText(reward.starterPetEntitlement.stage,24).toLowerCase()};
+  if (Number(reward.ownerRank)>0) {
+    a.ownerRank=Math.max(0,Math.floor(Number(reward.ownerRank)||0));
+    ensureTitleState(a);
+    if (!a.unlockedTitles.includes("Owner")) a.unlockedTitles.push("Owner");
+    a.title="Owner";
   }
+  if (reward.starterPetEntitlement && typeof reward.starterPetEntitlement === "object") {
+    grantStarterPetEntitlement(a,reward.starterPetEntitlement.type,reward.starterPetEntitlement.stage);
+  }
+  // Mark/repair special pet rewards idempotently. This also repairs older tester/owner claims.
+  repairSpecialPromoEntitlements(a);
   if (reward.globalOnce) accountDb.globalCodeClaims[code]=a.userId;
   redeemed.push(code);
   a.updatedAt = new Date().toISOString();
@@ -755,15 +857,33 @@ async function rewardTesterKill(accountId) {
   return { granted:true, rewardSummary, goldCubits, saberCards, account:publicAccount(a) };
 }
 
+async function rewardOwnerKill(accountId) {
+  const a = accountDb.byId[String(accountId || "")];
+  if (!a) return { granted:false, reason:"account_missing" };
+  if (!a.achievements || typeof a.achievements !== "object") a.achievements = {};
+  const achievementId = "owner_hunter_1";
+  if (a.achievements[achievementId]) return { granted:false, account:publicAccount(a) };
+  const goldCubits = 7500, viperCards = 250;
+  addGoldCubits(a, goldCubits);
+  if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
+  a.speciesCards.snake = Math.max(0, Math.floor(Number(a.speciesCards.snake)||0) + viperCards);
+  const rewardSummary = `+${goldCubits.toLocaleString()} Gold Cubits · +${viperCards} Viper Cards`;
+  a.achievements[achievementId] = { at:Date.now(), species:"snake", rewardSummary, serverVerified:true };
+  a.updatedAt = new Date().toISOString();
+  await saveAccounts();
+  return { granted:true, rewardSummary, goldCubits, viperCards, account:publicAccount(a) };
+}
+
 configureHostlAccountHooks({
   resolveSession(token) {
     const uid = verifySession(token);
     if (!uid) return null;
     const a = accountDb.byId[uid];
     if (!a) return null;
-    return { userId:uid, title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)) };
+    return { userId:uid, title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)) };
   },
   rewardTesterKill,
+  rewardOwnerKill,
   rewardGameplayMaterial,
   onPresenceJoin(userId,key,worldId){ markGamePresence(userId,key,worldId); },
   onPresenceLeave(userId,key){ clearGamePresence(userId,key); }

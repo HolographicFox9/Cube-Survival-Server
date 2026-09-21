@@ -5586,7 +5586,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "592";
+const CUBE_SHARED_RULES_VERSION = "593";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -8203,6 +8203,7 @@ function achievementDefs(){
     {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Gold Cubits",reward:{goldCubits:150}},
     {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Gold Cubits",reward:{goldCubits:50}},
     {id:"tester_hunter_1",icon:"🎯",name:"Tester Hunter",desc:"Defeat the #1 HOSTL Tester in multiplayer.",rewardText:"3,000 Gold Cubits + 100 Saber Cards",reward:{}},
+    {id:"owner_hunter_1",icon:"👑",name:"Owner Hunter",desc:"Defeat the HOSTL Owner in multiplayer.",rewardText:"7,500 Gold Cubits + 250 Viper Cards",reward:{}},
   ];
   for(const type of ACHIEVEMENT_SPECIES){
     const info=PET_TYPES[type];
@@ -8910,7 +8911,7 @@ function renderPlayerLeaderboard() {
       list.push({
         id,
         username: String(p.username || "Cube").slice(0, 14),
-        title: String(p.title||""), testerRank:Number(p.testerRank)||0,
+        title: String(p.title||""), testerRank:Number(p.testerRank)||0, ownerRank:Number(p.ownerRank)||0,
         kills: Math.max(0, Number(p.kills) || 0),
         gold: Math.max(0, Number(p.gold) || 0)
       });
@@ -8949,7 +8950,7 @@ function renderPlayerLeaderboard() {
 
     const name = document.createElement("span");
     name.className = "leaderboard-name";
-    name.textContent = entry.title ? `${entry.username} · ${entry.testerRank===1?"TESTER #1":entry.title}` : entry.username;
+    name.textContent = (entry.ownerRank===1 || entry.testerRank===1 || entry.title) ? `${entry.username} · ${entry.ownerRank===1?"OWNER":entry.testerRank===1?"TESTER #1":entry.title}` : entry.username;
 
     const kills = document.createElement("span");
     kills.className = "leaderboard-stat leaderboard-kills";
@@ -9908,6 +9909,20 @@ async function connectMultiplayer() {
     room.onMessage("testerDown", (data={}) => {
       if(String(data.killerName||"") && String(data.victimName||"")) banner(`${data.killerName} defeated TESTER #1 ${data.victimName}!`);
     });
+    room.onMessage("ownerKillReward", (data={}) => {
+      if(data?.account) setAccountFromServer(data.account);
+      saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
+      if(data?.granted){
+        const def=ACHIEVEMENT_BY_ID.get("owner_hunter_1");
+        if(def) queueAchievementToast(def,data.rewardSummary||"Owner bounty claimed");
+        banner(`You defeated ${data.victimName||"the Owner"}! ${data.rewardSummary||"Owner bounty claimed."}`);
+      } else {
+        banner(`You defeated ${data.victimName||"the Owner"}! Achievement already claimed.`);
+      }
+    });
+    room.onMessage("ownerDown", (data={}) => {
+      if(String(data.killerName||"") && String(data.victimName||"")) banner(`${data.killerName} defeated OWNER ${data.victimName}!`);
+    });
     room.onMessage("rulesMismatch", (data={}) => {
       const sv = String(data.serverRulesVersion || "unknown");
       setNetStatus(`Rules mismatch • server ${sv}`, "bad");
@@ -10250,7 +10265,7 @@ function updateRemotePlayers(dt) {
         y: Number(p.y) || 0,
         angle: Number(p.angle) || 0,
         username: p.username || "Cube",
-        title: p.title || "", testerRank: Number(p.testerRank)||0,
+        title: p.title || "", testerRank: Number(p.testerRank)||0, ownerRank: Number(p.ownerRank)||0,
         color: p.color || "#3fa7ff",
         health: Number.isFinite(Number(p.health)) ? Number(p.health) : 100,
         maxHealth: Number.isFinite(Number(p.maxHealth)) ? Number(p.maxHealth) : 100,
@@ -10291,7 +10306,7 @@ function updateRemotePlayers(dt) {
     da = Math.atan2(Math.sin(da), Math.cos(da));
     v.angle += da * follow;
     v.username = p.username || "Cube";
-    v.title = p.title || ""; v.testerRank = Number(p.testerRank)||0;
+    v.title = p.title || ""; v.testerRank = Number(p.testerRank)||0; v.ownerRank = Number(p.ownerRank)||0;
     v.color = p.color || "#3fa7ff";
     v.health = Number.isFinite(Number(p.health)) ? Number(p.health) : 100;
     v.maxHealth = Number.isFinite(Number(p.maxHealth)) ? Number(p.maxHealth) : 100;
@@ -10371,9 +10386,9 @@ function drawRemotePlayer(v) {
   ctx.strokeText(v.username || "Cube", v.x, nameY);
   ctx.fillStyle = "#fff7df";
   ctx.fillText(v.username || "Cube", v.x, nameY);
-  if(v.title){
-    const label=v.testerRank===1?"🎯 TESTER #1":String(v.title).toUpperCase();
-    ctx.font="900 11px -apple-system, sans-serif";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.9)";ctx.strokeText(label,v.x,nameY-17);ctx.fillStyle=v.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(label,v.x,nameY-17);
+  if(v.title || v.ownerRank===1 || v.testerRank===1){
+    const label=v.ownerRank===1?"👑 OWNER":v.testerRank===1?"🎯 TESTER #1":String(v.title).toUpperCase();
+    ctx.font="900 11px -apple-system, sans-serif";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.9)";ctx.strokeText(label,v.x,nameY-17);ctx.fillStyle=v.ownerRank===1?"#ffd76a":v.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(label,v.x,nameY-17);
   }
 
   const maxHp = Math.max(1, Number(v.maxHealth) || 100);
@@ -21915,7 +21930,7 @@ function drawPlayer() {
   ctx.font = "11px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(p.username, p.x, p.y - (p.riding ? 42 : 28));
-  if(p.title){ctx.font="900 10px sans-serif";ctx.fillStyle=p.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(p.testerRank===1?"🎯 TESTER #1":String(p.title).toUpperCase(),p.x,p.y-(p.riding?58:44));}
+  if(p.title || p.ownerRank===1 || p.testerRank===1){ctx.font="900 10px sans-serif";ctx.fillStyle=p.ownerRank===1?"#ffd76a":p.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(p.ownerRank===1?"👑 OWNER":p.testerRank===1?"🎯 TESTER #1":String(p.title).toUpperCase(),p.x,p.y-(p.riding?58:44));}
 }
 
 function shadeColor(hex, percent) {
@@ -24431,13 +24446,18 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
     }
     for(const id of (Array.isArray(payload.craftedStarters)?payload.craftedStarters:[])) meta.ownedStarters[String(id)]=true;
     for(const id of (Array.isArray(payload.learnedSkills)?payload.learnedSkills:[])) meta.ownedStarters[String(id)]=true;
-    const ent=payload.starterPetEntitlement;
-    if(ent && PET_TYPES?.[ent.type]){
+    const entitlements=[];
+    if(Array.isArray(payload.starterPetEntitlements)) entitlements.push(...payload.starterPetEntitlements);
+    if(payload.starterPetEntitlement && typeof payload.starterPetEntitlement==="object") entitlements.push(payload.starterPetEntitlement);
+    const ranks={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
+    const seenEnt=new Set();
+    for(const ent of entitlements){
+      if(!ent || !PET_TYPES?.[ent.type] || seenEnt.has(ent.type)) continue;
+      seenEnt.add(ent.type);
       meta.ownedStarters["start_"+ent.type]=true;
-      const ranks={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
       const newRank=ranks[String(ent.stage||"baby")] ?? 0;
       const oldRank=ranks[String(meta.petStages[ent.type]||"baby")] ?? 0;
-      if(newRank>oldRank) meta.petStages[ent.type]=ent.stage;
+      if(newRank>oldRank) meta.petStages[ent.type]=String(ent.stage||"baby");
       if(!meta.starterPetType) meta.starterPetType=ent.type;
       if(!game.startPet) game.startPet=ent.type;
     }
@@ -24450,6 +24470,7 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
     }
     player.title=String(payload.title||"");
     player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
+    player.ownerRank=Math.max(0,Math.floor(Number(payload.ownerRank)||0));
     saveMeta();
     try{ setupHome(); }catch(_){}
     try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
@@ -24482,7 +24503,7 @@ let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
 let hostlServerDayKey = "";
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 function utcDayKey() {
   if (hostlServerDayKey) return hostlServerDayKey;
@@ -24501,6 +24522,8 @@ function applyAccountGameEntitlements(){
       learnedSkills:Array.isArray(accountState.learnedSkills)?accountState.learnedSkills:[],
       title:accountState.title||"",
       testerRank:accountState.testerRank||0,
+      ownerRank:accountState.ownerRank||0,
+      starterPetEntitlements:Array.isArray(accountState.starterPetEntitlements)?accountState.starterPetEntitlements:[],
       starterPetEntitlement:accountState.starterPetEntitlement||null
     });
   } catch (err) {
@@ -24518,7 +24541,8 @@ function setAccountFromServer(p={}) {
     materials:(p.materials && typeof p.materials==="object") ? p.materials : {},
     craftedStarters:Array.isArray(p.craftedStarters)?p.craftedStarters.map(String):[],
     learnedSkills:Array.isArray(p.learnedSkills)?p.learnedSkills.map(String):[],
-    title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)),
+    title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(p.ownerRank)||0)),
+    starterPetEntitlements:Array.isArray(p.starterPetEntitlements)?p.starterPetEntitlements.filter(x=>x&&typeof x==="object"):[],
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
@@ -24641,7 +24665,7 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
     try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
@@ -24898,8 +24922,9 @@ async function redeemPromoCode() {
     const data=await r.json().catch(()=>({}));
     if(r.status===401){ logoutAccount(false); out.textContent="Your sign-in expired. Sign in again."; out.classList.add("error"); return; }
     if(!r.ok){
-      const messages={invalid_code:"That code is not valid.",already_redeemed:"You already redeemed that code.",code_already_claimed:"That special code has already been claimed.",missing_code:"Type a code first."};
-      out.textContent=messages[data?.error]||"That code could not be redeemed."; out.classList.add("error"); return;
+      if(data?.account){ setAccountFromServer(data.account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); try{setupHome();buildPetShop();buildCardInventory();}catch(_){} }
+      const messages={invalid_code:"That code is not valid.",already_redeemed:data?.repaired?"That code was already redeemed. Its missing special pet rewards were repaired.":"You already redeemed that code.",code_already_claimed:"That special code has already been claimed.",missing_code:"Type a code first."};
+      out.textContent=messages[data?.error]||"That code could not be redeemed."; out.classList.add(data?.repaired?"success":"error"); return;
     }
     if(data?.account) setAccountFromServer(data.account);
     saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); syncPromoCodeUi();
@@ -25074,7 +25099,7 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { meta.servs=5; saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
