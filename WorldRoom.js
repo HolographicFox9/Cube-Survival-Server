@@ -13,10 +13,11 @@ const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
 const CUBE_SHARED_RULES_VERSION = "592";
-let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
+let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
   if (typeof hooks.rewardTesterKill === "function") HOSTL_ACCOUNT_HOOKS.rewardTesterKill = hooks.rewardTesterKill;
+  if (typeof hooks.rewardGameplayMaterial === "function") HOSTL_ACCOUNT_HOOKS.rewardGameplayMaterial = hooks.rewardGameplayMaterial;
   if (typeof hooks.onPresenceJoin === "function") HOSTL_ACCOUNT_HOOKS.onPresenceJoin = hooks.onPresenceJoin;
   if (typeof hooks.onPresenceLeave === "function") HOSTL_ACCOUNT_HOOKS.onPresenceLeave = hooks.onPresenceLeave;
 }
@@ -1799,6 +1800,22 @@ export class WorldRoom extends Room {
   handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;const toolName=this.validTool(String(data.tool||"Fist")),t=this.toolStats(toolName,data.tier);const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"resourceHit",tool:toolName,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"resource",targetId:id});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}this.broadcastEntityHealth("resource",id,r);if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",id,r);this.resourceRespawns.set(id,rand(12,22));}}
   handleGoldHit(client,data){const id=String(data.id||""),g=this.state.gold.get(id);if(!g||(!g.infinite&&g.goldLeft<=0)||!this.playerCanReach(client,g.x,g.y,Math.min(150,g.r)))return;const tool=this.validTool(String(data.tool||"Fist"));const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"goldHit",tool,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"gold",targetId:id});this.broadcastFx({kind:"hit",x:g.x,y:g.y,text:"",color:g.pure?"#fff19a":"#ffd23f"});let take=0,tiny=false;if(tool==="Fist"){const key=`${client.sessionId}:${id}`;let c=(this.goldHandCredits.get(key)||0)+.12;if(c>=1){take=1;c-=1;}else tiny=true;this.goldHandCredits.set(key,c);}else take=g.pure?3:g.size==="huge"?randi(2,4):1;if(!g.infinite)take=Math.min(take,Math.max(0,g.goldLeft));if(take>0){if(!g.infinite)g.goldLeft=Math.max(0,g.goldLeft-take);take=Math.max(1,Math.round(take*this.runPerks(client.sessionId).gatherMul));const p=this.state.players.get(client.sessionId);if(p)p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+take));client.send("resourceReward",{id,kind:"gold",amount:take,pure:!!g.pure,balance:p?p.gold:undefined});}else client.send("resourceReward",{id,kind:"gold",amount:0,tiny});}
 
+  maybeRewardWildMaterial(attackerId,a){
+    const userId=this.playerAccountIds?.get(String(attackerId||"")); if(!userId||!a)return;
+    let id="",qty=0;
+    // Legendary gameplay drop: Super Boss snakes can drop one or two Sharpened Fangs.
+    if(a.type==="snake"&&a.stage==="superboss"&&Math.random()<.45){id="sharpFang";qty=Math.random()<.25?2:1;}
+    // Mythical gameplay drop: the strongest dragons can very rarely drop an Apex Scale.
+    else if(a.type==="dragon"&&(a.stage==="superboss"||a.stage==="bigmomma")&&Math.random()<(a.stage==="bigmomma"?.14:.06)){id="apexScale";qty=1;}
+    // Ordinary boss wildlife can still produce useful common materials.
+    else if(["bear","boar","deer"].includes(a.type)&&["boss","superboss","bigmomma"].includes(a.stage)&&Math.random()<.28){id="leather";qty=1+(a.stage==="bigmomma"&&Math.random()<.35?1:0);}
+    if(!id||qty<=0)return;
+    const c=this.clientById(String(attackerId||""));
+    Promise.resolve(HOSTL_ACCOUNT_HOOKS.rewardGameplayMaterial(String(userId),id,qty,`wild:${a.stage}:${a.type}`)).then(result=>{
+      if(result?.granted&&c)c.send("accountMaterialReward",result);
+    }).catch(()=>{});
+  }
+
   hitWild(id,a,dmg,attackerId,crit=false,attackerRef=null){
     if(!a||a.hp<=0)return;
     dmg=animalDamageTaken(a.type,a.stage,dmg);
@@ -1809,7 +1826,7 @@ export class WorldRoom extends Room {
     if(guardOwner){a.fleeUntil=0;a.tameFailedAggro=true;this.animalFleeFrom.delete(id);this.animalAggro.set(id,ref);}
     else this.setWildReactionToAttacker(id,a,ref);
     this.broadcastFx({kind:"hit",x:a.x,y:a.y,text:(crit?"CRIT ":"")+Math.round(dmg),color:crit?"#ffe08a":"#f2836a"});
-    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="animal"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);this.petChaseState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
+    if(a.hp<=0){if(guardOwner){this.enemyOwnerByPet.delete(id);if(this.enemyPetByEnemy.get(guardOwner)===id)this.enemyPetByEnemy.delete(guardOwner);const owner=this.state.enemies.get(guardOwner);if(owner){owner.guardPetId="";owner.ridingPetId="";owner.hasGuard=false;}}for(const[petId,focus]of Array.from(this.petFocusTargets.entries())){if(focus&&focus.kind==="animal"&&focus.id===id){this.petFocusTargets.delete(petId);this.petHuntState.delete(petId);this.petFollowState.delete(petId);this.petChaseState.delete(petId);const pet=this.state.pets.get(petId);if(pet){pet.orderMode="follow";pet.targetX=-1;pet.targetY=-1;}}}this.awardPetXpContributors("animal",id,a,ref.kind==="pet"?ref.id:"");this.maybeRewardWildMaterial(attackerId,a);this.broadcastSpectateKill("animal",id,ref.kind,ref.id);this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);this.rewardKill(attackerId,"animal",a.x,a.y,a.type);}
   }
   hitEnemy(id,en,dmg,attackerId,crit=false,attackerRef=null){
     if(!en||en.hp<=0)return;
@@ -2699,7 +2716,7 @@ export class WorldRoom extends Room {
       obj.hp=Math.max(0,obj.hp-amount);obj.flash=.15;obj.combat=8;obj.enraged=true;obj.sleeping=false;obj.recentHit=4;this.broadcastEntityHealth("animal",ref.id,obj);
       if(attackerKind==="animal"&&attackerId&&this.state.animals.has(attackerId))this.animalAggro.set(ref.id,{kind:"animal",id:attackerId});
       else if(attackerKind==="enemy"&&attackerId&&this.state.enemies.has(attackerId))this.animalAggro.set(ref.id,{kind:"enemy",id:attackerId});
-      if(obj.hp<=0){obj.dead=true;this.awardPetXpContributors("animal",ref.id,obj,"");this.state.animals.delete(ref.id);this.animalAggro.delete(ref.id);this.animalFleeFrom.delete(ref.id);}
+      if(obj.hp<=0){obj.dead=true;this.awardPetXpContributors("animal",ref.id,obj,"");if(attackerKind==="player")this.maybeRewardWildMaterial(attackerId,obj);this.state.animals.delete(ref.id);this.animalAggro.delete(ref.id);this.animalFleeFrom.delete(ref.id);}
       return true;
     }
     if(ref.kind==="enemy"){

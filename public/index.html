@@ -4046,6 +4046,20 @@
   .code-result.error{color:#ff9a9a}
   @media(max-width:520px){.code-entry-row{flex-direction:column}.code-entry-row button{width:100%}}
 
+  .material-grid,.recipe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:10px}
+  .material-card,.recipe-card{border:1px solid rgba(240,230,200,.16);border-radius:14px;padding:12px;background:rgba(255,255,255,.025)}
+  .material-card h4,.recipe-card h4{margin:0 0 6px;color:#fff2c7}
+  .material-rarity{display:inline-block;margin:0 0 6px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:1000;letter-spacing:.04em;border:1px solid rgba(255,255,255,.18)}
+  .rarity-Common{color:#e5e7eb}.rarity-Uncommon{color:#9ef0b3}.rarity-Rare{color:#91c8ff}.rarity-Epic{color:#d4a5ff}.rarity-Legendary{color:#ffd36a}.rarity-Mythical{color:#ff9ee8;text-shadow:0 0 10px rgba(255,158,232,.35)}
+  .material-card .owned-count,.recipe-card .owned-count{font-size:12px;font-weight:900;color:#bde9f2;margin:5px 0}
+  .ingredient-list{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+  .ingredient-chip{font-size:11px;padding:4px 7px;border-radius:999px;border:1px solid rgba(240,230,200,.18);background:rgba(0,0,0,.18)}
+  .ingredient-chip.missing{border-color:rgba(255,100,100,.42);color:#ffb0b0}
+  .recipe-chance{font-size:12px;font-weight:900;margin:6px 0;color:#ffd98a}
+  .shop-inventory-bar{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 12px}
+  .shop-inventory-chip{font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;background:rgba(189,233,242,.08);border:1px solid rgba(189,233,242,.24)}
+
+
 
   /* ---------- 460 mobile-mode home screen layout ---------- */
   body.mobile-home-layout #home{
@@ -9531,6 +9545,14 @@ async function connectMultiplayer() {
     net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
     net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.lastPhaseIdx = -1;
+    room.onMessage("accountMaterialReward", (data={}) => {
+      if(data?.account)setAccountFromServer(data.account);
+      const qty=Math.max(1,Math.floor(Number(data?.qty)||1));
+      const name=String(data?.name||"Material"), rarity=String(data?.rarity||"");
+      showGameMessage("Material Drop",`${rarity?rarity+" ":""}${name} ×${qty} added to your HOSTL account.`);
+      try{renderMaterialsAndRecipes();}catch(_){}
+    });
+
     room.onMessage("testerKillReward", (data={}) => {
       if(data?.account) setAccountFromServer(data.account);
       saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
@@ -13129,6 +13151,11 @@ function drawUploadedAnimalSkin(a) {
     // The uploaded Boss/Super Boss assembled files are reference-only.
     if (rabbitStage === "baby" && !a.sleeping) {
       if (drawReassembledRabbitPartsSkin(a, "baby", false)) return true;
+    }
+    // Boss rabbit uses the same independently animated tail/body/head system
+    // as the other separated animals, for both awake and sleeping poses.
+    if (rabbitStage === "boss") {
+      if (drawReassembledRabbitPartsSkin(a, "boss", !!a.sleeping)) return true;
     }
     if (rabbitStage === "superboss") {
       if (drawReassembledRabbitPartsSkin(a, "superboss", !!a.sleeping)) return true;
@@ -23739,10 +23766,14 @@ function closePlayerDesign() {
   el("playerDesignOverlay").classList.remove("show");
 }
 
+function mountStarterShopIntoTabbedShop() {
+  const grid = document.getElementById("shopGrid");
+  const mount = document.getElementById("expandedStarterShopMount");
+  if (grid && mount && grid.parentElement !== mount) mount.appendChild(grid);
+}
 function openStarterShop() {
   if (game.started && !game.over) return;
-  if (el("starterShopServs")) el("starterShopServs").textContent = meta.servs;
-  el("starterShopOverlay").classList.add("show");
+  openExpandedShop("shop");
 }
 function closeStarterShop() {
   el("starterShopOverlay").classList.remove("show");
@@ -24057,6 +24088,8 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
       const n=Math.max(0,Math.floor(Number(raw)||0));
       meta.speciesCards[species]=Math.max(Number(meta.speciesCards[species])||0,n);
     }
+    for(const id of (Array.isArray(payload.craftedStarters)?payload.craftedStarters:[])) meta.ownedStarters[String(id)]=true;
+    for(const id of (Array.isArray(payload.learnedSkills)?payload.learnedSkills:[])) meta.ownedStarters[String(id)]=true;
     const ent=payload.starterPetEntitlement;
     if(ent && PET_TYPES?.[ent.type]){
       meta.ownedStarters["start_"+ent.type]=true;
@@ -24107,7 +24140,7 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 function utcDayKey() {
   const d = new Date();
@@ -24121,6 +24154,8 @@ function applyAccountGameEntitlements(){
       username:accountState.username||"",
       cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
+      craftedStarters:Array.isArray(accountState.craftedStarters)?accountState.craftedStarters:[],
+      learnedSkills:Array.isArray(accountState.learnedSkills)?accountState.learnedSkills:[],
       title:accountState.title||"",
       testerRank:accountState.testerRank||0,
       starterPetEntitlement:accountState.starterPetEntitlement||null
@@ -24137,6 +24172,9 @@ function setAccountFromServer(p={}) {
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
+    materials:(p.materials && typeof p.materials==="object") ? p.materials : {},
+    craftedStarters:Array.isArray(p.craftedStarters)?p.craftedStarters.map(String):[],
+    learnedSkills:Array.isArray(p.learnedSkills)?p.learnedSkills.map(String):[],
     title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)),
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
@@ -24235,7 +24273,7 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     // Guest mode has its own clean starting balance and must never inherit account Cubits.
     try { meta.servs=5; saveMeta(); } catch (_) {}
     saveAccountSession();
@@ -24290,6 +24328,7 @@ function syncAccountUi(msg="") {
   renderThemeGrid();
   syncChestUi();
   syncPromoCodeUi();
+  renderMaterialsAndRecipes();
 }
 function openAccountModal() {
   document.getElementById("expandedShopModal")?.classList.remove("on");
@@ -24297,9 +24336,10 @@ function openAccountModal() {
   syncAccountUi();
 }
 function closeAccountModal() { document.getElementById("accountModal")?.classList.remove("on"); }
-function openExpandedShop(page="gear") {
+function openExpandedShop(page="shop") {
   document.getElementById("accountModal")?.classList.remove("on");
   document.getElementById("expandedShopModal")?.classList.add("on");
+  renderMaterialsAndRecipes();
   selectShopPage(page);
   syncAccountUi();
 }
@@ -24307,9 +24347,104 @@ function closeExpandedShop() { document.getElementById("expandedShopModal")?.cla
 function selectShopPage(page) {
   document.querySelectorAll(".shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
   document.querySelectorAll(".shop-page").forEach(p=>p.classList.remove("active"));
-  const ids = { gear:"shopPageGear", themes:"shopPageThemes", chests:"shopPageChests", codes:"shopPageCodes" };
-  document.getElementById(ids[page] || "shopPageGear")?.classList.add("active");
+  const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", themes:"shopPageThemes", chests:"shopPageChests", codes:"shopPageCodes" };
+  document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
   if (page === "codes") syncPromoCodeUi();
+  if (page === "shop" || page === "build" || page === "learn") renderMaterialsAndRecipes();
+}
+
+
+const HOSTL_MATERIALS = {
+  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment. Buy it or earn it from chests/gameplay."},
+  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear. Buy it or find it as loot."},
+  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter. Uncommon materials cost noticeably more to guarantee."},
+  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment. Available from the Shop and loot."},
+  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds. Rare materials are much cheaper if you find them instead of buying."},
+  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills. Buy it or find it through chests/gameplay."},
+  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds. Epic materials are expensive guaranteed purchases."},
+  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior. Rare in loot, but always purchasable."},
+  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"A non-magical study kit containing tracks, bite measurements, and predator behavior records."},
+  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A Legendary trophy component. Super Boss Snakes can drop 1–2, or you can buy one for a very high guaranteed price."},
+  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"A Mythical scale from the strongest dragons. Extremely rare in gameplay and chests, but still purchasable at a huge price."}
+};
+const HOSTL_BUILD_RECIPES = {
+  speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
+  ironShell:{name:"Iron Shell",chance:.60,desc:"Permanent starter equipment: begin each run with a 250-HP non-healable shell.",ingredients:{ironPlate:8,resin:5,leather:3}},
+  hunterWrap:{name:"Hunter's Wrap",chance:.75,desc:"Permanent starter equipment: deal 10% more player damage.",ingredients:{leather:5,sharpFang:3,swiftFiber:3}},
+  gatherGloves:{name:"Gatherer's Gloves",chance:.82,desc:"Permanent starter equipment: gain 15% more gathered resources.",ingredients:{leather:4,swiftFiber:4,toolKit:1}},
+  saddle:{name:"Saddle",chance:.92,desc:"Permanent starter equipment: begin every run with a Saddle.",ingredients:{leather:5,swiftFiber:2,ironBuckle:1}}
+};
+const HOSTL_LEARN_RECIPES = {
+  animalWhisperer:{name:"Animal Whisperer",desc:"Permanent skill: +30% pet/species-card drop chance.",ingredients:{beastBook:1,animalNotes:5,predatorStudy:2,sharpFang:1}}
+};
+function materialCount(id){ return Math.max(0,Math.floor(Number(accountState.materials?.[id])||0)); }
+function materialIngredientHtml(ingredients){
+  return Object.entries(ingredients||{}).map(([id,n])=>{
+    const have=materialCount(id), info=HOSTL_MATERIALS[id];
+    return `<span class="ingredient-chip ${have<n?'missing':''}">${info?.name||id} <small>${info?.rarity||''}</small>: ${have}/${n}</span>`;
+  }).join("");
+}
+function renderMaterialsAndRecipes(){
+  const bar=document.getElementById("materialInventoryBar");
+  if(bar) bar.innerHTML = accountState.loggedIn
+    ? Object.entries(HOSTL_MATERIALS).filter(([id])=>materialCount(id)>0).map(([id,v])=>`<span class="shop-inventory-chip">${v.name} · ${v.rarity}: ${materialCount(id)}</span>`).join("") || `<span class="muted">No crafting materials yet.</span>`
+    : `<span class="muted">Sign in to own materials, build equipment, and learn skills.</span>`;
+  const shop=document.getElementById("materialShopGrid");
+  if(shop){
+    shop.innerHTML="";
+    for(const [id,item] of Object.entries(HOSTL_MATERIALS)){
+      const d=document.createElement("div"); d.className="material-card";
+      const action=`<button class="account-btn" type="button" ${accountState.loggedIn?'':'disabled'}>Buy 1 · ${item.price.toLocaleString()} Cubits</button>`;
+      d.innerHTML=`<span class="material-rarity rarity-${item.rarity}">${item.rarity}</span><h4>${item.name}</h4><div class="muted">${item.desc}</div><div class="owned-count">Owned: ${materialCount(id)}</div>${action}`;
+      d.querySelector("button")?.addEventListener("click",()=>buyMaterial(id)); shop.appendChild(d);
+    }
+  }
+  const build=document.getElementById("buildRecipeGrid");
+  if(build){ build.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_BUILD_RECIPES)){
+    const owned=accountState.craftedStarters.includes(id);
+    const d=document.createElement("div"); d.className="recipe-card";
+    d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Build success: ${Math.round(r.chance*100)}%</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Built':'Build'}</button>`;
+    d.querySelector("button")?.addEventListener("click",()=>attemptBuild(id)); build.appendChild(d);
+  }}
+  const learn=document.getElementById("learnRecipeGrid");
+  if(learn){ learn.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_LEARN_RECIPES)){
+    const owned=accountState.learnedSkills.includes(id);
+    const d=document.createElement("div"); d.className="recipe-card";
+    d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Learning succeeds once all study materials are present.</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Learned':'Learn'}</button>`;
+    d.querySelector("button")?.addEventListener("click",()=>learnSkill(id)); learn.appendChild(d);
+  }}
+}
+async function accountAction(path,body){
+  if(!accountState.loggedIn){ openAccountModal(); return null; }
+  try{
+    const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},credentials:"same-origin",body:JSON.stringify(body||{})});
+    const data=await r.json().catch(()=>({}));
+    if(r.status===401){ logoutAccount(false); return null; }
+    if(data?.account) setAccountFromServer(data.account);
+    syncAccountUi(); renderMaterialsAndRecipes();
+    return {ok:r.ok,data};
+  }catch(_){ return {ok:false,data:{error:"network"}}; }
+}
+async function buyMaterial(id){
+  const item=HOSTL_MATERIALS[id]; if(!item)return;
+  const result=await accountAction("/api/shop/buy-material",{id}); if(!result)return;
+  if(!result.ok){ showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${item.price.toLocaleString()} Cubits.`:"Could not buy that material."); return; }
+  showGameMessage("Material Purchased",`+1 ${item.name}`);
+}
+async function attemptBuild(id){
+  const r=HOSTL_BUILD_RECIPES[id]; if(!r)return;
+  const ok=await showGameConfirm("Build Attempt",`${r.name} has a ${Math.round(r.chance*100)}% success chance. If it fails, all ingredients are lost. Attempt the build?`,"Build");
+  if(!ok)return;
+  const result=await accountAction("/api/build-starter",{id}); if(!result)return;
+  if(!result.ok){ showGameMessage("Cannot Build",result.data?.error==="missing_materials"?"You do not have every required material.":"That build could not be attempted."); return; }
+  if(result.data?.success) showGameMessage("Build Complete",`${r.name} was built successfully and is now a permanent starter unlock.`);
+  else showGameMessage("Build Failed",`${r.name} failed during construction. The materials used in the attempt were lost.`);
+}
+async function learnSkill(id){
+  const r=HOSTL_LEARN_RECIPES[id]; if(!r)return;
+  const result=await accountAction("/api/learn-skill",{id}); if(!result)return;
+  if(!result.ok){ showGameMessage("Cannot Learn",result.data?.error==="missing_materials"?"You do not have every required study material.":"That skill could not be learned."); return; }
+  showGameMessage("Skill Learned",`${r.name} is now permanently learned for this HOSTL account.`);
 }
 
 function syncPromoCodeUi() {
@@ -24394,11 +24529,11 @@ function syncChestUi() {
     status.textContent = "Log in or create an account to use chests.";
   } else {
     const freeReady = accountState.lastDailyChest !== utcDayKey();
-    btn.disabled = false;
-    btn.textContent = freeReady ? "Open Daily Chest — FREE" : "Open Again — 50 Cubits";
+    btn.disabled = !freeReady;
+    btn.textContent = freeReady ? "Watch Ad to Open Wooden Chest" : "Wooden Chest Claimed Today";
     status.textContent = freeReady
-      ? "Your free chest is ready."
-      : "Today's free chest is already opened. Extra Daily Chest opens cost 50 Cubits.";
+      ? "Your daily Wooden Chest is ready."
+      : "Come back tomorrow for another Wooden Chest.";
   }
 
   document.querySelectorAll(".cubitChestBtn").forEach(b=>{
@@ -24435,77 +24570,29 @@ function showChestResult(name, parts) {
     {duration:300,easing:"ease-out"}
   );
 }
-function openAccountChest(name,cost,kind="small",isFreeDaily=false) {
-  if (!accountState.loggedIn) {
-    openAccountModal();
-    syncAccountUi("Log in or create an account before opening chests.");
-    return;
+async function openAccountChest(name,cost,kind="forest",isFreeDaily=false) {
+  if (!accountState.loggedIn) { openAccountModal(); syncAccountUi("Log in or create an account before opening chests."); return; }
+  const result=await accountAction("/api/open-chest",{kind:isFreeDaily?"daily":kind});
+  if(!result)return;
+  if(!result.ok){
+    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:"That chest could not be opened.";
+    showChestResult(name,[msg]); syncChestUi(); return;
   }
-  cost = Math.max(0,Math.floor(Number(cost)||0));
-  if (accountState.cubits < cost) {
-    showChestResult(name,[`Not enough Cubits. You need ${cost}.`]);
-    return;
-  }
-
-  accountState.cubits -= cost;
-  const rewards = [];
-  let bonusMin=0, bonusMax=0, themeChance=0, guaranteedThemes=0;
-
-  if (kind==="daily") {
-    bonusMin=8; bonusMax=18; themeChance=.20;
-  } else if (kind==="small") {
-    bonusMin=10; bonusMax=28; themeChance=.28;
-  } else if (kind==="explorer") {
-    bonusMin=35; bonusMax=80; themeChance=.55;
-  } else if (kind==="rare") {
-    bonusMin=90; bonusMax=180; guaranteedThemes=1;
-  } else if (kind==="legendary") {
-    bonusMin=220; bonusMax=420; guaranteedThemes=1; themeChance=.75;
-  }
-
-  const bonus = chestRandomInt(bonusMin,bonusMax);
-  accountState.cubits += bonus;
-  rewards.push(`+${bonus} Cubits`);
-
-  let unlockedCount=0;
-  for (let i=0;i<guaranteedThemes;i++) {
-    const t=unlockRandomChestTheme();
-    if (t) { rewards.push(`${t} theme unlocked permanently`); unlockedCount++; }
-  }
-  if (Math.random()<themeChance) {
-    const t=unlockRandomChestTheme();
-    if (t) { rewards.push(`${t} theme unlocked permanently`); unlockedCount++; }
-  }
-  if (!unlockedCount && !availableChestThemes().length) {
-    const extra = kind==="legendary" ? 120 : kind==="rare" ? 70 : kind==="explorer" ? 30 : 12;
-    accountState.cubits += extra;
-    rewards.push(`+${extra} Cubits (all chest themes already unlocked)`);
-  }
-
-  if (isFreeDaily) accountState.lastDailyChest = utcDayKey();
-  persistAccountProfile();
-  syncAccountUi();
-  showChestResult(name,rewards);
+  const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
+  showChestResult(name,rewards); syncChestUi(); renderMaterialsAndRecipes();
 }
 
 function openDailyChestNow() {
-  if (!accountState.loggedIn) {
-    openAccountModal();
-    return;
-  }
-  const freeReady = accountState.lastDailyChest !== utcDayKey();
-  openAccountChest(
-    freeReady ? "Daily Chest" : "Daily Chest — Extra Open",
-    freeReady ? 0 : 50,
-    "daily",
-    freeReady
-  );
+  if (!accountState.loggedIn) { openAccountModal(); return; }
+  if (accountState.lastDailyChest === utcDayKey()) { showChestResult("Wooden Chest", ["Already claimed today. Come back tomorrow."]); syncChestUi(); return; }
+  // Test-build reward hook. When ads are connected, call this only after ad completion.
+  openAccountChest("Wooden Chest",0,"daily",true);
 }
 
 function buyCubitChest(button) {
   const cost = Number(button?.dataset?.cost)||0;
-  const name = button?.dataset?.name || "Chest";
-  const kind = cost>=1000 ? "legendary" : cost>=500 ? "rare" : cost>=200 ? "explorer" : "small";
+  const name = button?.dataset?.name || "Forest Chest";
+  const kind = button?.dataset?.kind || "forest";
   openAccountChest(name,cost,kind,false);
 }
 
@@ -24598,7 +24685,7 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { meta.servs=5; saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
@@ -24811,7 +24898,7 @@ function bindAccountAndShopUi() {
   once(document.getElementById("deleteConfirmInput"), "input", updateDeleteConfirmState);
   once(document.getElementById("confirmDeleteAccountBtn"), "click", deleteHostlAccount);
   once(document.getElementById("openShopFromAccount"), "click",
-    ()=>{ closeAccountModal(); openExpandedShop("chests"); });
+    ()=>{ closeAccountModal(); openExpandedShop("shop"); });
   once(document.getElementById("expandedShopClose"), "click", closeExpandedShop);
 
   document.querySelectorAll(".shop-tab").forEach(b =>
@@ -24841,23 +24928,6 @@ function bindAccountAndShopUi() {
     if (e.target === e.currentTarget) closeExpandedShop();
   });
 
-  // Add a Chests button beside/near the existing shop trigger where possible.
-  const legacy = Array.from(document.querySelectorAll("button"))
-    .find(b => /^shop$/i.test((b.textContent||"").trim()));
-  if (legacy && !document.getElementById("chestsMenuBtn")) {
-    const btn = document.createElement("button");
-    btn.id = "chestsMenuBtn";
-    btn.className = legacy.className || "account-btn";
-    btn.type = "button";
-    btn.textContent = "Chests";
-    btn.addEventListener("click", ()=>openExpandedShop("chests"));
-    legacy.insertAdjacentElement("afterend", btn);
-    legacy.addEventListener("contextmenu", e=>e.preventDefault());
-  }
-  if (legacy && !legacy.dataset.expandedShopDblclick) {
-    legacy.dataset.expandedShopDblclick = "1";
-    legacy.addEventListener("dblclick", ()=>openExpandedShop("gear"));
-  }
 
   syncAccountUi();
 }
@@ -24987,16 +25057,33 @@ syncAchievementAccountBridge();
     </div>
 
     <div class="shop-tabs">
-      <button class="shop-tab active" data-shop-page="gear">Gear</button>
+      <button class="shop-tab active" data-shop-page="shop">Shop</button>
+      <button class="shop-tab" data-shop-page="build">Build</button>
+      <button class="shop-tab" data-shop-page="learn">Learn</button>
       <button class="shop-tab" data-shop-page="themes">Themes</button>
       <button class="shop-tab" data-shop-page="chests">Chests</button>
       <button class="shop-tab" data-shop-page="codes">Codes</button>
     </div>
 
-    <section id="shopPageGear" class="shop-page active">
-      <h3>Gear</h3>
-      <p class="muted">Your current run-shop gear stays here. Cubits are for permanent account purchases later.</p>
-      <button id="openLegacyShopBtn" class="account-btn" type="button">Open Current Gear Shop</button>
+    <section id="shopPageShop" class="shop-page active">
+      <h3>Parts &amp; Materials</h3>
+      <p class="muted">Buy parts here, then use <b>Build</b> to make permanent starter equipment or <b>Learn</b> to unlock permanent skills. Chests can also drop these materials.</p>
+      <div id="materialInventoryBar" class="shop-inventory-bar"></div>
+      <div id="materialShopGrid" class="material-grid"></div>
+      <div class="divider"></div>
+      <button id="openLegacyShopBtn" class="account-btn" type="button">Open In-Run Gold Gear Shop</button>
+    </section>
+
+    <section id="shopPageBuild" class="shop-page">
+      <h3>Build</h3>
+      <p class="muted">Building is free once you own the required parts. Harder builds can fail. A failed build consumes every ingredient used in the attempt.</p>
+      <div id="buildRecipeGrid" class="recipe-grid"></div>
+    </section>
+
+    <section id="shopPageLearn" class="shop-page">
+      <h3>Learn</h3>
+      <p class="muted">Skills are learned from books plus other study materials. Learning costs no Cubits once you have everything required.</p>
+      <div id="learnRecipeGrid" class="recipe-grid"></div>
     </section>
 
     <section id="shopPageThemes" class="shop-page">
@@ -25008,37 +25095,23 @@ syncAchievementAccountBridge();
     <section id="shopPageChests" class="shop-page">
       <h3>Chests</h3>
       <div class="chest-card featured">
-        <div class="chest-title"><span>Daily Chest</span><span class="pill">FREE</span></div>
-        <p>One per day for logged-in players.</p>
-        <button id="dailyChestBtn" class="account-btn" type="button">Open Daily Chest</button>
+        <div class="chest-title"><span>Wooden Chest</span><span class="pill">DAILY AD</span></div>
+        <p class="muted">One free Wooden Chest per day for signed-in players. It can contain Cubits, species cards, materials, and occasionally a permanent theme. This is the chest tied to the daily rewarded ad.</p>
+        <button id="dailyChestBtn" class="account-btn" type="button">Watch Ad to Open</button>
         <div id="dailyChestStatus" class="locked-note"></div>
       </div>
 
       <div class="chest-card">
-        <div class="chest-title"><span>Small Chest</span><span class="pill">75 Cubits</span></div>
-        <p class="muted">Basic permanent account rewards.</p>
-        <button class="account-btn cubitChestBtn" data-cost="75" data-name="Small Chest" type="button">Buy for 75</button>
+        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Cubits</span></div>
+        <p class="muted">A Cubit chest with Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
+        <button class="account-btn cubitChestBtn" data-cost="1200" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,200</button>
       </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Explorer Chest</span><span class="pill">200 Cubits</span></div>
-        <p class="muted">Better reward chances.</p>
-        <button class="account-btn cubitChestBtn" data-cost="200" data-name="Explorer Chest" type="button">Buy for 200</button>
-      </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Rare Chest</span><span class="pill">500 Cubits</span></div>
-        <p class="muted">Higher-value rewards.</p>
-        <button class="account-btn cubitChestBtn" data-cost="500" data-name="Rare Chest" type="button">Buy for 500</button>
-      </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Legendary Chest</span><span class="pill">1000 Cubits</span></div>
-        <p class="muted">Top-end chest. Rewards will be filled in later.</p>
-        <button class="account-btn cubitChestBtn" data-cost="1000" data-name="Legendary Chest" type="button">Buy for 1000</button>
-      </div>
+
       <div id="chestResult" class="chest-card" style="display:none">
         <div class="chest-title"><span>Chest Opened!</span><span class="pill">Reward</span></div>
         <div id="chestResultText" style="margin-top:8px"></div>
       </div>
-      <p class="locked-note">No ads are used yet. The Daily Chest is free once per UTC day, then costs 50 Cubits for extra opens.</p>
+      <p class="locked-note">The rewarded-ad provider is not connected yet, so the daily Wooden Chest uses the daily reward hook in this test build. Once ads are connected, the reward will only be granted after the ad completes.</p>
     </section>
 
     <section id="shopPageCodes" class="shop-page">

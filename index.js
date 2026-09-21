@@ -87,6 +87,55 @@ function ensureTitleState(a) {
   return a;
 }
 
+
+const MATERIAL_CATALOG = {
+  // Prices are balanced against normal high-skill play (~100–150 Cubits/minute once waves are active).
+  // Drops/chests are intentionally the efficient route; buying is the guaranteed route.
+  leather:{name:"Leather",price:650,rarity:"Common"},
+  resin:{name:"Hard Resin",price:800,rarity:"Common"},
+  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon"},
+  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon"},
+  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare"},
+  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare"},
+  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic"},
+  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic"},
+  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic"},
+  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary"},
+  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical"}
+};
+const BUILD_RECIPES = {
+  speedyBoots:{chance:.85,ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
+  ironShell:{chance:.60,ingredients:{ironPlate:8,resin:5,leather:3}},
+  hunterWrap:{chance:.75,ingredients:{leather:5,sharpFang:3,swiftFiber:3}},
+  gatherGloves:{chance:.82,ingredients:{leather:4,swiftFiber:4,toolKit:1}},
+  saddle:{chance:.92,ingredients:{leather:5,swiftFiber:2,ironBuckle:1}}
+};
+const LEARN_RECIPES = { animalWhisperer:{ingredients:{beastBook:1,animalNotes:5,predatorStudy:2,sharpFang:1}} };
+const CHEST_SPECIES=["dog","cat","dragon","fox","wolf","bear","rabbit","owl","snake","deer","boar","saber"];
+const CHEST_THEMES=["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal","Power","Viperwave","Hologram","Hyperwave","Owl Night","Bearded Dunes","Saber Fang"];
+function ensureEconomyState(a){
+  if(!a.materials||typeof a.materials!=="object"||Array.isArray(a.materials))a.materials={};
+  for(const id of Object.keys(MATERIAL_CATALOG))a.materials[id]=Math.max(0,Math.min(100000,Math.floor(Number(a.materials[id])||0)));
+  if(!Array.isArray(a.craftedStarters))a.craftedStarters=[]; a.craftedStarters=[...new Set(a.craftedStarters.map(x=>safeText(x,32)).filter(x=>BUILD_RECIPES[x]))];
+  if(!Array.isArray(a.learnedSkills))a.learnedSkills=[]; a.learnedSkills=[...new Set(a.learnedSkills.map(x=>safeText(x,32)).filter(x=>LEARN_RECIPES[x]))];
+  return a;
+}
+function hasIngredients(a,ingredients){ensureEconomyState(a);return Object.entries(ingredients||{}).every(([id,n])=>(a.materials[id]||0)>=n);}
+function consumeIngredients(a,ingredients){ensureEconomyState(a);for(const [id,n] of Object.entries(ingredients||{}))a.materials[id]=Math.max(0,(a.materials[id]||0)-n);}
+function addMaterial(a,id,n){ensureEconomyState(a);if(MATERIAL_CATALOG[id])a.materials[id]=Math.min(100000,(a.materials[id]||0)+Math.max(0,Math.floor(Number(n)||0)));}
+const MATERIAL_RARITY_WEIGHT={Common:48,Uncommon:28,Rare:14,Epic:7,Legendary:2.5,Mythical:.5};
+function randomMaterialId(multiplier=1){
+  const entries=Object.entries(MATERIAL_CATALOG).map(([id,m])=>[id,Math.max(.05,(MATERIAL_RARITY_WEIGHT[m.rarity]||1)*multiplier)]);
+  let total=entries.reduce((a,[,w])=>a+w,0),roll=Math.random()*total;
+  for(const [id,w] of entries){roll-=w;if(roll<=0)return id;}
+  return entries[0]?.[0]||"leather";
+}
+async function rewardGameplayMaterial(userId,id,qty,source="gameplay"){
+  const a=accountDb.byId[String(userId||"")]; if(!a||!MATERIAL_CATALOG[id])return {granted:false};
+  addMaterial(a,id,qty); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  return {granted:true,id,qty:Math.max(1,Math.floor(Number(qty)||1)),name:MATERIAL_CATALOG[id].name,rarity:MATERIAL_CATALOG[id].rarity,source,account:publicAccount(a)};
+}
+
 function ensureSocialState(a) {
   if (!a || typeof a !== "object") return a;
   const cleanIds = arr => [...new Set((Array.isArray(arr) ? arr : []).map(x=>String(x||"")).filter(x=>/^\d{1,5}$/.test(x)))].slice(0,200);
@@ -146,6 +195,7 @@ function normalizeLoadedAccounts() {
     a.username = cleanDisplayName(a.username || "");
     a.displayName = cleanDisplayName(a.displayName || "");
     ensureTitleState(a);
+    ensureEconomyState(a);
     ensureSocialState(a);
     newById[newId] = a;
   }
@@ -181,6 +231,9 @@ function publicAccount(a) {
     unlockedTitles: Array.isArray(a.unlockedTitles) ? a.unlockedTitles : [],
     testerRank: Math.max(0, Math.floor(Number(a.testerRank) || 0)),
     speciesCards: a.speciesCards && typeof a.speciesCards === "object" ? a.speciesCards : {},
+    materials: ensureEconomyState(a).materials,
+    craftedStarters: [...a.craftedStarters],
+    learnedSkills: [...a.learnedSkills],
     starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? a.starterPetEntitlement : null,
     friendCount: ensureSocialState(a).friends.length
   };
@@ -276,13 +329,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 533, gameBuild: 605, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 538, gameBuild: 610, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 533, gameBuild: 605 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 538, gameBuild: 610 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -320,6 +373,7 @@ app.post("/auth/google", async (req, res) => {
         lastDailyChest: "",
         redeemedCodes: [],
         speciesCards: {},
+        materials: {}, craftedStarters: [], learnedSkills: [],
         title: "",
         unlockedTitles: [],
         testerRank: 0,
@@ -350,6 +404,7 @@ app.post("/auth/google", async (req, res) => {
         account.displayName = cleanDisplayName(account.displayName || "");
       }
       ensureTitleState(account);
+      ensureEconomyState(account);
       ensureSocialState(account);
       account.updatedAt = new Date().toISOString();
     }
@@ -411,6 +466,42 @@ app.put("/api/account", requireAccount, async (req, res) => {
   res.json({ ok: true, account: publicAccount(a) });
 });
 
+
+
+app.post("/api/shop/buy-material", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a);
+  const id=safeText(req.body?.id,32); const item=MATERIAL_CATALOG[id]; if(!item)return res.status(404).json({ok:false,error:"unknown_material"});
+  if(Math.floor(Number(a.cubits)||0)<item.price)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:item.price,account:publicAccount(a)});
+  a.cubits=Math.max(0,Math.floor(Number(a.cubits)||0)-item.price); addMaterial(a,id,1); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,material:id,account:publicAccount(a)});
+});
+app.post("/api/build-starter", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); const id=safeText(req.body?.id,32); const recipe=BUILD_RECIPES[id];
+  if(!recipe)return res.status(404).json({ok:false,error:"unknown_recipe"}); if(a.craftedStarters.includes(id))return res.status(409).json({ok:false,error:"already_owned",account:publicAccount(a)});
+  if(!hasIngredients(a,recipe.ingredients))return res.status(409).json({ok:false,error:"missing_materials",account:publicAccount(a)});
+  consumeIngredients(a,recipe.ingredients); const success=Math.random()<recipe.chance; if(success)a.craftedStarters.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,success,account:publicAccount(a)});
+});
+app.post("/api/learn-skill", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); const id=safeText(req.body?.id,32); const recipe=LEARN_RECIPES[id];
+  if(!recipe)return res.status(404).json({ok:false,error:"unknown_skill"}); if(a.learnedSkills.includes(id))return res.status(409).json({ok:false,error:"already_owned",account:publicAccount(a)});
+  if(!hasIngredients(a,recipe.ingredients))return res.status(409).json({ok:false,error:"missing_materials",account:publicAccount(a)});
+  consumeIngredients(a,recipe.ingredients); a.learnedSkills.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,account:publicAccount(a)});
+});
+app.post("/api/open-chest", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); if(!a.speciesCards||typeof a.speciesCards!=="object")a.speciesCards={}; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
+  const kind=safeText(req.body?.kind,20).toLowerCase(); const daily=kind==="daily"; const forest=kind==="forest"; if(!daily&&!forest)return res.status(400).json({ok:false,error:"unknown_chest"});
+  const day=new Date().toISOString().slice(0,10); const cost=forest?1200:0; if(daily&&a.lastDailyChest===day)return res.status(409).json({ok:false,error:"already_claimed",account:publicAccount(a)});
+  if((a.cubits||0)<cost)return res.status(409).json({ok:false,error:"not_enough_cubits",cost,account:publicAccount(a)}); if(cost)a.cubits-=cost;
+  const rewards=[]; const rand=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
+  const cubits=daily?rand(18,45):rand(260,620); a.cubits+=cubits; rewards.push(`+${cubits} Cubits`);
+  const materialRolls=daily?rand(1,2):rand(2,4);
+  const matRewards={}; for(let i=0;i<materialRolls;i++){const id=randomMaterialId(); const rarity=MATERIAL_CATALOG[id]?.rarity||"Common"; const qty=(rarity==="Common"||rarity==="Uncommon")?(daily?rand(1,2):rand(1,3)):1; addMaterial(a,id,qty); matRewards[id]=(matRewards[id]||0)+qty;}
+  for(const [id,qty] of Object.entries(matRewards))rewards.push(`+${qty} ${MATERIAL_CATALOG[id].name}`);
+  const species=CHEST_SPECIES[rand(0,CHEST_SPECIES.length-1)]; const cards=daily?rand(3,8):rand(8,20); a.speciesCards[species]=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)+cards); rewards.push(`+${cards} ${species.charAt(0).toUpperCase()+species.slice(1)} Cards`);
+  const themeChance=daily?.10:.35; if(Math.random()<themeChance){const choices=CHEST_THEMES.filter(t=>!a.unlockedThemes.includes(t)); if(choices.length){const t=choices[rand(0,choices.length-1)];a.unlockedThemes.push(t);rewards.push(`${t} theme unlocked permanently`);}}
+  if(daily)a.lastDailyChest=day; a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,rewards,account:publicAccount(a)});
+});
 
 app.post("/api/presence", requireAccount, (req,res)=>{ markWebPresence(req.hostlUserId); res.json({ok:true}); });
 app.get("/api/friends", requireAccount, (req,res)=>{
@@ -549,6 +640,7 @@ configureHostlAccountHooks({
     return { userId:uid, title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)) };
   },
   rewardTesterKill,
+  rewardGameplayMaterial,
   onPresenceJoin(userId,key,worldId){ markGamePresence(userId,key,worldId); },
   onPresenceLeave(userId,key){ clearGamePresence(userId,key); }
 });
