@@ -1,6 +1,6 @@
 {
   "name": "hostl-full-multiplayer-server",
-  "version": "0.16.38",
+  "version": "0.16.39",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "@colyseus/core": "^0.16.0",
     "@colyseus/schema": "^3.0.0",
     "@colyseus/ws-transport": "^0.16.0",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "google-auth-library": "^10.3.0"
   }
 }

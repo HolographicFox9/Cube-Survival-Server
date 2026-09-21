@@ -4834,6 +4834,7 @@
   <div class="m-btn" id="mCraft">C</div>
 </div>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="https://unpkg.com/colyseus.js@0.16.22/dist/colyseus.js"></script>
 
 <script>
@@ -23523,45 +23524,58 @@ hideLoadingScreen();
 })();
 
 // ---------- account / cubits / expanded shop ----------
-const ACCOUNT_STORAGE_KEY = "cubeSurvivalAccountSessionV1";
-const ACCOUNT_DB_KEY = "cubeSurvivalLocalAccountDBV1";
+const ACCOUNT_STORAGE_KEY = "hostlAccountSessionV2";
 const GUEST_THEME_LIMIT = 10;
-
-// These are local placeholders until Supabase/real auth is connected.
-// Passwords are NOT persisted here; this is only to build/test the game UI flow.
-let accountState = { loggedIn:false, userId:"", username:"", email:"", cubits:0, unlockedThemes:[], achievements:{}, lastDailyCubits:"", lastDailyChest:"" };
+let hostlSessionToken = "";
+let accountSaveTimer = 0;
+let googleAuthReady = false;
+let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, lastDailyCubits:"", lastDailyChest:"" };
 
 function utcDayKey() {
   const d = new Date();
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
 }
-function loadLocalAccountDb() {
-  try { return JSON.parse(localStorage.getItem(ACCOUNT_DB_KEY) || "{}") || {}; } catch (_) { return {}; }
-}
-function saveLocalAccountDb(db) {
-  try { localStorage.setItem(ACCOUNT_DB_KEY, JSON.stringify(db)); } catch (_) {}
+function setAccountFromServer(p={}) {
+  accountState = {
+    loggedIn:true, userId:p.userId||"", username:p.username||"Player", email:p.email||"", picture:p.picture||"",
+    cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
+    lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||""
+  };
 }
 function saveAccountSession() {
   try {
-    if (accountState.loggedIn) localStorage.setItem(ACCOUNT_STORAGE_KEY, JSON.stringify({userId:accountState.userId}));
+    if (accountState.loggedIn && hostlSessionToken) localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken);
     else localStorage.removeItem(ACCOUNT_STORAGE_KEY);
   } catch (_) {}
 }
+function accountAuthHeaders() {
+  return hostlSessionToken ? { "Authorization": `Bearer ${hostlSessionToken}` } : {};
+}
+async function pushAccountProfileNow() {
+  if (!accountState.loggedIn || !hostlSessionToken) return false;
+  try {
+    const r = await fetch("/api/account", {
+      method:"PUT",
+      headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
+      body:JSON.stringify({
+        username:accountState.username, cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
+        achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
+        lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||""
+      })
+    });
+    if (r.status===401) { logoutAccount(false); return false; }
+    if (!r.ok) return false;
+    const data=await r.json();
+    if (data?.account) setAccountFromServer(data.account);
+    return true;
+  } catch (_) { return false; }
+}
 function persistAccountProfile() {
-  if (!accountState.loggedIn || !accountState.userId) return;
-  const db = loadLocalAccountDb();
-  db[accountState.userId] = {
-    ...(db[accountState.userId] || {}),
-    userId:accountState.userId,
-    username:accountState.username,
-    email:accountState.email,
-    cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
-    unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
-    achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
-    lastDailyCubits:accountState.lastDailyCubits || "",
-    lastDailyChest:accountState.lastDailyChest || ""
-  };
-  saveLocalAccountDb(db);
+  if (!accountState.loggedIn || !hostlSessionToken) return;
+  clearTimeout(accountSaveTimer);
+  accountSaveTimer = setTimeout(pushAccountProfileNow, 250);
 }
 function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
@@ -23579,31 +23593,27 @@ function syncAchievementAccountBridge(){
   try{ window.__cubeAchievementUiApi?.onAccountChanged?.(); }catch(_){}
 }
 
-function restoreAccountSession() {
+async function restoreAccountSession() {
+  try { hostlSessionToken = localStorage.getItem(ACCOUNT_STORAGE_KEY) || ""; } catch (_) { hostlSessionToken=""; }
+  if (!hostlSessionToken) { syncAccountUi(); return; }
   try {
-    const s = JSON.parse(localStorage.getItem(ACCOUNT_STORAGE_KEY) || "null");
-    if (!s?.userId) return;
-    const db = loadLocalAccountDb();
-    const p = db[s.userId];
-    if (!p) return;
-    accountState = {
-      loggedIn:true,userId:p.userId,username:p.username||"Player",email:p.email||"",
-      cubits:Number(p.cubits)||0,unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
-      achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
-      lastDailyCubits:p.lastDailyCubits||"",lastDailyChest:p.lastDailyChest||""
-    };
+    const r=await fetch("/api/account", { headers:accountAuthHeaders(), cache:"no-store" });
+    if (!r.ok) throw new Error("session expired");
+    const data=await r.json();
+    if (!data?.account) throw new Error("account missing");
+    setAccountFromServer(data.account);
     syncAchievementAccountBridge();
-    claimDailyCubits();
-  } catch (_) {}
+    syncAccountUi("Account restored.");
+  } catch (_) {
+    hostlSessionToken="";
+    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
+    saveAccountSession();
+    syncAccountUi();
+  }
 }
 function claimDailyCubits() {
-  if (!accountState.loggedIn) return false;
-  const today = utcDayKey();
-  if (accountState.lastDailyCubits === today) return false;
-  accountState.lastDailyCubits = today;
-  accountState.cubits = Math.max(0,Math.floor(Number(accountState.cubits)||0)+10);
-  persistAccountProfile();
-  return true;
+  // Daily Cubits are granted by the HOSTL server when Google login succeeds.
+  return false;
 }
 function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
@@ -23806,48 +23816,71 @@ function buyCubitChest(button) {
   openAccountChest(name,cost,kind,false);
 }
 
-function createPlaceholderAccount() {
-  const username = (document.getElementById("signupName")?.value || "").trim().slice(0,20);
-  const email = (document.getElementById("signupEmail")?.value || "").trim().toLowerCase();
-  const password = document.getElementById("signupPassword")?.value || "";
-  if (username.length < 2) return syncAccountUi("Choose a username with at least 2 characters.");
-  if (!email.includes("@")) return syncAccountUi("Enter a valid email.");
-  if (password.length < 6) return syncAccountUi("Use a password with at least 6 characters.");
-
-  const db = loadLocalAccountDb();
-  const existing = Object.values(db).find(p => (p.email||"").toLowerCase() === email);
-  if (existing) return syncAccountUi("That email already has a local test account.");
-
-  const userId = "local_" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-  accountState = {
-    loggedIn:true,userId,username,email,cubits:500,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:""
-  };
-  claimDailyCubits(); // +10 on the signup day as the daily reward
-  persistAccountProfile();
-  saveAccountSession();
-  syncAccountUi("Account created. +500 signup Cubits and today's +10 daily Cubits were added.");
+async function initializeGoogleSignIn() {
+  const holder=document.getElementById("googleSignInButton");
+  const status=document.getElementById("googleSetupStatus");
+  if (!holder) return;
+  try {
+    const cfg=await fetch("/auth/config", {cache:"no-store"}).then(r=>r.json());
+    if (!cfg?.googleClientId) {
+      if(status) status.textContent="Google Sign-In needs GOOGLE_CLIENT_ID added in Render first.";
+      return;
+    }
+    const waitForGoogle=()=>new Promise((resolve,reject)=>{
+      let tries=0;
+      const tick=()=>{
+        if(window.google?.accounts?.id) return resolve();
+        if(++tries>80) return reject(new Error("Google library did not load"));
+        setTimeout(tick,100);
+      }; tick();
+    });
+    await waitForGoogle();
+    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback:handleGoogleCredential, use_fedcm_for_prompt:true });
+    holder.innerHTML="";
+    google.accounts.id.renderButton(holder,{ theme:"outline",size:"large",shape:"pill",text:"continue_with",width:280 });
+    googleAuthReady=true;
+    if(status) status.textContent="Use Google to create or restore your HOSTL account.";
+  } catch (err) {
+    if(status) status.textContent="Google Sign-In could not load. You can still play as a guest.";
+  }
 }
-function loginPlaceholderAccount() {
-  const email = (document.getElementById("loginEmail")?.value || "").trim().toLowerCase();
-  if (!email) return syncAccountUi("Enter your email.");
-  const db = loadLocalAccountDb();
-  const p = Object.values(db).find(x => (x.email||"").toLowerCase() === email);
-  if (!p) return syncAccountUi("No local test account found for that email.");
-  accountState = {
-    loggedIn:true,userId:p.userId,username:p.username||"Player",email:p.email||email,
-    cubits:Number(p.cubits)||0,unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
-    achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
-    lastDailyCubits:p.lastDailyCubits||"",lastDailyChest:p.lastDailyChest||""
-  };
-  const got = claimDailyCubits();
-  persistAccountProfile(); saveAccountSession();
-  syncAccountUi(got ? "Logged in. +10 daily Cubits added." : "Logged in.");
+async function handleGoogleCredential(response) {
+  if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
+  syncAccountUi("Signing in with Google…");
+  try {
+    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:response.credential}) });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
+    hostlSessionToken=data.token;
+    setAccountFromServer(data.account);
+    saveAccountSession();
+    syncAchievementAccountBridge();
+    const bits=[];
+    if(data.created) bits.push("HOSTL account created with 500 Cubits");
+    if(data.dailyGranted) bits.push("+10 daily Cubits");
+    syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
+  } catch (err) {
+    syncAccountUi("Google sign-in failed. Check the Render Google Client ID and authorized website origin.");
+  }
 }
-function logoutAccount() {
-  persistAccountProfile();
-  accountState = { loggedIn:false,userId:"",username:"",email:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
+function logoutAccount(showMessage=true) {
+  clearTimeout(accountSaveTimer);
+  if(accountState.loggedIn) pushAccountProfileNow();
+  hostlSessionToken="";
+  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},lastDailyCubits:"",lastDailyChest:"" };
   saveAccountSession();
-  syncAccountUi("Logged out. Guest progress will not be saved.");
+  try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
+  syncAccountUi(showMessage ? "Logged out. Guest progress will not be saved." : "");
+}
+async function deleteHostlAccount() {
+  if(!accountState.loggedIn || !hostlSessionToken) return;
+  if(!confirm("Delete this HOSTL account and its saved Cubits, themes, and achievements? This cannot be undone.")) return;
+  try {
+    const r=await fetch("/api/account",{method:"DELETE",headers:accountAuthHeaders()});
+    if(!r.ok) throw new Error();
+    logoutAccount(false); closeAccountModal();
+    alert("Your HOSTL account data was deleted.");
+  } catch (_) { syncAccountUi("Account deletion failed. Please try again or contact HoloFox9 Studios."); }
 }
 
 function bindAccountAndShopUi() {
@@ -23861,11 +23894,8 @@ function bindAccountAndShopUi() {
 
   once(document.getElementById("accountBtn"), "click", openAccountModal);
   once(document.getElementById("accountClose"), "click", closeAccountModal);
-  once(document.getElementById("signupBtn"), "click", createPlaceholderAccount);
-  once(document.getElementById("loginBtn"), "click", loginPlaceholderAccount);
-  once(document.getElementById("googleLoginBtn"), "click",
-    ()=>syncAccountUi("Google login will be connected when we add the real account backend."));
-  once(document.getElementById("logoutBtn"), "click", logoutAccount);
+  once(document.getElementById("logoutBtn"), "click", ()=>logoutAccount(true));
+  once(document.getElementById("deleteAccountBtn"), "click", deleteHostlAccount);
   once(document.getElementById("openShopFromAccount"), "click",
     ()=>{ closeAccountModal(); openExpandedShop("chests"); });
   once(document.getElementById("expandedShopClose"), "click", closeExpandedShop);
@@ -23931,6 +23961,11 @@ document.addEventListener("keydown", e => {
 
 syncAchievementAccountBridge();
 restoreAccountSession();
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeGoogleSignIn, { once:true });
+} else {
+  initializeGoogleSignIn();
+}
 syncAchievementAccountBridge();
 
 </script>
@@ -23943,24 +23978,13 @@ syncAchievementAccountBridge();
     </div>
 
     <div id="accountGuestView">
-      <p class="muted">You can play as a guest, but guest progress is temporary and does not save.</p>
-      <div class="reward-badge">Create an account: +500 Cubits</div>
+      <p class="muted">You can play as a guest, but guest progress is temporary and does not save across devices.</p>
+      <div class="reward-badge">New Google-linked HOSTL account: +500 Cubits</div>
       <div class="divider"></div>
-      <h3>Sign Up</h3>
-      <input id="signupName" maxlength="20" placeholder="Username">
-      <input id="signupEmail" maxlength="80" placeholder="Email">
-      <input id="signupPassword" type="password" maxlength="80" placeholder="Password">
-      <button id="signupBtn" class="account-btn" type="button">Create Account</button>
-
-      <div class="divider"></div>
-      <h3>Log In</h3>
-      <input id="loginEmail" maxlength="80" placeholder="Email">
-      <input id="loginPassword" type="password" maxlength="80" placeholder="Password">
-      <div class="modal-row">
-        <button id="loginBtn" class="account-btn" type="button">Log In</button>
-        <button id="googleLoginBtn" class="account-btn" type="button">Continue with Google</button>
-      </div>
-      <p class="locked-note">Google sign-in is a placeholder until the real account backend is connected.</p>
+      <h3>Continue with Google</h3>
+      <div id="googleSignInButton" style="min-height:44px;display:flex;align-items:center;justify-content:flex-start;"></div>
+      <p id="googleSetupStatus" class="locked-note">Loading Google Sign-In…</p>
+      <p class="locked-note">By continuing, you agree to the HOSTL Terms of Use and Privacy Policy in Legal &amp; Support.</p>
     </div>
 
     <div id="accountUserView" style="display:none">
@@ -23975,6 +23999,7 @@ syncAchievementAccountBridge();
       <div class="modal-row">
         <button id="openShopFromAccount" class="account-btn" type="button">Open Shop</button>
         <button id="logoutBtn" class="account-btn" type="button">Log Out</button>
+        <button id="deleteAccountBtn" class="account-btn" type="button" style="border-color:rgba(255,110,110,.45)">Delete Account</button>
       </div>
     </div>
     <p id="accountMsg" class="muted"></p>

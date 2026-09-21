@@ -1,0 +1,56 @@
+HOSTL — GOOGLE SIGN-IN SETUP
+============================
+
+This build has real Google Sign-In wired into the HOSTL server.
+The browser never receives a Google client secret. Google ID tokens are verified by the Node server.
+
+1) GOOGLE CLOUD
+---------------
+In Google Cloud Console:
+- Create/select the project for HOSTL.
+- Configure the OAuth consent/branding screen for HOSTL.
+- Create an OAuth 2.0 Client ID with Application type: Web application.
+- Under Authorized JavaScript origins, add the exact origin players use, for example:
+    https://cube-survival-server.onrender.com
+- When you later use a custom HOSTL domain, add that exact HTTPS origin too.
+- This build uses Google's popup/callback flow, so it does not need a Google redirect URI for the sign-in button.
+- Copy the Web Client ID. It ends in .apps.googleusercontent.com
+
+2) RENDER ENVIRONMENT VARIABLES
+-------------------------------
+Add these to the HOSTL Render web service:
+
+GOOGLE_CLIENT_ID
+  Value: the Web Client ID from Google Cloud.
+
+HOSTL_SESSION_SECRET
+  Value: a long random secret (at least 32 random bytes / a long random string).
+  Keep this private. Do NOT put it in index.html or GitHub.
+
+HOSTL_DATA_DIR
+  Recommended value when using a Render persistent disk:
+    /var/data/hostl
+
+3) PERSISTENT ACCOUNT STORAGE — IMPORTANT
+-----------------------------------------
+HOSTL currently stores server account data in accounts.json inside HOSTL_DATA_DIR.
+Render's normal service filesystem is ephemeral, so for permanent saves you need a persistent disk mounted at /var/data (or move the account storage to a database later).
+
+If you deploy without persistent storage, Google login can work, but account data can be lost on a redeploy/restart. Do not treat that as production-safe.
+
+4) WHAT THIS BUILD DOES
+-----------------------
+- Continue with Google creates or restores a HOSTL account.
+- New accounts receive 500 Cubits.
+- The server grants the +10 daily Cubits at Google sign-in, once per UTC day.
+- Cubits, unlocked themes, achievements, and chest/daily-account fields sync to the server.
+- The player can log out.
+- The player can delete the HOSTL account from the Account window.
+- Guest play still works without Google.
+
+5) SECURITY NOTE
+----------------
+The server verifies Google's ID token and uses Google's stable account subject to map the Google identity to HOSTL's own internal player ID.
+This build does not store Google passwords.
+
+Current game-account economy is still largely client-driven. Before real-money Cubit purchases are added, move Cubit purchase/reward mutations fully server-side so players cannot fake balances from browser code.
