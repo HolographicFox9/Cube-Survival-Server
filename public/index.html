@@ -23955,7 +23955,7 @@ function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.username} • ${accountState.cubits} Cubits` : "Account";
+    btn.textContent = accountState.loggedIn ? `${accountState.username}${accountState.title ? " · " + accountState.title : ""}` : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
@@ -23975,6 +23975,7 @@ function syncAccountUi(msg="") {
   const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
+  const homeCubits = document.getElementById("homeServs"); if (homeCubits) homeCubits.textContent = Math.floor(accountState.loggedIn ? (accountState.cubits||0) : (meta.servs||0));
   const ds = document.getElementById("dailyCubitStatus");
   if (ds) ds.textContent = accountState.loggedIn
     ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Cubits claimed for today." : "Daily Cubits available.")
@@ -24509,7 +24510,6 @@ syncAchievementAccountBridge();
           <div class="muted">Signed in as</div>
           <strong id="accountName">Player</strong>
         </div>
-        <div class="reward-badge"><span id="accountCubits">0</span> Cubits</div>
       </div>
       <p id="dailyCubitStatus" class="muted"></p>
       <div class="modal-row">
