@@ -1752,6 +1752,23 @@
 
   .theme-choice.selected .theme-selected-pill{opacity:1;}
 
+  .theme-unlock-summary{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px;}
+  .theme-unlock-summary .pill{font-size:10px;font-weight:900;letter-spacing:.05em;padding:6px 9px;border:1px solid color-mix(in srgb,var(--ht-accent) 45%,transparent);border-radius:999px;background:color-mix(in srgb,var(--ht-panel2) 82%,transparent);color:var(--ht-text);}
+  .theme-group{grid-column:1/-1;margin:12px 0 2px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--ht-accent) 28%,transparent);}
+  .theme-group:first-child{border-top:0;padding-top:0;margin-top:0;}
+  .theme-group-title{font-size:15px;font-weight:1000;color:var(--ht-text);margin-bottom:3px;}
+  .theme-group-desc{font-size:11px;line-height:1.4;color:var(--ht-muted);}
+  .theme-choice.locked{opacity:1;filter:none;}
+  .theme-choice .theme-lock-state{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;justify-content:space-between;z-index:4;}
+  .theme-choice .theme-unlock-badge{font-size:9px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);}
+  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 10px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:30px;}
+  .theme-choice .theme-action:hover{transform:translateY(-1px);filter:brightness(1.08);}
+  .theme-choice.locked .theme-choice-bg{filter:saturate(.75) brightness(.72);}
+  .theme-choice.locked .theme-choice-content{padding-bottom:46px;}
+  .theme-choice.unlocked-account .theme-unlock-badge{background:rgba(54,108,171,.82);}
+  .theme-choice.unlocked-ad .theme-unlock-badge{background:rgba(130,72,170,.82);}
+  .theme-choice.unlocked-gold .theme-unlock-badge{background:rgba(156,109,20,.88);}
+
   @media(max-width:700px){
     .theme-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
     #homeThemesBtn{padding:10px 13px !important;}
@@ -4900,6 +4917,9 @@
           <strong id="homeThemeEffectsState">On</strong>
         </span>
       </label>
+      <div class="theme-unlock-summary">
+        <span class="pill">Guest Free</span><span class="pill">Account Free</span><span class="pill">Gold Cubits</span><span class="pill">Watch Ad</span>
+      </div>
       <label class="theme-effects-toggle background-effects-toggle" for="homeBackgroundEffectsToggle">
         <span class="theme-effects-toggle-copy">
           <b>Background Effects</b>
@@ -7222,59 +7242,90 @@ function buildHomeThemeGrid() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  const elementThemeOrder = [
-    "fireElement",
-    "waterElement",
-    "lightningElement",
-    "powerElement",
-    "windElement",
-    "plantElement",
-    "stoneElement",
-    "earthElement",
-    "soundElement"
-  ];
-
+  const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
+  const elementThemeOrder = ["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement"];
   const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon"];
   const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus"];
   const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
   const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"];
-  const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
-  const featuredThemeIds = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
-  const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !featuredThemeIds.includes(id));
-  // Show the original/classic HOSTL themes first, before the newer theme groups.
-  const themeOrder = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...otherThemeOrder];
+  const known = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
+  const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !known.includes(id));
 
-  for (const id of themeOrder) {
-    const theme = HOME_THEMES[id];
-    if (!theme) continue;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    const isElementTheme = elementThemeOrder.includes(id);
-    const moodBadge = isElementTheme ? "ELEMENT"
-      : cuteThemeOrder.includes(id) ? "CUTE"
-      : coolThemeOrder.includes(id) ? "COOL"
-      : epicThemeOrder.includes(id) ? "EPIC"
-      : relaxingThemeOrder.includes(id) ? "RELAX"
-      : "CLASSIC";
-    btn.className = "theme-choice" + (id === currentHomeTheme ? " selected" : "") + (isElementTheme ? " element-theme-choice" : "") + (moodBadge ? " themed-mood-choice" : "");
-    btn.innerHTML = `
-      <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
-      <span class="theme-choice-content">
-        ${moodBadge ? `<span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>` : ``}
-        <span class="theme-choice-name">${theme.name}</span>
-        <span class="theme-choice-desc">${theme.desc}</span>
-      </span>
-      <span class="theme-swatch-row">
-        <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
-        <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
-        <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
-        <span class="theme-selected-pill">Selected</span>
-      </span>
-    `;
-    btn.addEventListener("click", () => applyHomeTheme(id, true));
-    grid.appendChild(btn);
+  const guestFree = new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
+  const accountFree = new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const adThemes = new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+  const account = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[],goldCubits:0};
+  const owned = new Set(Array.isArray(account.unlockedThemes) ? account.unlockedThemes : []);
+  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : "gold";
+  const priceOf = id => {
+    if (elementThemeOrder.includes(id)) return 6500;
+    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 28000 : 20000;
+    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 16000 : 11000;
+    if (cuteThemeOrder.includes(id)) return 8500;
+    if (relaxingThemeOrder.includes(id)) return 9500;
+    return 12000;
+  };
+  const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
+
+  const groups = [
+    {key:"guest",title:"Guest Free",desc:"Available to everyone, even without an account.",ids:[...classicThemeOrder,...otherThemeOrder].filter(id=>guestFree.has(id))},
+    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:known.filter(id=>accountFree.has(id))},
+    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold")},
+    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id))},
+  ];
+
+  const addHeading = g => {
+    const h=document.createElement("div"); h.className="theme-group";
+    h.innerHTML=`<div class="theme-group-title">${g.title}</div><div class="theme-group-desc">${g.desc}</div>`;
+    grid.appendChild(h);
+  };
+
+  for (const group of groups) {
+    const ids=group.ids.filter(id=>HOME_THEMES[id]); if(!ids.length) continue;
+    addHeading(group);
+    for (const id of ids) {
+      const theme=HOME_THEMES[id]; const unlocked=isUnlocked(id); const cat=categoryOf(id); const price=priceOf(id);
+      const btn=document.createElement("div");
+      btn.className=`theme-choice ${unlocked?"":"locked"} unlocked-${cat}` + (id===currentHomeTheme?" selected":"");
+      const moodBadge = elementThemeOrder.includes(id) ? "ELEMENT" : cuteThemeOrder.includes(id) ? "CUTE" : coolThemeOrder.includes(id) ? "COOL" : epicThemeOrder.includes(id) ? "EPIC" : relaxingThemeOrder.includes(id) ? "RELAX" : "CLASSIC";
+      let unlockText = cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
+      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad to Unlock" : `Buy ${price.toLocaleString()}`;
+      btn.innerHTML = `
+        <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
+        <span class="theme-choice-content">
+          <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+          <span class="theme-choice-name">${theme.name}</span>
+          <span class="theme-choice-desc">${theme.desc}</span>
+        </span>
+        <span class="theme-swatch-row">
+          <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
+          <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
+          <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
+          <span class="theme-selected-pill">Selected</span>
+        </span>
+        <span class="theme-lock-state"><span class="theme-unlock-badge">${unlockText}</span><button class="theme-action" type="button">${actionText}</button></span>`;
+      const action=btn.querySelector(".theme-action");
+      action.addEventListener("click", async (e)=>{
+        e.stopPropagation();
+        if (isUnlocked(id)) { applyHomeTheme(id,true); return; }
+        if (!account.loggedIn) { window.__hostlOpenAccountForTheme?.(); return; }
+        if (cat==="gold") await window.__hostlBuyTheme?.(id,price);
+        else if (cat==="ad") await window.__hostlUnlockAdTheme?.(id);
+      });
+      btn.addEventListener("click",()=>{ if(isUnlocked(id)) applyHomeTheme(id,true); });
+      grid.appendChild(btn);
+    }
   }
 }
+
+window.__hostlRefreshThemeAccess = function(){
+  const account=window.__hostlThemeAccountState||{loggedIn:false,unlockedThemes:[]};
+  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
+  const acct=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const owned=new Set(Array.isArray(account.unlockedThemes)?account.unlockedThemes:[]);
+  const allowed=guest.has(currentHomeTheme)||(account.loggedIn&&(acct.has(currentHomeTheme)||owned.has(currentHomeTheme)));
+  if(!allowed) applyHomeTheme("forestGold",true); else buildHomeThemeGrid();
+};
 
 function openHomeThemes() {
   if (game.started && !game.over) return;
@@ -24384,6 +24435,8 @@ function setAccountFromServer(p={}) {
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
+  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
   try {
     if (!window.__hostlUsernameDirty) {
       meta.username=accountState.username||meta.username||"Cube";
@@ -24404,6 +24457,29 @@ function saveAccountSession() {
 function accountAuthHeaders() {
   return hostlSessionToken ? { "Authorization": `Bearer ${hostlSessionToken}` } : {};
 }
+
+window.__hostlOpenAccountForTheme = function(){ try{ openAccountModal(); }catch(_){ document.getElementById("accountBtn")?.click(); } };
+window.__hostlBuyTheme = async function(themeId, shownPrice){
+  if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
+  try{
+    const r=await fetch("/api/themes/buy",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ showGameMessage?.("Theme", d?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(d.price||shownPrice||0).toLocaleString()}.`:"That theme could not be purchased."); return; }
+    if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
+    showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
+  }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
+};
+window.__hostlUnlockAdTheme = async function(themeId){
+  if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
+  // Test hook: when the ad provider is connected, call this endpoint only after the rewarded ad completes.
+  try{
+    const r=await fetch("/api/themes/ad-unlock",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ showGameMessage?.("Theme", "That ad theme could not be unlocked."); return; }
+    if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
+    showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
+  }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
+};
 async function pushAccountProfileNow() {
   if (!accountState.loggedIn || !hostlSessionToken) return false;
   try {
@@ -24479,6 +24555,8 @@ async function restoreAccountSession() {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
     accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
+    try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
     try { meta.servs=5; saveMeta(); } catch (_) {}
     saveAccountSession();
@@ -24490,6 +24568,8 @@ function claimDailyCubits() {
   return false;
 }
 function syncAccountUi(msg="") {
+  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  try{ buildHomeThemeGrid(); }catch(_){}
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
@@ -24724,39 +24804,7 @@ async function redeemPromoCode() {
   }catch(_){ out.textContent="Could not reach the HOSTL server. Try again."; out.classList.add("error"); }
 }
 
-const PLANNED_THEMES = [
-  "Classic","Forest","Ocean","Sunset","Midnight","Desert","Snow","Rose","Neon","Purple",
-  "Galaxy","Cherry Blossom","Golden","Emerald","Crimson","Arctic","Volcanic","Candy","Shadow","Royal",
-  "Lightning","Power","Viperwave","Hologram","Hyperwave","Rabbit Meadow","Deer Grove","Owl Night","Bearded Dunes","Saber Fang"
-];
-const GUEST_THEMES = new Set(PLANNED_THEMES.slice(0,GUEST_THEME_LIMIT));
-const ACCOUNT_THEMES = new Set(["Emerald","Crimson","Arctic","Volcanic","Lightning","Rabbit Meadow","Deer Grove"]);
-const AD_THEMES = new Set(["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal","Power","Viperwave","Hologram","Hyperwave","Owl Night","Bearded Dunes","Saber Fang"]);
-
-function renderThemeGrid() {
-  const grid = document.getElementById("themeGrid");
-  if (!grid) return;
-  grid.innerHTML = "";
-  for (const t of PLANNED_THEMES) {
-    const guestFree = GUEST_THEMES.has(t);
-    const acctFree = ACCOUNT_THEMES.has(t);
-    const adUnlock = AD_THEMES.has(t);
-    const unlocked = guestFree || (accountState.loggedIn && (acctFree || accountState.unlockedThemes.includes(t)));
-
-    const card = document.createElement("div");
-    card.className = "theme-card" + (unlocked ? "" : " locked");
-    const badge = guestFree ? "Guest" : acctFree ? "Account" : adUnlock ? "Rewarded Ad" : "Locked";
-    card.innerHTML = `<strong>${t}</strong><div class="pill" style="margin-top:6px">${badge}</div>`;
-    if (!unlocked) {
-      const note = document.createElement("div");
-      note.className = "locked-note";
-      note.textContent = !accountState.loggedIn ? "Create or log into an account to unlock." :
-        (adUnlock ? "Ad unlock will be added later. One ad will unlock this forever." : "Locked for a future unlock method.");
-      card.appendChild(note);
-    }
-    grid.appendChild(card);
-  }
-}
+// Theme unlocks are handled exclusively by the Home Themes screen above.
 function syncChestUi() {
   const btn = document.getElementById("dailyChestBtn");
   const status = document.getElementById("dailyChestStatus");
@@ -24782,11 +24830,8 @@ function syncChestUi() {
 }
 
 function availableChestThemes() {
-  return PLANNED_THEMES.filter(t =>
-    !GUEST_THEMES.has(t) &&
-    !ACCOUNT_THEMES.has(t) &&
-    !accountState.unlockedThemes.includes(t)
-  );
+  const ids=["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement","arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus","dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
+  return ids.filter(t=>!accountState.unlockedThemes.includes(t));
 }
 function chestRandomInt(min,max) {
   return Math.floor(min + Math.random() * (max - min + 1));

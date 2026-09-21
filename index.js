@@ -124,7 +124,25 @@ const BUILD_RECIPES = {
 };
 const LEARN_RECIPES = { animalWhisperer:{ingredients:{beastBook:1,animalNotes:5,predatorStudy:2,sharpFang:1}} };
 const CHEST_SPECIES=["dog","cat","dragon","fox","wolf","bear","rabbit","owl","snake","deer","boar","saber"];
-const CHEST_THEMES=["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal","Power","Viperwave","Hologram","Hyperwave","Owl Night","Bearded Dunes","Saber Fang"];
+const CHEST_THEMES=["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement","arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus","dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
+const THEME_GUEST_FREE=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
+const THEME_ACCOUNT_FREE=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+const THEME_AD=new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+const THEME_ELEMENT=new Set(["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement"]);
+const THEME_EPIC=new Set(["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"]);
+const THEME_COOL=new Set(["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus"]);
+const THEME_CUTE=new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon"]);
+const THEME_RELAX=new Set(["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+function themeGoldPrice(id){
+  if(THEME_ELEMENT.has(id))return 6500;
+  if(THEME_EPIC.has(id))return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id)?28000:20000;
+  if(THEME_COOL.has(id))return ["glitch","hologram","hacker","computerVirus"].includes(id)?16000:11000;
+  if(THEME_CUTE.has(id))return 8500;
+  if(THEME_RELAX.has(id))return 9500;
+  return 12000;
+}
+function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_ELEMENT.has(id)||THEME_EPIC.has(id)||THEME_COOL.has(id)||THEME_CUTE.has(id)||THEME_RELAX.has(id);}
+
 function ensureEconomyState(a){
   if(!a.materials||typeof a.materials!=="object"||Array.isArray(a.materials))a.materials={};
   for(const id of Object.keys(MATERIAL_CATALOG))a.materials[id]=Math.max(0,Math.min(100000,Math.floor(Number(a.materials[id])||0)));
@@ -577,6 +595,23 @@ app.post("/api/learn-skill", requireAccount, async (req,res)=>{
   if(!hasIngredients(a,recipe.ingredients))return res.status(409).json({ok:false,error:"missing_materials",account:publicAccount(a)});
   consumeIngredients(a,recipe.ingredients); a.learnedSkills.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,account:publicAccount(a)});
 });
+app.post("/api/themes/buy", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
+  const id=safeText(req.body?.themeId,40);
+  if(!isKnownTheme(id)||THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id))return res.status(404).json({ok:false,error:"theme_not_for_sale"});
+  if(a.unlockedThemes.includes(id))return res.json({ok:true,alreadyOwned:true,account:publicAccount(a)});
+  const price=themeGoldPrice(id); if(ensureGoldCubits(a)<price)return res.status(409).json({ok:false,error:"not_enough_cubits",price,account:publicAccount(a)});
+  setGoldCubits(a,ensureGoldCubits(a)-price); a.unlockedThemes.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,themeId:id,price,account:publicAccount(a)});
+});
+app.post("/api/themes/ad-unlock", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
+  const id=safeText(req.body?.themeId,40); if(!THEME_AD.has(id))return res.status(404).json({ok:false,error:"theme_not_ad_unlock"});
+  if(!a.unlockedThemes.includes(id))a.unlockedThemes.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  // Rewarded-ad test hook: once an ad provider is connected, require a verified ad-completion token before granting.
+  res.json({ok:true,themeId:id,account:publicAccount(a)});
+});
+
 app.post("/api/open-chest", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); if(!a.speciesCards||typeof a.speciesCards!=="object")a.speciesCards={}; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const kind=safeText(req.body?.kind,20).toLowerCase(); const daily=kind==="daily"; const forest=kind==="forest"; if(!daily&&!forest)return res.status(400).json({ok:false,error:"unknown_chest"});
