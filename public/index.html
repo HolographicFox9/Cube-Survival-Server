@@ -6919,9 +6919,10 @@ function buildHomeThemeGrid() {
   const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
   const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"];
   const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
-  const featuredThemeIds = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...classicThemeOrder];
+  const featuredThemeIds = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
   const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !featuredThemeIds.includes(id));
-  const themeOrder = [...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...classicThemeOrder,...otherThemeOrder];
+  // Show the original/classic HOSTL themes first, before the newer theme groups.
+  const themeOrder = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...otherThemeOrder];
 
   for (const id of themeOrder) {
     const theme = HOME_THEMES[id];
