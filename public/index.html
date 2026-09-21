@@ -4539,6 +4539,176 @@
     .legal-support-body{padding:13px 15px 20px;font-size:12px;}
   }
 
+
+
+  /* ---------- 614 themed readable Shop / Friends / Account Settings ---------- */
+  /* HOME_THEMES already writes --ht-* to :root, so these screens update live with the selected theme. */
+  #expandedShopModal,
+  #friendsModal,
+  #accountSettingsModal{
+    color:var(--ht-text) !important;
+    background:
+      radial-gradient(circle at 14% 8%,color-mix(in srgb,var(--ht-accent) 12%,transparent),transparent 32%),
+      radial-gradient(circle at 86% 14%,color-mix(in srgb,var(--ht-secondary) 12%,transparent),transparent 30%),
+      color-mix(in srgb,var(--ht-bg) 78%,black 22%) !important;
+  }
+
+  #expandedShopModal .modal-card,
+  #accountSettingsModal .modal-card,
+  #friendsModal .friends-card{
+    color:var(--ht-text) !important;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb,var(--ht-panel) 94%,black 6%),
+        color-mix(in srgb,var(--ht-panel2) 95%,black 5%)
+      ) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 36%,var(--ht-muted) 16%) !important;
+    box-shadow:0 24px 70px rgba(0,0,0,.56),0 0 0 1px color-mix(in srgb,var(--ht-primary) 10%,transparent) inset !important;
+  }
+
+  /* Strong text contrast: don't fade important copy inside these screens. */
+  #expandedShopModal h2,#expandedShopModal h3,#expandedShopModal h4,
+  #friendsModal h2,#friendsModal h3,#friendsModal h4,
+  #accountSettingsModal h2,#accountSettingsModal h3{
+    color:var(--ht-text) !important;
+    opacity:1 !important;
+    text-shadow:0 1px 2px rgba(0,0,0,.48);
+  }
+  #expandedShopModal h3,#expandedShopModal h4,
+  #friendsModal h3,
+  #accountSettingsModal h3{
+    color:color-mix(in srgb,var(--ht-accent) 72%,var(--ht-text) 28%) !important;
+  }
+  #expandedShopModal p,#expandedShopModal .muted,#expandedShopModal .locked-note,
+  #friendsModal p,#friendsModal .friends-note,#friendsModal .friend-status,#friendsModal .friend-chat-meta,
+  #accountSettingsModal p,#accountSettingsModal .muted,#accountSettingsModal .settings-hint,#accountSettingsModal .account-detail-grid .label{
+    color:color-mix(in srgb,var(--ht-muted) 82%,var(--ht-text) 18%) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal b,#expandedShopModal strong,
+  #friendsModal b,#friendsModal strong,.friends-card .friend-name,
+  #accountSettingsModal b,#accountSettingsModal strong,#accountSettingsModal .account-detail-grid .value{
+    color:var(--ht-text) !important;
+  }
+
+  /* Theme-aware controls */
+  #expandedShopModal .account-btn,#expandedShopModal .shop-tab,
+  #friendsModal button,
+  #accountSettingsModal .account-btn{
+    color:var(--ht-text) !important;
+    background:linear-gradient(180deg,
+      color-mix(in srgb,var(--ht-secondary) 70%,var(--ht-panel) 30%),
+      color-mix(in srgb,var(--ht-secondary2) 76%,var(--ht-panel2) 24%)
+    ) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 36%,transparent) !important;
+  }
+  #expandedShopModal .shop-tab.active,
+  #friendsModal button.primary,
+  #accountSettingsModal #saveAccountSettingsBtn{
+    background:linear-gradient(180deg,var(--ht-primary),var(--ht-primary2)) !important;
+    border-color:color-mix(in srgb,var(--ht-primary) 62%,white 38%) !important;
+    color:color-mix(in srgb,var(--ht-bg) 86%,black 14%) !important;
+  }
+  #expandedShopModal .account-btn:hover,#expandedShopModal .shop-tab:hover,
+  #friendsModal button:hover,#accountSettingsModal .account-btn:hover{
+    filter:brightness(1.12);
+    border-color:var(--ht-accent) !important;
+  }
+
+  #expandedShopModal input,#expandedShopModal select,
+  #friendsModal input,#friendsModal select,
+  #accountSettingsModal .settings-control,#accountSettingsModal input,#accountSettingsModal select{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-bg) 88%,black 12%) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 34%,transparent) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal input::placeholder,#friendsModal input::placeholder,#accountSettingsModal input::placeholder{
+    color:color-mix(in srgb,var(--ht-muted) 72%,transparent) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal input:focus,#expandedShopModal select:focus,
+  #friendsModal input:focus,#friendsModal select:focus,
+  #accountSettingsModal input:focus,#accountSettingsModal select:focus{
+    border-color:var(--ht-accent) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 18%,transparent) !important;
+  }
+  #expandedShopModal select option,#friendsModal select option,#accountSettingsModal select option{
+    background:var(--ht-panel2) !important;
+    color:var(--ht-text) !important;
+  }
+
+  /* Shop surfaces */
+  #expandedShopModal .rotating-stock-panel,
+  #expandedShopModal .material-owned-panel,
+  #expandedShopModal .shopkeeper-panel,
+  #expandedShopModal .material-card,
+  #expandedShopModal .recipe-card,
+  #expandedShopModal .theme-card,
+  #expandedShopModal .chest-card,
+  #expandedShopModal .code-card{
+    background:color-mix(in srgb,var(--ht-panel2) 76%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 22%,transparent) !important;
+    color:var(--ht-text) !important;
+  }
+  #expandedShopModal .material-card:hover,
+  #expandedShopModal .recipe-card:hover,
+  #expandedShopModal .theme-card:hover,
+  #expandedShopModal .chest-card:hover{
+    border-color:color-mix(in srgb,var(--ht-accent) 66%,transparent) !important;
+  }
+  #expandedShopModal .reward-badge,
+  #expandedShopModal .shop-refresh-pill,
+  #expandedShopModal .pill{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-special) 14%,var(--ht-panel2) 86%) !important;
+    border-color:color-mix(in srgb,var(--ht-special) 46%,transparent) !important;
+  }
+  #expandedShopModal .shopkeeper-placeholder{
+    background:color-mix(in srgb,var(--ht-panel) 66%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 42%,transparent) !important;
+  }
+  #expandedShopModal .shopkeeper-placeholder strong{color:var(--ht-accent) !important;}
+  #expandedShopModal .shopkeeper-placeholder span{color:var(--ht-muted) !important;opacity:1 !important;}
+
+  /* Friends surfaces */
+  #friendsModal .friends-panel,
+  #friendsModal .friend-item,
+  #friendsModal .trade-offer{
+    background:color-mix(in srgb,var(--ht-panel2) 78%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 22%,transparent) !important;
+    color:var(--ht-text) !important;
+  }
+  #friendsModal .friends-chat-log{
+    background:color-mix(in srgb,var(--ht-bg) 90%,black 10%) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 24%,transparent) !important;
+  }
+  #friendsModal .friend-chat-msg{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-secondary) 28%,var(--ht-panel2) 72%) !important;
+  }
+  #friendsModal .friend-chat-msg.mine{
+    background:color-mix(in srgb,var(--ht-primary) 24%,var(--ht-panel2) 76%) !important;
+  }
+  #friendsModal .friend-status.online{color:color-mix(in srgb,#8ff0ad 74%,var(--ht-text) 26%) !important;}
+  #friendsModal .friend-status.playing{color:color-mix(in srgb,#8fc8ff 70%,var(--ht-text) 30%) !important;}
+
+  /* Account Settings surfaces */
+  #accountSettingsModal .account-detail-grid,
+  #accountSettingsModal .danger-zone,
+  #accountSettingsModal .delete-confirm-box{
+    color:var(--ht-text) !important;
+  }
+  #accountSettingsModal .danger-zone{
+    background:color-mix(in srgb,#6a2028 24%,var(--ht-panel2) 76%) !important;
+    border-color:color-mix(in srgb,#ff7a84 42%,transparent) !important;
+  }
+  #accountSettingsModal .danger-btn{
+    background:linear-gradient(180deg,#7b2d36,#552027) !important;
+    border-color:#b75a64 !important;
+    color:#fff7f2 !important;
+  }
+
 </style>
 </head>
 <body>
