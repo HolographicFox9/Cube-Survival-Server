@@ -4,6 +4,53 @@
 <meta charset="utf-8">
 <title>HOSTL</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script>
+// One-time HOSTL browser-data reset. Existing players are reset the next time they load this build.
+(function(){
+  const RESET_KEY = "hostlBrowserResetVersion";
+  const RESET_VERSION = "2026-09-21-reset-1";
+  try {
+    if (localStorage.getItem(RESET_KEY) === RESET_VERSION) return;
+  } catch (_) {}
+
+  try { localStorage.clear(); } catch (_) {}
+  try { sessionStorage.clear(); } catch (_) {}
+
+  // Clear same-origin cookies that are accessible to the game.
+  try {
+    document.cookie.split(";").forEach(function(cookie){
+      const eq = cookie.indexOf("=");
+      const name = (eq > -1 ? cookie.slice(0, eq) : cookie).trim();
+      if (!name) return;
+      document.cookie = name + "=; Max-Age=0; path=/; SameSite=Lax";
+    });
+  } catch (_) {}
+
+  // Clear Cache Storage / service workers if the browser supports them.
+  try {
+    if (window.caches && caches.keys) {
+      caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }).catch(function(){});
+    }
+  } catch (_) {}
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); }).catch(function(){});
+    }
+  } catch (_) {}
+
+  // Clear IndexedDB databases owned by this HOSTL origin when the browser exposes the database list.
+  try {
+    if (window.indexedDB && indexedDB.databases) {
+      indexedDB.databases().then(function(dbs){
+        dbs.forEach(function(db){ if (db && db.name) { try { indexedDB.deleteDatabase(db.name); } catch (_) {} } });
+      }).catch(function(){});
+    }
+  } catch (_) {}
+
+  // Mark the reset after clearing so it only happens once per browser/profile.
+  try { localStorage.setItem(RESET_KEY, RESET_VERSION); } catch (_) {}
+})();
+</script>
 <style>
   :root{
     --ink:#18231c;
@@ -5161,7 +5208,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "590";
+const CUBE_SHARED_RULES_VERSION = "591";
 const TOOLS = {
   // Each tool has a real job now. Fists are intentionally bad at everything,
   // Axe = wood + respectable combat, Pickaxe = stone/rock, Sword = creature combat,
