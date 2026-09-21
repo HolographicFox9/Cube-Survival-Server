@@ -23516,7 +23516,9 @@ function setupHome() {
   }
   syncHomeWorldThemeState();
   setHomeControlsEnabled(true);
-  el("username").value = meta.username || "Cube";
+  // Never stomp a username the player is currently typing. Account/friends
+  // refreshes can call setupHome/sync UI while this field is being edited.
+  if (!window.__hostlUsernameDirty) el("username").value = meta.username || "Cube";
   const preferredServer = preferredMultiplayerServerUrl();
   if (el("serverUrl")) el("serverUrl").value = preferredServer;
   updateOnlineModeUI();
@@ -23826,13 +23828,52 @@ el("lootPopup").addEventListener("mousedown", (e) => {
   if (e.target === el("lootPopup")) hideLootPopup();
 });
 
-el("username").addEventListener("change", () => {
-  meta.username = (el("username").value || "Cube").trim().replace(/\s+/g," ").slice(0, 14) || "Cube";
-  el("username").value = meta.username;
-  if(accountState?.loggedIn){
-    accountState.username=meta.username;
-    persistAccountProfile();
-    syncAccountUi();
+// Username is the actual in-game name. Keep a local draft while the player
+// types so background account/friend refreshes cannot replace it with the
+// last server value before the edit is saved.
+el("username").addEventListener("input", () => {
+  window.__hostlUsernameDirty = true;
+  const raw = String(el("username").value || "").replace(/\s+/g," ").slice(0,14);
+  if (raw.trim()) {
+    meta.username = raw;
+    if (player) player.username = raw;
+  }
+});
+el("username").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); el("username").blur(); }
+});
+el("username").addEventListener("change", async () => {
+  const nextUsername = (el("username").value || "Cube").trim().replace(/\s+/g," ").slice(0, 14) || "Cube";
+  meta.username = nextUsername;
+  if (player) player.username = nextUsername;
+  el("username").value = nextUsername;
+  if(accountState?.loggedIn && hostlSessionToken){
+    // Save this exact draft immediately. Do not route it through the delayed
+    // full-profile save because a friends refresh can otherwise restore the
+    // previous username before that timer fires.
+    try {
+      const r = await fetch("/api/account", {
+        method:"PUT",
+        headers:{"Content-Type":"application/json", ...accountAuthHeaders()},
+        body:JSON.stringify({ username:nextUsername })
+      });
+      const data = await r.json().catch(()=>({}));
+      if (r.ok && data?.account) {
+        setAccountFromServer(data.account);
+        window.__hostlUsernameDirty = false;
+        syncAccountUi("Username saved.");
+      } else {
+        // Keep the typed name in the box instead of snapping back. The player
+        // can retry by changing/blurring the field again.
+        window.__hostlUsernameDirty = true;
+        syncAccountUi("Could not save username yet. Your typed name was kept.");
+      }
+    } catch (_) {
+      window.__hostlUsernameDirty = true;
+      syncAccountUi("Could not save username yet. Your typed name was kept.");
+    }
+  } else {
+    window.__hostlUsernameDirty = false;
   }
   if (game.startPet) {
     game.startPetName = String(el("starterPetName")?.value || game.startPetName || "").trim().slice(0,14);
@@ -24098,9 +24139,12 @@ function setAccountFromServer(p={}) {
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
   try {
-    meta.username=accountState.username||meta.username||"Cube";
-    player.username=meta.username;
-    const homeUser=document.getElementById("username"); if(homeUser && document.activeElement!==homeUser) homeUser.value=meta.username;
+    if (!window.__hostlUsernameDirty) {
+      meta.username=accountState.username||meta.username||"Cube";
+      player.username=meta.username;
+    }
+    const homeUser=document.getElementById("username");
+    if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser) homeUser.value=meta.username;
     applyAccountGameEntitlements();
   } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
   setTimeout(()=>{ if(accountState.loggedIn){ sendPresence(); refreshFriends(false); } },0);
@@ -24203,7 +24247,7 @@ function syncAccountUi(msg="") {
   if(friendsCorner) friendsCorner.classList.toggle("show", !!accountState.loggedIn);
   const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"Player";
   const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.displayName||accountState.username||"Player";
-  const homeUser=document.getElementById("username"); if(homeUser && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"Player";
+  const homeUser=document.getElementById("username"); if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"Player";
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
@@ -24570,6 +24614,7 @@ async function saveAccountSettings(){
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
     setAccountFromServer(data.account);
+    window.__hostlUsernameDirty = false;
     syncAccountUi();
     if(msg) msg.textContent="Account settings saved.";
     meta.username=accountState.username||meta.username||"Cube";
