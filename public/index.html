@@ -4343,6 +4343,42 @@
     }
   }
 
+
+
+  /* ---------- HOSTL Legal & Support ---------- */
+  .legal-support-footer{position:fixed;right:clamp(10px,2vw,22px);bottom:calc(clamp(10px,2vw,18px) + env(safe-area-inset-bottom, 0px));z-index:90;display:flex;justify-content:flex-end;align-items:center;padding:0;pointer-events:none;}
+  #legalSupportBtn{pointer-events:auto;border:1px solid rgba(244,198,95,.48);background:linear-gradient(180deg,rgba(34,47,38,.96),rgba(16,24,19,.96));color:#f7e5b2;font:800 12px/1.2 inherit;letter-spacing:.035em;cursor:pointer;padding:10px 14px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.05);}
+  #legalSupportBtn:hover,#legalSupportBtn:focus-visible{color:#fff1c5;background:linear-gradient(180deg,rgba(49,66,53,.98),rgba(23,33,26,.98));border-color:#f4c65f;outline:2px solid rgba(244,198,95,.22);outline-offset:2px;}
+  #legalSupportOverlay{position:fixed;inset:0;z-index:12000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(5,9,7,.82);backdrop-filter:blur(7px);}
+  #legalSupportOverlay.show{display:flex;}
+  .legal-support-card{width:min(900px,96vw);max-height:min(86vh,820px);display:flex;flex-direction:column;background:linear-gradient(180deg,rgba(24,34,28,.99),rgba(12,18,15,.99));border:1px solid rgba(244,198,95,.28);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.58);overflow:hidden;color:#efe6d2;}
+  .legal-support-head{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-bottom:1px solid rgba(244,198,95,.16);}
+  .legal-support-head h2{margin:0;color:#f5d48a;font-size:22px;}
+  #closeLegalSupport{border:1px solid rgba(240,230,200,.22);background:rgba(255,255,255,.04);color:#fff2d6;border-radius:12px;min-width:42px;height:38px;font:900 20px inherit;cursor:pointer;}
+  .legal-tabs{display:flex;gap:8px;flex-wrap:wrap;padding:12px 18px 0;}
+  .legal-tab{border:1px solid rgba(240,230,200,.18);background:rgba(255,255,255,.035);color:#efe6d2;border-radius:999px;padding:9px 13px;font:800 12px inherit;cursor:pointer;}
+  .legal-tab.active{background:rgba(244,198,95,.16);border-color:rgba(244,198,95,.58);color:#ffe7a7;}
+  .legal-support-body{overflow:auto;padding:16px 20px 22px;line-height:1.55;font-size:13px;}
+  .legal-panel{display:none;max-width:780px;margin:0 auto;}
+  .legal-panel.active{display:block;}
+  .legal-panel h3{margin:4px 0 8px;color:#f8efcf;font-size:19px;}
+  .legal-panel h4{margin:18px 0 5px;color:#f5d48a;font-size:14px;}
+  .legal-panel p{margin:7px 0;opacity:.9;}
+  .legal-panel ul{margin:7px 0 10px 20px;padding:0;}
+  .legal-panel li{margin:4px 0;}
+  .legal-panel a{color:#9edcff;}
+  .legal-note{opacity:.67;font-size:11px;margin-bottom:12px;}
+  @media(max-width:700px){
+    .legal-support-footer{right:10px;bottom:calc(10px + env(safe-area-inset-bottom, 0px));}
+    #legalSupportBtn{font-size:11px;padding:9px 12px;}
+    #legalSupportOverlay{padding:8px;align-items:stretch;}
+    .legal-support-card{width:100%;max-height:none;height:100%;border-radius:14px;}
+    .legal-support-head{padding:13px 14px;}
+    .legal-tabs{padding:10px 12px 0;}
+    .legal-tab{flex:1 1 auto;}
+    .legal-support-body{padding:13px 15px 20px;font-size:12px;}
+  }
+
 </style>
 </head>
 <body>
@@ -4702,6 +4738,92 @@
       </div>
 
     </div>
+    <div class="legal-support-footer">
+      <button id="legalSupportBtn" type="button">Legal &amp; Support</button>
+    </div>
+  </div>
+
+  <div id="legalSupportOverlay" role="dialog" aria-modal="true" aria-labelledby="legalSupportTitle">
+    <div class="legal-support-card">
+      <div class="legal-support-head">
+        <h2 id="legalSupportTitle">HOSTL Legal &amp; Support</h2>
+        <button id="closeLegalSupport" type="button" aria-label="Close">×</button>
+      </div>
+      <div class="legal-tabs" role="tablist" aria-label="Legal and support sections">
+        <button class="legal-tab active" type="button" data-legal-tab="privacy">Privacy Policy</button>
+        <button class="legal-tab" type="button" data-legal-tab="terms">Terms of Use</button>
+        <button class="legal-tab" type="button" data-legal-tab="contact">Contact</button>
+      </div>
+      <div class="legal-support-body">
+        <section class="legal-panel active" data-legal-panel="privacy">
+          <h3>Privacy Policy</h3>
+          <div class="legal-note">Effective September 20, 2026</div>
+          <p>HOSTL respects the privacy of its players. This policy explains what information may be collected, why it is used, and the choices available to players.</p>
+          <h4>1. Information We Collect</h4>
+          <p>If you sign in with Google, HOSTL may receive basic information you authorize, such as your name, email address, Google account identifier, and profile picture. HOSTL does not receive or store your Google password.</p>
+          <p>HOSTL may store game-account information such as your player ID, display name, progress, Gold Cubits, unlocked themes, chests, rewards, pets, items, settings, and other information needed to save progress.</p>
+          <p>Technical information may also be collected, including IP address, browser or device type, connection information, server logs, session information, and error information.</p>
+          <h4>2. Advertising</h4>
+          <p>HOSTL may display advertisements provided by third-party advertising services, including Google advertising services. Ads may include optional rewarded ads and occasional transition ads.</p>
+          <p>Advertising providers may use cookies, device information, IP addresses, and similar technologies to deliver, measure, personalize, or limit advertising. Rewarded ad benefits are virtual in-game rewards and have no cash value unless HOSTL specifically states otherwise.</p>
+          <h4>3. Cookies and Similar Technologies</h4>
+          <p>HOSTL and services used by HOSTL may use cookies or similar technologies to keep users signed in, remember settings, provide and measure advertising, prevent abuse, maintain security, and operate game features. Where required by law, consent will be requested before certain technologies are used.</p>
+          <h4>4. How We Use Information</h4>
+          <ul><li>Create and maintain player accounts and save progress.</li><li>Provide multiplayer gameplay and in-game content.</li><li>Deliver rewarded advertising.</li><li>Prevent cheating, fraud, spam, and abuse.</li><li>Fix bugs, improve performance, and protect players.</li><li>Comply with applicable legal obligations.</li></ul>
+          <h4>5. Sharing of Information</h4>
+          <p>HOSTL does not sell players' personal information. Information may be shared with service providers when needed for hosting, Google authentication, advertising, security, databases, or other services used to operate HOSTL.</p>
+          <h4>6. Google Services</h4>
+          <p>HOSTL may use Google Sign-In and Google advertising services. Information processed directly by Google is subject to Google's own privacy policies and service terms.</p>
+          <h4>7. Security and Retention</h4>
+          <p>Reasonable measures are used to protect player information, but no online service can guarantee complete security. Information may be kept for as long as reasonably necessary to operate accounts, prevent abuse, comply with law, and resolve disputes.</p>
+          <h4>8. Account and Privacy Requests</h4>
+          <p>Players may request information about their account, corrections, or deletion of certain account information where applicable. Some information may be retained when required for security, fraud prevention, or legal compliance.</p>
+          <h4>9. Children</h4>
+          <p>HOSTL is not designed or specifically directed toward young children. HOSTL does not knowingly seek to collect personal information from children in violation of applicable law.</p>
+          <h4>10. Changes</h4>
+          <p>This policy may be updated as HOSTL changes or legal and service-provider requirements change. Important updates will be posted with a revised effective date.</p>
+          <h4>11. Contact</h4>
+          <p>For privacy questions or account-deletion requests, contact <a href="mailto:holofox9studios@gmail.com">holofox9studios@gmail.com</a>.</p>
+        </section>
+
+        <section class="legal-panel" data-legal-panel="terms">
+          <h3>Terms of Use</h3>
+          <div class="legal-note">Effective September 20, 2026</div>
+          <p>These Terms of Use apply when you access or play HOSTL. By using HOSTL, you agree to follow these terms.</p>
+          <h4>1. Player Accounts</h4>
+          <p>You are responsible for activity on your HOSTL account and for keeping access to any linked sign-in account secure. Do not impersonate other players or use another person's account without permission.</p>
+          <h4>2. Fair Play</h4>
+          <p>Do not cheat, exploit bugs, use unauthorized automation or modified clients, interfere with servers, attack other players outside intended game mechanics, or deliberately disrupt HOSTL. Serious or repeated abuse may result in restrictions, resets, suspensions, or bans.</p>
+          <h4>3. Player Conduct</h4>
+          <p>Do not use HOSTL to threaten, harass, scam, spam, or share unlawful or seriously abusive content. Usernames and other player-visible content may be removed or changed when necessary to protect the service or other players.</p>
+          <h4>4. Virtual Items and Gold Cubits</h4>
+          <p>Gold Cubits, pets, themes, chests, rewards, and other virtual game items are features of HOSTL. They do not represent real-world money, ownership in HOSTL, or a promise of cash value. Game balance, prices, rewards, and availability may change as HOSTL is updated.</p>
+          <h4>5. Rewarded Ads</h4>
+          <p>HOSTL may offer optional advertisements in exchange for virtual rewards such as themes, chests, or a revive. A reward is provided only when the ad system confirms successful completion. Attempts to manipulate ad systems may result in removal of rewards or account action.</p>
+          <h4>6. Game Changes and Availability</h4>
+          <p>HOSTL is actively developed. Features, animals, items, game balance, servers, accounts, rewards, and other parts of the game may be changed, added, removed, reset, or temporarily unavailable. HoloFox9 Studios does not guarantee uninterrupted service.</p>
+          <h4>7. Bugs and Data Loss</h4>
+          <p>We work to protect player progress, but bugs, hosting failures, updates, account issues, or other technical problems can cause data loss or service interruptions. Report serious problems so they can be investigated.</p>
+          <h4>8. Ownership</h4>
+          <p>HOSTL, its original game systems, artwork, code, branding, and other original content belong to HoloFox9 Studios or their respective licensors. Playing HOSTL does not transfer ownership of the game or its content to the player.</p>
+          <h4>9. Third-Party Services</h4>
+          <p>HOSTL may rely on third-party services for hosting, sign-in, advertising, or other functionality. Those services may have their own terms and privacy policies.</p>
+          <h4>10. Enforcement</h4>
+          <p>HoloFox9 Studios may take reasonable action to protect HOSTL, its servers, or its players, including limiting access or suspending accounts that violate these terms or create security, fraud, or abuse risks.</p>
+          <h4>11. Changes to These Terms</h4>
+          <p>These terms may change as HOSTL develops. Continued use of HOSTL after updated terms are posted means the updated terms apply going forward.</p>
+          <h4>12. Contact</h4>
+          <p>Questions about these terms can be sent to <a href="mailto:holofox9studios@gmail.com">holofox9studios@gmail.com</a>.</p>
+        </section>
+
+        <section class="legal-panel" data-legal-panel="contact">
+          <h3>Contact HoloFox9 Studios</h3>
+          <p>For HOSTL support, privacy questions, account-deletion requests, bug reports, or other game-related issues:</p>
+          <p><strong>HoloFox9 Studios</strong><br><a href="mailto:holofox9studios@gmail.com">holofox9studios@gmail.com</a></p>
+          <p>If your message is about an account, include your HOSTL username or player ID when possible. Never email your password.</p>
+        </section>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -4713,6 +4835,29 @@
 </div>
 
 <script src="https://unpkg.com/colyseus.js@0.16.22/dist/colyseus.js"></script>
+
+<script>
+(() => {
+  const openBtn = document.getElementById('legalSupportBtn');
+  const overlay = document.getElementById('legalSupportOverlay');
+  const closeBtn = document.getElementById('closeLegalSupport');
+  const tabs = Array.from(document.querySelectorAll('.legal-tab'));
+  const panels = Array.from(document.querySelectorAll('.legal-panel'));
+  if (!openBtn || !overlay || !closeBtn) return;
+  const closeLegal = () => { overlay.classList.remove('show'); document.body.style.overflow = ''; };
+  const openLegal = () => { overlay.classList.add('show'); document.body.style.overflow = 'hidden'; closeBtn.focus(); };
+  openBtn.addEventListener('click', openLegal);
+  closeBtn.addEventListener('click', closeLegal);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closeLegal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('show')) closeLegal(); });
+  tabs.forEach(tab => tab.addEventListener('click', () => {
+    const key = tab.dataset.legalTab;
+    tabs.forEach(t => t.classList.toggle('active', t === tab));
+    panels.forEach(panel => panel.classList.toggle('active', panel.dataset.legalPanel === key));
+  }));
+})();
+</script>
+
 <script>
 (() => {
 "use strict";
