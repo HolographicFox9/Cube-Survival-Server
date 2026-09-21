@@ -931,7 +931,7 @@
     font-weight:900;
   }
 
-  #starterShopOverlay{
+  #starterShopOverlay{display:none!important;
     position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(7,12,15,.88);
     opacity:0;visibility:hidden;pointer-events:none;
@@ -4059,6 +4059,39 @@
   .shop-inventory-bar{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 12px}
   .shop-inventory-chip{font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;background:rgba(189,233,242,.08);border:1px solid rgba(189,233,242,.24)}
 
+  #expandedShopModal{align-items:center;justify-content:center;padding:clamp(12px,2vw,28px);}
+  #expandedShopModal .expanded-shop-card{width:min(1280px,96vw);max-height:92vh;overflow:hidden;margin:0;display:flex;flex-direction:column;}
+  #expandedShopModal .shop-tabs{flex:0 0 auto;}
+  #expandedShopModal .shop-page.active{min-height:0;overflow:auto;padding-right:4px;scrollbar-width:thin;}
+  .materials-shop-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.9fr);gap:18px;align-items:stretch;}
+  .rotating-stock-panel,.material-owned-panel,.shopkeeper-panel{border:1px solid rgba(240,230,200,.16);border-radius:16px;background:rgba(0,0,0,.16);padding:13px;min-width:0;}
+  .materials-left-column{min-width:0;display:flex;flex-direction:column;gap:12px;}
+  .shopkeeper-panel{min-height:58vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;}
+  .shopkeeper-panel:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 34%,rgba(244,198,95,.11),transparent 48%);pointer-events:none;}
+  .shopkeeper-placeholder{position:relative;z-index:1;width:min(260px,90%);aspect-ratio:4/5;border:1px dashed rgba(244,198,95,.34);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;background:rgba(255,255,255,.025);}
+  .shopkeeper-placeholder .shopkeeper-icon{font-size:52px;line-height:1;margin-bottom:12px;}
+  .shopkeeper-placeholder strong{font-size:18px;color:#ffe29a;}
+  .shopkeeper-placeholder span{font-size:12px;color:#d9ccb4;margin-top:7px;line-height:1.4;}
+  .rotating-stock-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+  .shop-refresh-pill{font-size:12px;font-weight:900;padding:6px 9px;border-radius:999px;border:1px solid rgba(244,198,95,.35);background:rgba(244,198,95,.08);color:#ffe29a;}
+  #materialShopGrid.rotating-material-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:58vh;overflow-y:auto;overscroll-behavior:contain;padding:2px 5px 4px 0;scrollbar-width:thin;}
+  #materialShopGrid .material-card{min-height:150px;display:flex;flex-direction:column;}
+  #materialShopGrid .material-card button{margin-top:auto;width:100%;}
+  #materialShopGrid .material-card.sold{opacity:.55;}
+  .material-owned-panel{max-height:20vh;overflow-y:auto;overscroll-behavior:contain;}
+  .material-owned-panel h4{margin:0 0 8px;color:#fff2c7;}
+  .material-owned-list{display:grid;gap:7px;}
+  .material-owned-row{display:flex;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);font-size:12px;}
+  @media(max-width:760px){
+    #expandedShopModal{justify-content:center;padding:8px;}
+    #expandedShopModal .expanded-shop-card{width:98vw;max-height:94vh;}
+    .materials-shop-layout{grid-template-columns:1fr;}
+    #materialShopGrid.rotating-material-grid{grid-template-columns:1fr;max-height:48vh;}
+    .material-owned-panel{max-height:28vh;}
+    .shopkeeper-panel{min-height:260px;}
+    .shopkeeper-placeholder{max-width:230px;aspect-ratio:5/3;}
+  }
+
 
 
   /* ---------- 460 mobile-mode home screen layout ---------- */
@@ -4880,9 +4913,9 @@
 
         <div class="home-side-panel home-shop-launcher">
           <button id="openStarterShop" type="button">
-            <span class="shop-launch-kicker">Loadout &amp; Supplies</span>
+            <span class="shop-launch-kicker">Materials · Build · Learn</span>
             <span class="shop-launch-title">Shop</span>
-            <span class="shop-launch-sub">Open the full shop. More items can be added here later without cramming the home screen.</span>
+            <span class="shop-launch-sub">Browse the rotating material stock, build permanent gear, learn skills, open chests, and redeem codes.</span>
             <span class="shop-launch-arrow">→</span>
           </button>
         </div>
@@ -4915,8 +4948,8 @@
           <div id="friendDetailView" class="friends-subview">
             <div class="friends-head"><div><div id="friendDetailName" class="friend-name">Friend</div><div id="friendDetailStatus" class="friend-status"></div></div><div class="friend-actions"><button id="friendChatTab" type="button">Chat</button><button id="friendGiftTab" type="button">Gift</button><button id="friendTradeTab" type="button">Trade</button><button id="removeFriendBtn" class="danger" type="button">Remove</button></div></div>
             <div id="friendChatView" class="friends-subview on"><div id="friendChatLog" class="friends-chat-log"></div><div class="friends-form-row"><input id="friendChatInput" maxlength="240" style="flex:1" placeholder="Message your friend"><button id="sendFriendChatBtn" class="primary" type="button">Send</button></div></div>
-            <div id="friendGiftView" class="friends-subview"><h3>Gift</h3><p class="friends-note">Gifts are immediate and cannot be undone.</p><div class="friends-form-row"><input id="giftCubits" type="number" min="0" placeholder="Cubits"><input id="giftSpecies" maxlength="24" placeholder="Card species (e.g. saber)"><input id="giftCards" type="number" min="0" placeholder="Cards"><button id="sendGiftBtn" class="primary" type="button">Send Gift</button></div></div>
-            <div id="friendTradeView" class="friends-subview"><h3>Trade Offer</h3><div class="friends-note">Choose what you give and what you want. Both players must still own the items when the trade is accepted.</div><h4>You Give</h4><div class="friends-form-row"><input id="tradeGiveCubits" type="number" min="0" placeholder="Cubits"><input id="tradeGiveSpecies" maxlength="24" placeholder="Card species"><input id="tradeGiveCards" type="number" min="0" placeholder="Cards"></div><h4>You Want</h4><div class="friends-form-row"><input id="tradeWantCubits" type="number" min="0" placeholder="Cubits"><input id="tradeWantSpecies" maxlength="24" placeholder="Card species"><input id="tradeWantCards" type="number" min="0" placeholder="Cards"><button id="sendTradeBtn" class="primary" type="button">Send Offer</button></div><h4>Pending Trades</h4><div id="friendTradesList"></div></div>
+            <div id="friendGiftView" class="friends-subview"><h3>Gift</h3><p class="friends-note">Gifts are immediate and cannot be undone.</p><div class="friends-form-row"><input id="giftCubits" type="number" min="0" placeholder="Gold Cubits"><input id="giftSpecies" maxlength="24" placeholder="Card species (e.g. saber)"><input id="giftCards" type="number" min="0" placeholder="Cards"><button id="sendGiftBtn" class="primary" type="button">Send Gift</button></div></div>
+            <div id="friendTradeView" class="friends-subview"><h3>Trade Offer</h3><div class="friends-note">Choose what you give and what you want. Both players must still own the items when the trade is accepted.</div><h4>You Give</h4><div class="friends-form-row"><input id="tradeGiveCubits" type="number" min="0" placeholder="Gold Cubits"><input id="tradeGiveSpecies" maxlength="24" placeholder="Card species"><input id="tradeGiveCards" type="number" min="0" placeholder="Cards"></div><h4>You Want</h4><div class="friends-form-row"><input id="tradeWantCubits" type="number" min="0" placeholder="Gold Cubits"><input id="tradeWantSpecies" maxlength="24" placeholder="Card species"><input id="tradeWantCards" type="number" min="0" placeholder="Cards"><button id="sendTradeBtn" class="primary" type="button">Send Offer</button></div><h4>Pending Trades</h4><div id="friendTradesList"></div></div>
           </div>
         </div>
       </div>
@@ -7835,14 +7868,14 @@ function saveMeta() {
     // Achievement unlock records are account-only. Never put them in the general browser meta save.
     const saveCopy = {...meta};
     delete saveCopy.achievements;
-    // Account Cubits live on the HOSTL server. Never leak an account balance into the
-    // browser's guest save; a logged-out player always starts with 5 Cubits.
+    // Account Gold Cubits live on the HOSTL server. Never leak an account balance into the
+    // browser's guest save; a logged-out player always starts with 5 Gold Cubits.
     if (window.__hostlAccountSessionActive) saveCopy.servs = 5;
     localStorage.setItem(META_KEY, JSON.stringify(saveCopy));
   } catch (e) {}
-  // If a HOSTL account is signed in, Gold Cubits live in the normal game Cubits counter
+  // If a HOSTL account is signed in, Gold Cubits live in the normal game Gold Cubits counter
   // and are mirrored back to the account for cross-device persistence.
-  try { window.__hostlAccountCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
+  try { window.__hostlAccountGoldCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
 }
 let meta = loadMeta();
 // Old browser-wide achievement records are intentionally ignored from this build onward.
@@ -7853,23 +7886,23 @@ const ACHIEVEMENT_SPECIES = Object.keys(PET_TYPES);
 function achievementSpeciesName(type){ return PET_TYPES[type]?.name || type; }
 function achievementDefs(){
   const defs = [
-    {id:"first_tame",icon:"🤝",name:"First Animal Tamed",desc:"Tame any wild animal for the first time.",rewardText:"20 Cubits + 2 cards for that animal",reward:{cubits:20,dynamicCards:2}},
-    {id:"first_death",icon:"💀",name:"Well, That Happened",desc:"Die for the first time.",rewardText:"8 Cubits",reward:{cubits:8}},
-    {id:"moonmark_hunter",icon:"🌙",name:"Moonmark Hunter",desc:"Defeat the Moonmarked Hostl boss.",rewardText:"100 Cubits",reward:{cubits:100}},
-    {id:"survive_5",icon:"⏱️",name:"Five Minutes Strong",desc:"Survive for 5 minutes in one run.",rewardText:"35 Cubits",reward:{cubits:35}},
-    {id:"survive_night",icon:"🌅",name:"First Night Survived",desc:"Reach Morning alive after your first Night.",rewardText:"25 Cubits",reward:{cubits:25}},
-    {id:"survive_10",icon:"🛡️",name:"Ten-Minute Survivor",desc:"Survive for 10 minutes in one run.",rewardText:"60 Cubits",reward:{cubits:60}},
-    {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Cubits",reward:{cubits:150}},
-    {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Cubits",reward:{cubits:50}},
-    {id:"tester_hunter_1",icon:"🎯",name:"Tester Hunter",desc:"Defeat the #1 HOSTL Tester in multiplayer.",rewardText:"3,000 Cubits + 100 Saber Cards",reward:{}},
+    {id:"first_tame",icon:"🤝",name:"First Animal Tamed",desc:"Tame any wild animal for the first time.",rewardText:"20 Gold Cubits + 2 cards for that animal",reward:{goldCubits:20,dynamicCards:2}},
+    {id:"first_death",icon:"💀",name:"Well, That Happened",desc:"Die for the first time.",rewardText:"8 Gold Cubits",reward:{goldCubits:8}},
+    {id:"moonmark_hunter",icon:"🌙",name:"Moonmark Hunter",desc:"Defeat the Moonmarked Hostl boss.",rewardText:"100 Gold Cubits",reward:{goldCubits:100}},
+    {id:"survive_5",icon:"⏱️",name:"Five Minutes Strong",desc:"Survive for 5 minutes in one run.",rewardText:"35 Gold Cubits",reward:{goldCubits:35}},
+    {id:"survive_night",icon:"🌅",name:"First Night Survived",desc:"Reach Morning alive after your first Night.",rewardText:"25 Gold Cubits",reward:{goldCubits:25}},
+    {id:"survive_10",icon:"🛡️",name:"Ten-Minute Survivor",desc:"Survive for 10 minutes in one run.",rewardText:"60 Gold Cubits",reward:{goldCubits:60}},
+    {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Gold Cubits",reward:{goldCubits:150}},
+    {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Gold Cubits",reward:{goldCubits:50}},
+    {id:"tester_hunter_1",icon:"🎯",name:"Tester Hunter",desc:"Defeat the #1 HOSTL Tester in multiplayer.",rewardText:"3,000 Gold Cubits + 100 Saber Cards",reward:{}},
   ];
   for(const type of ACHIEVEMENT_SPECIES){
     const info=PET_TYPES[type];
-    defs.push({id:`tame_${type}`,icon:info.emoji||"🐾",name:`First ${info.name} Tamed`,desc:`Tame a wild ${info.name} for the first time.`,rewardText:`10 Cubits + 4 ${info.name} Cards`,reward:{cubits:10,cards:4,species:type}});
+    defs.push({id:`tame_${type}`,icon:info.emoji||"🐾",name:`First ${info.name} Tamed`,desc:`Tame a wild ${info.name} for the first time.`,rewardText:`10 Gold Cubits + 4 ${info.name} Cards`,reward:{goldCubits:10,cards:4,species:type}});
   }
   for(const type of ACHIEVEMENT_SPECIES){
     const info=PET_TYPES[type];
-    defs.push({id:`breed_${type}`,icon:"🍼",name:`First ${info.name} Baby`,desc:`Breed your first ${info.name} baby.`,rewardText:`12 Cubits + 6 ${info.name} Cards`,reward:{cubits:12,cards:6,species:type}});
+    defs.push({id:`breed_${type}`,icon:"🍼",name:`First ${info.name} Baby`,desc:`Breed your first ${info.name} baby.`,rewardText:`12 Gold Cubits + 6 ${info.name} Cards`,reward:{goldCubits:12,cards:6,species:type}});
   }
   return defs;
 }
@@ -7906,7 +7939,7 @@ function queueAchievementToast(def,rewardSummary){
 }
 function grantAchievementReward(def, context={}){
   const r=def.reward||{}; const bits=[];
-  if(r.cubits){ meta.servs=(meta.servs||0)+r.cubits; bits.push(`+${r.cubits} Cubits`); }
+  if(r.goldCubits){ meta.servs=(meta.servs||0)+r.goldCubits; bits.push(`+${r.goldCubits} Gold Cubits`); }
   const species=r.species || context.species;
   const cards=Number(r.cards||r.dynamicCards||0);
   if(cards>0 && species && PET_TYPES[species]){
@@ -9350,7 +9383,7 @@ function applyWorldReward(data={}) {
     meta.speciesCards[reward.species] = (meta.speciesCards[reward.species]||0) + reward.amount;
     saveMeta(); buildCardInventory();
     banner(`+${reward.amount} ${PET_TYPES[reward.species].name} Card${reward.amount===1?"":"s"}!`);
-  } else if (reward.kind === "cubits") {
+  } else if (reward.kind === "goldCubits") {
     meta.servs = (meta.servs||0) + reward.amount; saveMeta();
   }
   if (data.kill) { game.kills++; gainSkillXp(5,"combat"); }
@@ -15059,13 +15092,13 @@ function hideLootPopup() {
 }
 function lootRewardIconHTML(reward, big = false) {
   if (!reward) return '<span class="emoji">🎁</span>';
-  if (reward.kind === "cubits") return big ? '<span class="loot-token-big"></span>' : '<span class="cubit-token"></span>';
+  if (reward.kind === "goldCubits") return big ? '<span class="loot-token-big"></span>' : '<span class="cubit-token"></span>';
   if (reward.kind === "cards") return `<span class="emoji">${PET_TYPES[reward.species].emoji}</span>`;
   const map = { wood: "🪵", stone: "🪨", gold: "🟡", berries: "🍓" };
   return `<span class="emoji">${map[reward.resource] || "📦"}</span>`;
 }
 function rewardName(reward) {
-  if (reward.kind === "cubits") return "Gold Cubits";
+  if (reward.kind === "goldCubits") return "Gold Cubits";
   if (reward.kind === "cards") return PET_TYPES[reward.species].name + " Cards";
   if (reward.resource === "wood") return "Wood";
   if (reward.resource === "stone") return "Stone";
@@ -15076,9 +15109,9 @@ function rewardName(reward) {
 function showLootPopup(rewards) {
   if (!rewards || !rewards.length) return;
   hideLootPopup();
-  const main = rewards.find(r => r.kind === "cards") || rewards.find(r => r.kind === "cubits") || rewards[0];
+  const main = rewards.find(r => r.kind === "cards") || rewards.find(r => r.kind === "goldCubits") || rewards[0];
   document.getElementById("lootIcon").innerHTML = lootRewardIconHTML(main, true);
-  document.getElementById("lootTitle").textContent = main.kind === "cards" ? `${PET_TYPES[main.species].name} Cards!` : main.kind === "cubits" ? "Gold Cubits!" : rewardName(main) + "!";
+  document.getElementById("lootTitle").textContent = main.kind === "cards" ? `${PET_TYPES[main.species].name} Cards!` : main.kind === "goldCubits" ? "Gold Cubits!" : rewardName(main) + "!";
   document.getElementById("lootSub").textContent = rewards.length > 1 ? "Treasure found inside the chest" : "This chest dropped one main reward";
   document.getElementById("lootLines").innerHTML = rewards.map(r => `<div class="loot-line"><div class="left"><div class="ico">${lootRewardIconHTML(r, false)}</div><div class="nm">${rewardName(r)}</div></div><div class="amt">+${r.amount}</div></div>`).join("");
   document.getElementById("lootPopup").classList.add("show");
@@ -15094,7 +15127,7 @@ function randomChestCardSpecies() {
 function makeChestReward() {
   const roll = Math.random();
   if (roll < 0.34) {
-    return { kind: "cubits", amount: Math.random() < 0.1 ? randi(12, 18) : randi(5, 10) };
+    return { kind: "goldCubits", amount: Math.random() < 0.1 ? randi(12, 18) : randi(5, 10) };
   }
   if (roll < 0.52) {
     return { kind: "cards", species: randomChestCardSpecies(), amount: Math.random() < 0.14 ? 25 : 10 };
@@ -15114,7 +15147,7 @@ function makeChestReward() {
 }
 function awardChestReward(reward) {
   if (!reward) return;
-  if (reward.kind === "cubits") meta.servs += reward.amount;
+  if (reward.kind === "goldCubits") meta.servs += reward.amount;
   else if (reward.kind === "cards") {
     if (!meta.speciesCards) meta.speciesCards = {};
     meta.speciesCards[reward.species] = (meta.speciesCards[reward.species] || 0) + reward.amount;
@@ -23623,7 +23656,7 @@ function setupHome() {
     div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;"><b>${item.name}</b><span style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border:1px solid rgba(189,233,242,.42);border-radius:999px;background:rgba(189,233,242,.08);white-space:nowrap;">${item.category || "Starter"}</span></div><div style="font-size:11px;opacity:.72;line-height:1.35;margin:5px 0 7px;">${item.desc || "Permanent starter unlock."}</div><div class="price">${owned ? "Owned" : item.price.toLocaleString() + " Gold Cubits"}</div>`;
     div.addEventListener("click", () => {
       if (owned) return;
-      if (meta.servs < item.price) { showGameMessage("Not Enough Cubits", `You need ${item.price.toLocaleString()} Gold Cubits for ${item.name}. You have ${Number(meta.servs||0).toLocaleString()}.`); return; }
+      if (meta.servs < item.price) { showGameMessage("Not Enough Gold Cubits", `You need ${item.price.toLocaleString()} Gold Cubits for ${item.name}. You have ${Number(meta.servs||0).toLocaleString()}.`); return; }
       meta.servs -= item.price;
       meta.ownedStarters[item.id] = true;
       saveMeta();
@@ -24104,8 +24137,8 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
       const nm=String(payload.username).trim().slice(0,20);
       if(nm){ meta.username=nm; player.username=nm; }
     }
-    if(Number.isFinite(Number(payload.cubits))){
-      meta.servs=Math.max(0,Math.floor(Number(payload.cubits)||0));
+    if(Number.isFinite(Number(payload.goldCubits ?? payload.cubits))){
+      meta.servs=Math.max(0,Math.floor(Number(payload.goldCubits ?? payload.cubits)||0));
     }
     player.title=String(payload.title||"");
     player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
@@ -24134,15 +24167,17 @@ hideLoadingScreen();
 
 })();
 
-// ---------- account / cubits / expanded shop ----------
+// ---------- account / Gold Cubits / expanded shop ----------
 const ACCOUNT_STORAGE_KEY = "hostlAccountSessionV2";
 const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let hostlServerDayKey = "";
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 function utcDayKey() {
+  if (hostlServerDayKey) return hostlServerDayKey;
   const d = new Date();
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
 }
@@ -24152,7 +24187,7 @@ function applyAccountGameEntitlements(){
   try {
     window.__hostlApplyAccountEntitlements?.({
       username:accountState.username||"",
-      cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+      goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
       craftedStarters:Array.isArray(accountState.craftedStarters)?accountState.craftedStarters:[],
       learnedSkills:Array.isArray(accountState.learnedSkills)?accountState.learnedSkills:[],
@@ -24169,7 +24204,7 @@ function setAccountFromServer(p={}) {
   window.__hostlAccountSessionActive = true;
   accountState = {
     loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
-    cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
     materials:(p.materials && typeof p.materials==="object") ? p.materials : {},
@@ -24208,7 +24243,7 @@ async function pushAccountProfileNow() {
       body:JSON.stringify({
         // Username and Display Name are saved only by their dedicated profile editors.
         // Background Cubit/theme saves must never overwrite a name the player just chose.
-        title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        title:accountState.title||"", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24227,11 +24262,11 @@ function persistAccountProfile() {
   clearTimeout(accountSaveTimer);
   accountSaveTimer = setTimeout(pushAccountProfileNow, 250);
 }
-window.__hostlAccountCubitsChanged = function(value){
+window.__hostlAccountGoldCubitsChanged = function(value){
   if(!accountState.loggedIn) return;
   const next=Math.max(0,Math.floor(Number(value)||0));
-  if(next===Math.floor(Number(accountState.cubits)||0)) return;
-  accountState.cubits=next;
+  if(next===Math.floor(Number(accountState.goldCubits)||0)) return;
+  accountState.goldCubits=next;
   const hs=document.getElementById("homeServs"); if(hs) hs.textContent=next;
   const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
   const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
@@ -24273,15 +24308,15 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
-    // Guest mode has its own clean starting balance and must never inherit account Cubits.
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
     try { meta.servs=5; saveMeta(); } catch (_) {}
     saveAccountSession();
     syncAccountUi();
   }
 }
 function claimDailyCubits() {
-  // Daily Cubits are granted by the HOSTL server when Google login succeeds.
+  // Daily Gold Cubits are granted by the HOSTL server when Google login succeeds.
   return false;
 }
 function syncAccountUi(msg="") {
@@ -24301,7 +24336,7 @@ function syncAccountUi(msg="") {
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
-  const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.cubits||0);
+  const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.goldCubits||0);
   const sCreated=document.getElementById("settingsCreatedAt"); if(sCreated) {
     let label="—"; try{ if(accountState.createdAt) label=new Date(accountState.createdAt).toLocaleString(); }catch(_){} sCreated.textContent=label;
   }
@@ -24310,11 +24345,11 @@ function syncAccountUi(msg="") {
   if (guest) guest.style.display = accountState.loggedIn ? "none" : "";
   if (user) user.style.display = accountState.loggedIn ? "" : "none";
   const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Choose a username";
-  const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
-  const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
+  const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.goldCubits||0);
+  const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.goldCubits||0);
   if(accountState.loggedIn){
-    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.cubits||0);
-    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.cubits||0);
+    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.goldCubits||0);
+    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.goldCubits||0);
   } else {
     // Logged-out home state is a fresh guest profile, not the last account balance.
     const hs=document.getElementById("homeServs"); if(hs) hs.textContent=5;
@@ -24322,7 +24357,7 @@ function syncAccountUi(msg="") {
   }
   const ds = document.getElementById("dailyCubitStatus");
   if (ds) ds.textContent = accountState.loggedIn
-    ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Cubits claimed for today." : "Daily Cubits available.")
+    ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Gold Cubits claimed for today." : "Daily Gold Cubits available.")
     : "";
   const am = document.getElementById("accountMsg"); if (am) am.textContent = msg;
   renderThemeGrid();
@@ -24339,9 +24374,9 @@ function closeAccountModal() { document.getElementById("accountModal")?.classLis
 function openExpandedShop(page="shop") {
   document.getElementById("accountModal")?.classList.remove("on");
   document.getElementById("expandedShopModal")?.classList.add("on");
-  renderMaterialsAndRecipes();
   selectShopPage(page);
   syncAccountUi();
+  loadRotatingShopStock(false);
 }
 function closeExpandedShop() { document.getElementById("expandedShopModal")?.classList.remove("on"); }
 function selectShopPage(page) {
@@ -24350,22 +24385,22 @@ function selectShopPage(page) {
   const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", themes:"shopPageThemes", chests:"shopPageChests", codes:"shopPageCodes" };
   document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
   if (page === "codes") syncPromoCodeUi();
-  if (page === "shop" || page === "build" || page === "learn") renderMaterialsAndRecipes();
+  if (page === "shop") loadRotatingShopStock(false); else if (page === "build" || page === "learn") renderMaterialsAndRecipes();
 }
 
 
 const HOSTL_MATERIALS = {
-  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment. Buy it or earn it from chests/gameplay."},
-  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear. Buy it or find it as loot."},
-  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter. Uncommon materials cost noticeably more to guarantee."},
-  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment. Available from the Shop and loot."},
-  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds. Rare materials are much cheaper if you find them instead of buying."},
-  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills. Buy it or find it through chests/gameplay."},
-  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds. Epic materials are expensive guaranteed purchases."},
-  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior. Rare in loot, but always purchasable."},
-  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"A non-magical study kit containing tracks, bite measurements, and predator behavior records."},
-  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A Legendary trophy component. Super Boss Snakes can drop 1–2, or you can buy one for a very high guaranteed price."},
-  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"A Mythical scale from the strongest dragons. Extremely rare in gameplay and chests, but still purchasable at a huge price."}
+  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
+  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
+  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
+  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
+  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
+  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
+  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
+  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
+  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
+  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
+  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
 };
 const HOSTL_BUILD_RECIPES = {
   speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
@@ -24384,32 +24419,65 @@ function materialIngredientHtml(ingredients){
     return `<span class="ingredient-chip ${have<n?'missing':''}">${info?.name||id} <small>${info?.rarity||''}</small>: ${have}/${n}</span>`;
   }).join("");
 }
+let rotatingShopState={loading:false,rotationId:null,nextRefreshAt:0,serverOffset:0,listings:[]};
+function formatShopRefresh(ms){
+  const n=Math.max(0,Math.floor(ms/1000)); const d=Math.floor(n/86400),hh=Math.floor((n%86400)/3600),mm=Math.floor((n%3600)/60);
+  return d>0?`${d}d ${hh}h ${mm}m`:`${hh}h ${mm}m`;
+}
+function updateShopRefreshUi(){
+  const el=document.getElementById("shopRefreshCountdown"); if(!el)return;
+  if(!rotatingShopState.nextRefreshAt){el.textContent="Loading rotation…";return;}
+  const serverNow=Date.now()+rotatingShopState.serverOffset;
+  const left=rotatingShopState.nextRefreshAt-serverNow;
+  el.textContent=left>0?`Refreshes in ${formatShopRefresh(left)}`:"Refreshing…";
+  if(left<=0 && !rotatingShopState.loading) loadRotatingShopStock(true);
+}
+async function loadRotatingShopStock(force=false){
+  if(rotatingShopState.loading)return;
+  if(!force && rotatingShopState.listings.length){renderMaterialsAndRecipes();return;}
+  rotatingShopState.loading=true; renderMaterialsAndRecipes();
+  try{
+    const r=await fetch("/api/shop/stock",{credentials:"same-origin",cache:"no-store"}); const data=await r.json().catch(()=>({}));
+    if(r.ok&&data?.ok){
+      rotatingShopState.rotationId=data.rotationId; rotatingShopState.nextRefreshAt=Number(data.nextRefreshAt)||0;
+      rotatingShopState.serverOffset=(Number(data.serverNow)||Date.now())-Date.now(); rotatingShopState.listings=Array.isArray(data.listings)?data.listings:[];
+      if(data.utcDay)hostlServerDayKey=String(data.utcDay);
+    }
+  }catch(_){}
+  rotatingShopState.loading=false; renderMaterialsAndRecipes(); updateShopRefreshUi(); syncChestUi();
+}
+async function refreshServerDay(){
+  try{const r=await fetch("/api/time",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(r.ok&&d?.utcDay){const changed=hostlServerDayKey&&hostlServerDayKey!==d.utcDay;hostlServerDayKey=d.utcDay;rotatingShopState.serverOffset=(Number(d.serverNow)||Date.now())-Date.now();if(changed){syncAccountUi();syncChestUi();loadRotatingShopStock(true);}}}catch(_){}
+}
 function renderMaterialsAndRecipes(){
   const bar=document.getElementById("materialInventoryBar");
   if(bar) bar.innerHTML = accountState.loggedIn
     ? Object.entries(HOSTL_MATERIALS).filter(([id])=>materialCount(id)>0).map(([id,v])=>`<span class="shop-inventory-chip">${v.name} · ${v.rarity}: ${materialCount(id)}</span>`).join("") || `<span class="muted">No crafting materials yet.</span>`
     : `<span class="muted">Sign in to own materials, build equipment, and learn skills.</span>`;
+  const owned=document.getElementById("materialOwnedList");
+  if(owned) owned.innerHTML=Object.entries(HOSTL_MATERIALS).map(([id,v])=>`<div class="material-owned-row"><span>${v.name}<br><small class="rarity-${v.rarity}">${v.rarity}</small></span><b>${materialCount(id)}</b></div>`).join("");
   const shop=document.getElementById("materialShopGrid");
   if(shop){
     shop.innerHTML="";
-    for(const [id,item] of Object.entries(HOSTL_MATERIALS)){
-      const d=document.createElement("div"); d.className="material-card";
-      const action=`<button class="account-btn" type="button" ${accountState.loggedIn?'':'disabled'}>Buy 1 · ${item.price.toLocaleString()} Cubits</button>`;
-      d.innerHTML=`<span class="material-rarity rarity-${item.rarity}">${item.rarity}</span><h4>${item.name}</h4><div class="muted">${item.desc}</div><div class="owned-count">Owned: ${materialCount(id)}</div>${action}`;
-      d.querySelector("button")?.addEventListener("click",()=>buyMaterial(id)); shop.appendChild(d);
+    if(rotatingShopState.loading && !rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Loading this rotation…</div>`;}
+    else if(!rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Shop stock could not be loaded yet. Try reopening the Shop.</div>`;}
+    else for(const listing of rotatingShopState.listings){
+      const item=HOSTL_MATERIALS[listing.materialId]||listing; const d=document.createElement("div"); d.className="material-card"+(listing.purchased?" sold":"");
+      const buttonText=listing.purchased?"Bought this rotation":`Buy · ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits`;
+      d.innerHTML=`<span class="material-rarity rarity-${item.rarity}">${item.rarity}</span><h4>${item.name}</h4><div class="muted">${item.desc||"Crafting material."}</div><div class="owned-count">Owned: ${materialCount(listing.materialId)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||listing.purchased)?'disabled':''}>${buttonText}</button>`;
+      d.querySelector("button")?.addEventListener("click",()=>buyShopListing(listing.slotId)); shop.appendChild(d);
     }
   }
+  updateShopRefreshUi();
   const build=document.getElementById("buildRecipeGrid");
   if(build){ build.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_BUILD_RECIPES)){
-    const owned=accountState.craftedStarters.includes(id);
-    const d=document.createElement("div"); d.className="recipe-card";
+    const owned=accountState.craftedStarters.includes(id); const d=document.createElement("div"); d.className="recipe-card";
     d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Build success: ${Math.round(r.chance*100)}%</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Built':'Build'}</button>`;
     d.querySelector("button")?.addEventListener("click",()=>attemptBuild(id)); build.appendChild(d);
   }}
   const learn=document.getElementById("learnRecipeGrid");
   if(learn){ learn.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_LEARN_RECIPES)){
-    const owned=accountState.learnedSkills.includes(id);
-    const d=document.createElement("div"); d.className="recipe-card";
+    const owned=accountState.learnedSkills.includes(id); const d=document.createElement("div"); d.className="recipe-card";
     d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Learning succeeds once all study materials are present.</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Learned':'Learn'}</button>`;
     d.querySelector("button")?.addEventListener("click",()=>learnSkill(id)); learn.appendChild(d);
   }}
@@ -24418,18 +24486,20 @@ async function accountAction(path,body){
   if(!accountState.loggedIn){ openAccountModal(); return null; }
   try{
     const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},credentials:"same-origin",body:JSON.stringify(body||{})});
-    const data=await r.json().catch(()=>({}));
-    if(r.status===401){ logoutAccount(false); return null; }
-    if(data?.account) setAccountFromServer(data.account);
-    syncAccountUi(); renderMaterialsAndRecipes();
-    return {ok:r.ok,data};
+    const data=await r.json().catch(()=>({})); if(r.status===401){ logoutAccount(false); return null; }
+    if(data?.account) setAccountFromServer(data.account); syncAccountUi(); renderMaterialsAndRecipes(); return {ok:r.ok,data};
   }catch(_){ return {ok:false,data:{error:"network"}}; }
 }
-async function buyMaterial(id){
-  const item=HOSTL_MATERIALS[id]; if(!item)return;
-  const result=await accountAction("/api/shop/buy-material",{id}); if(!result)return;
-  if(!result.ok){ showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${item.price.toLocaleString()} Cubits.`:"Could not buy that material."); return; }
-  showGameMessage("Material Purchased",`+1 ${item.name}`);
+async function buyShopListing(slotId){
+  const listing=rotatingShopState.listings.find(x=>x.slotId===slotId); if(!listing)return;
+  const item=HOSTL_MATERIALS[listing.materialId]||listing;
+  const result=await accountAction("/api/shop/buy-stock",{slotId}); if(!result)return;
+  if(!result.ok){
+    if(result.data?.error==="shop_refreshed"){showGameMessage("Shop Refreshed","The two-day shop rotation changed. Loading the new stock now.");await loadRotatingShopStock(true);return;}
+    showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits.`:result.data?.error==="already_purchased"?"You already bought this exact shop slot during this rotation.":"Could not buy that material."); return;
+  }
+  const local=rotatingShopState.listings.find(x=>x.slotId===slotId); if(local)local.purchased=true;
+  showGameMessage("Material Purchased",`+1 ${item.name}`); renderMaterialsAndRecipes();
 }
 async function attemptBuild(id){
   const r=HOSTL_BUILD_RECIPES[id]; if(!r)return;
@@ -24575,7 +24645,7 @@ async function openAccountChest(name,cost,kind="forest",isFreeDaily=false) {
   const result=await accountAction("/api/open-chest",{kind:isFreeDaily?"daily":kind});
   if(!result)return;
   if(!result.ok){
-    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:"That chest could not be opened.";
+    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:"That chest could not be opened.";
     showChestResult(name,[msg]); syncChestUi(); return;
   }
   const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
@@ -24668,8 +24738,8 @@ async function handleGoogleCredential(response) {
     saveAccountSession();
     syncAchievementAccountBridge();
     const bits=[];
-    if(data.created) bits.push("HOSTL account created with 500 Cubits");
-    if(data.dailyGranted) bits.push("+10 daily Cubits");
+    if(data.created) bits.push("HOSTL account created with 500 Gold Cubits");
+    if(data.dailyGranted) bits.push("+10 daily Gold Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
     startFriendsLoops();
   } catch (err) {
@@ -24685,11 +24755,11 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { meta.servs=5; saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
-  syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Cubits." : "");
+  syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Gold Cubits." : "");
 }
 function populateTitleDropdown(){
   const sel=document.getElementById("settingsTitleSelect");
@@ -24849,10 +24919,10 @@ function updateSelectedFriend(f){const n=document.getElementById("friendDetailNa
 async function removeSelectedFriend(){if(!selectedFriendId)return;const ok=await showGameConfirm("Remove Friend","Remove this player from your friends list?");if(!ok)return;try{await friendApi(`/api/friends/${encodeURIComponent(selectedFriendId)}`,{method:"DELETE"});selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";refreshFriends();}catch(_){}}
 async function refreshFriendChat(scroll=true){if(!selectedFriendId)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`);if(!r.ok)return;const d=await r.json();const log=document.getElementById("friendChatLog");if(!log)return;log.innerHTML=(d.messages||[]).map(m=>`<div class="friend-chat-msg ${String(m.from)===String(accountState.userId)?"mine":""}"><div class="friend-chat-meta">${String(m.from)===String(accountState.userId)?"You":"Friend"} · ${new Date(m.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div>${escapeFriendText(m.message)}</div>`).join("")||'<div class="friends-note">No messages yet.</div>';if(scroll)log.scrollTop=log.scrollHeight;}catch(_){}}
 async function sendFriendChat(){const i=document.getElementById("friendChatInput");const message=String(i?.value||"").trim();if(!selectedFriendId||!message)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`,{method:"POST",body:JSON.stringify({message})});if(r.ok){i.value="";refreshFriendChat();}}catch(_){}}
-async function sendFriendGift(){if(!selectedFriendId)return;const cubits=Math.max(0,Math.floor(Number(document.getElementById("giftCubits")?.value)||0)),species=String(document.getElementById("giftSpecies")?.value||"").trim().toLowerCase(),cards=Math.max(0,Math.floor(Number(document.getElementById("giftCards")?.value)||0));if(!cubits&&!cards){showGameMessage("Gift","Choose Cubits or cards to gift.");return;}const ok=await showGameConfirm("Send Gift",`Send ${cubits?`${cubits.toLocaleString()} Cubits`:""}${cubits&&cards?" and ":""}${cards?`${cards} ${species||"?"} cards`:""}? This cannot be undone.`);if(!ok)return;try{const r=await friendApi("/api/friends/gift",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,cubits,species,cards})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Gift Failed",d.error==="not_enough"?"You do not have enough Cubits or cards.":"The gift could not be sent.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Gift Sent","Your gift was sent successfully.");}catch(_){showGameMessage("Gift Failed","Could not reach the server.");}}
-function readTradePart(prefix){return{cubits:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cubits")?.value)||0)),species:String(document.getElementById(prefix+"Species")?.value||"").trim().toLowerCase(),cards:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cards")?.value)||0))};}
+async function sendFriendGift(){if(!selectedFriendId)return;const goldCubits=Math.max(0,Math.floor(Number(document.getElementById("giftCubits")?.value)||0)),species=String(document.getElementById("giftSpecies")?.value||"").trim().toLowerCase(),cards=Math.max(0,Math.floor(Number(document.getElementById("giftCards")?.value)||0));if(!goldCubits&&!cards){showGameMessage("Gift","Choose Gold Cubits or cards to gift.");return;}const ok=await showGameConfirm("Send Gift",`Send ${goldCubits?`${goldCubits.toLocaleString()} Gold Cubits`:""}${goldCubits&&cards?" and ":""}${cards?`${cards} ${species||"?"} cards`:""}? This cannot be undone.`);if(!ok)return;try{const r=await friendApi("/api/friends/gift",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,goldCubits,species,cards})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Gift Failed",d.error==="not_enough"?"You do not have enough Gold Cubits or cards.":"The gift could not be sent.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Gift Sent","Your gift was sent successfully.");}catch(_){showGameMessage("Gift Failed","Could not reach the server.");}}
+function readTradePart(prefix){return{goldCubits:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cubits")?.value)||0)),species:String(document.getElementById(prefix+"Species")?.value||"").trim().toLowerCase(),cards:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cards")?.value)||0))};}
 async function sendTradeOffer(){if(!selectedFriendId)return;const give=readTradePart("tradeGive"),want=readTradePart("tradeWant");try{const r=await friendApi("/api/friends/trade",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,give,want})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Trade",d.error==="not_enough"?"You do not currently have what you offered.":"Could not create that trade.");return;}showGameMessage("Trade Offer Sent","Your friend can accept or decline the offer.");refreshTrades();}catch(_){}}
-function tradePartText(p){const bits=[];if(Number(p?.cubits)>0)bits.push(`${Number(p.cubits).toLocaleString()} Cubits`);if(Number(p?.cards)>0)bits.push(`${p.cards} ${p.species} cards`);return bits.join(" + ")||"nothing";}
+function tradePartText(p){const bits=[];if(Number(p?.goldCubits)>0)bits.push(`${Number(p.goldCubits).toLocaleString()} Gold Cubits`);if(Number(p?.cards)>0)bits.push(`${p.cards} ${p.species} cards`);return bits.join(" + ")||"nothing";}
 async function refreshTrades(){if(!selectedFriendId)return;try{const r=await friendApi("/api/friends/trades");if(!r.ok)return;const d=await r.json();const box=document.getElementById("friendTradesList");if(!box)return;const offers=(d.offers||[]).filter(o=>String(o.from)===selectedFriendId||String(o.to)===selectedFriendId);box.innerHTML=offers.map(o=>{const incoming=String(o.to)===String(accountState.userId);return `<div class="trade-offer ${incoming?"incoming":""}"><b>${incoming?"Incoming offer":"Offer sent"}</b><div class="friends-note">${incoming?"They give":"You give"}: ${escapeFriendText(tradePartText(o.give))}<br>${incoming?"They want":"You want"}: ${escapeFriendText(tradePartText(o.want))}</div>${incoming?`<div class="friend-actions"><button class="primary" data-trade-accept="${o.id}">Accept</button><button data-trade-decline="${o.id}">Decline</button></div>`:""}</div>`;}).join("")||'<div class="friends-note">No pending trades with this friend.</div>';box.querySelectorAll("[data-trade-accept]").forEach(b=>b.onclick=()=>respondTrade(b.dataset.tradeAccept,true));box.querySelectorAll("[data-trade-decline]").forEach(b=>b.onclick=()=>respondTrade(b.dataset.tradeDecline,false));}catch(_){}}
 async function respondTrade(id,accept){try{const r=await friendApi(`/api/friends/trade/${encodeURIComponent(id)}/respond`,{method:"POST",body:JSON.stringify({accept})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Trade",d.error==="trade_inventory_changed"?"The trade can no longer be completed because one player no longer has the offered items.":"Trade could not be completed.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Trade",accept?"Trade completed.":"Trade declined.");refreshTrades();}catch(_){}}
 
@@ -24984,7 +25054,7 @@ syncAchievementAccountBridge();
 
     <div id="accountGuestView">
       <p class="muted">You can play as a guest, but guest progress is temporary and does not save across devices.</p>
-      <div class="reward-badge">New Google-linked HOSTL account: +500 Cubits</div>
+      <div class="reward-badge">New Google-linked HOSTL account: +500 Gold Cubits</div>
       <div class="divider"></div>
       <h3>Continue with Google</h3>
       <div id="googleSignInButton"></div>
@@ -25032,7 +25102,7 @@ syncAchievementAccountBridge();
     </div>
     <div class="danger-zone">
       <h3>Delete account?</h3>
-      <p class="muted">Deleting your HOSTL account permanently erases its saved progress, Cubits, unlocked themes, achievements, and other account data. This does <strong>not</strong> delete your Google account.</p>
+      <p class="muted">Deleting your HOSTL account permanently erases its saved progress, Gold Cubits, unlocked themes, achievements, and other account data. This does <strong>not</strong> delete your Google account.</p>
       <button id="openDeleteAccountBtn" class="account-btn danger-btn" type="button">Delete Account?</button>
       <div id="deleteConfirmBox" class="delete-confirm-box">
         <strong>Are you sure?</strong>
@@ -25049,10 +25119,10 @@ syncAchievementAccountBridge();
 </div>
 
 <div id="expandedShopModal" class="shop-modal" aria-hidden="true">
-  <div class="modal-card">
+  <div class="modal-card expanded-shop-card">
     <div class="modal-row" style="justify-content:space-between">
       <h2>Shop</h2>
-      <div class="reward-badge"><span id="shopCubits">0</span> Cubits</div>
+      <div class="reward-badge"><span id="shopCubits">0</span> Gold Cubits</div>
       <button id="expandedShopClose" class="account-btn" type="button">Close</button>
     </div>
 
@@ -25066,12 +25136,30 @@ syncAchievementAccountBridge();
     </div>
 
     <section id="shopPageShop" class="shop-page active">
-      <h3>Parts &amp; Materials</h3>
-      <p class="muted">Buy parts here, then use <b>Build</b> to make permanent starter equipment or <b>Learn</b> to unlock permanent skills. Chests can also drop these materials.</p>
-      <div id="materialInventoryBar" class="shop-inventory-bar"></div>
-      <div id="materialShopGrid" class="material-grid"></div>
-      <div class="divider"></div>
-      <button id="openLegacyShopBtn" class="account-btn" type="button">Open In-Run Gold Gear Shop</button>
+      <div class="materials-shop-layout">
+        <div class="materials-left-column">
+          <div class="rotating-stock-panel">
+            <div class="rotating-stock-head">
+              <div><h3 style="margin:0 0 4px">Materials Shop</h3><p class="muted" style="margin:0">Buy ingredients here, then use <b>Build</b> or <b>Learn</b>. Stock changes every two days, and duplicate items can appear.</p></div>
+              <div id="shopRefreshCountdown" class="shop-refresh-pill">Loading rotation…</div>
+            </div>
+            <div id="materialShopGrid" class="material-grid rotating-material-grid"></div>
+          </div>
+          <aside class="material-owned-panel">
+            <h4>Your Materials</h4>
+            <div id="materialInventoryBar" class="shop-inventory-bar"></div>
+            <div id="materialOwnedList" class="material-owned-list"></div>
+            <p class="locked-note">The server controls the two-day rotation and daily resets, so changing your device clock cannot force an early refresh.</p>
+          </aside>
+        </div>
+        <aside class="shopkeeper-panel" aria-label="Shopkeeper area">
+          <div class="shopkeeper-placeholder">
+            <div class="shopkeeper-icon">🧑‍🌾</div>
+            <strong>Shopkeeper Area</strong>
+            <span>Reserved for your HOSTL shopkeeper character. The material stock stays on the left.</span>
+          </div>
+        </aside>
+      </div>
     </section>
 
     <section id="shopPageBuild" class="shop-page">
@@ -25082,7 +25170,7 @@ syncAchievementAccountBridge();
 
     <section id="shopPageLearn" class="shop-page">
       <h3>Learn</h3>
-      <p class="muted">Skills are learned from books plus other study materials. Learning costs no Cubits once you have everything required.</p>
+      <p class="muted">Skills are learned from books plus other study materials. Learning costs no Gold Cubits once you have everything required.</p>
       <div id="learnRecipeGrid" class="recipe-grid"></div>
     </section>
 
@@ -25096,14 +25184,14 @@ syncAchievementAccountBridge();
       <h3>Chests</h3>
       <div class="chest-card featured">
         <div class="chest-title"><span>Wooden Chest</span><span class="pill">DAILY AD</span></div>
-        <p class="muted">One free Wooden Chest per day for signed-in players. It can contain Cubits, species cards, materials, and occasionally a permanent theme. This is the chest tied to the daily rewarded ad.</p>
+        <p class="muted">One free Wooden Chest per day for signed-in players. It can contain Gold Cubits, species cards, materials, and occasionally a permanent theme. This is the chest tied to the daily rewarded ad.</p>
         <button id="dailyChestBtn" class="account-btn" type="button">Watch Ad to Open</button>
         <div id="dailyChestStatus" class="locked-note"></div>
       </div>
 
       <div class="chest-card">
-        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Cubits</span></div>
-        <p class="muted">A Cubit chest with Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
+        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Gold Cubits</span></div>
+        <p class="muted">A Gold Cubit chest with Gold Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
         <button class="account-btn cubitChestBtn" data-cost="1200" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,200</button>
       </div>
 
@@ -25130,5 +25218,11 @@ syncAchievementAccountBridge();
   </div>
 </div>
 
+<script>
+// Keep day/rotation UI current even if HOSTL stays open across UTC midnight.
+setInterval(()=>{ try{ updateShopRefreshUi(); }catch(_){} }, 1000);
+setInterval(()=>{ try{ refreshServerDay(); }catch(_){} }, 60000);
+setTimeout(()=>{ try{ refreshServerDay(); }catch(_){} }, 1500);
+</script>
 </body>
 </html>

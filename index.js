@@ -61,6 +61,18 @@ function cleanDisplayName(value) {
   const cleaned = raw.replace(/[^A-Za-z0-9 _\-.'!]/g, "").trim();
   return cleaned.slice(0, 20);
 }
+// HOSTL has exactly one account currency: Gold Cubits.
+// Older builds stored this balance under `cubits`; migrate it once and keep only
+// `goldCubits` as the canonical saved-account field going forward.
+function ensureGoldCubits(a) {
+  if (!a || typeof a !== "object") return 0;
+  if (!Number.isFinite(Number(a.goldCubits))) a.goldCubits = Number.isFinite(Number(a.cubits)) ? Number(a.cubits) : 0;
+  a.goldCubits = Math.max(0, Math.min(1000000000, Math.floor(Number(a.goldCubits) || 0)));
+  if (Object.prototype.hasOwnProperty.call(a, "cubits")) delete a.cubits;
+  return a.goldCubits;
+}
+function setGoldCubits(a, value) { a.goldCubits = Math.max(0, Math.min(1000000000, Math.floor(Number(value) || 0))); return a.goldCubits; }
+function addGoldCubits(a, delta) { return setGoldCubits(a, ensureGoldCubits(a) + Math.floor(Number(delta) || 0)); }
 function allocateNumericUserId(used = new Set(Object.keys(accountDb?.byId || {}))) {
   for (let tries = 0; tries < 5000; tries++) {
     const candidate = String(1 + Math.floor(Math.random() * 99999));
@@ -89,7 +101,7 @@ function ensureTitleState(a) {
 
 
 const MATERIAL_CATALOG = {
-  // Prices are balanced against normal high-skill play (~100–150 Cubits/minute once waves are active).
+  // Prices are balanced against normal high-skill play (~100–150 Gold Cubits/minute once waves are active).
   // Drops/chests are intentionally the efficient route; buying is the guaranteed route.
   leather:{name:"Leather",price:650,rarity:"Common"},
   resin:{name:"Hard Resin",price:800,rarity:"Common"},
@@ -136,6 +148,54 @@ async function rewardGameplayMaterial(userId,id,qty,source="gameplay"){
   return {granted:true,id,qty:Math.max(1,Math.floor(Number(qty)||1)),name:MATERIAL_CATALOG[id].name,rarity:MATERIAL_CATALOG[id].rarity,source,account:publicAccount(a)};
 }
 
+// The material shop is one shared deterministic stock rotation for everyone.
+// A rotation lasts exactly two UTC days. Duplicate material slots are intentional.
+const SHOP_ROTATION_MS = 2 * 24 * 60 * 60 * 1000;
+const SHOP_SLOT_COUNT = 30;
+const SHOP_STOCK_WEIGHT = { Common:34, Uncommon:26, Rare:18, Epic:12, Legendary:7, Mythical:3 };
+function shopRotationInfo(now=Date.now()) {
+  const rotationId = Math.floor(Number(now) / SHOP_ROTATION_MS);
+  return { rotationId, startsAt: rotationId * SHOP_ROTATION_MS, nextRefreshAt: (rotationId + 1) * SHOP_ROTATION_MS };
+}
+function seededShopRandom(seed) {
+  let t = (Number(seed) ^ 0x6D2B79F5) >>> 0;
+  return function(){ t += 0x6D2B79F5; let x=t; x=Math.imul(x^(x>>>15),x|1); x^=x+Math.imul(x^(x>>>7),x|61); return ((x^(x>>>14))>>>0)/4294967296; };
+}
+function weightedShopMaterial(rand) {
+  const entries=Object.entries(MATERIAL_CATALOG).map(([id,m])=>[id,Math.max(.1,SHOP_STOCK_WEIGHT[m.rarity]||1)]);
+  let total=entries.reduce((a,[,w])=>a+w,0), roll=rand()*total;
+  for(const [id,w] of entries){ roll-=w; if(roll<=0)return id; }
+  return entries[0]?.[0]||"leather";
+}
+function generateShopStock(rotationId) {
+  const rand=seededShopRandom((rotationId+1)*104729);
+  const ids=[];
+  // Always give the rotation useful coverage, then fill the rest by rarity weight.
+  const guaranteed=["leather","resin","swiftFiber","ironBuckle","ironPlate","animalNotes","toolKit","beastBook","predatorStudy","sharpFang"];
+  for(const id of guaranteed) if(MATERIAL_CATALOG[id]) ids.push(id);
+  // Mythical appears in about half of rotations; it remains obtainable from gameplay/chests even when absent.
+  if(MATERIAL_CATALOG.apexScale && rand()<0.5) ids.push("apexScale");
+  while(ids.length<SHOP_SLOT_COUNT) ids.push(weightedShopMaterial(rand));
+  // Deterministically shuffle so guaranteed items are not always at the top.
+  for(let i=ids.length-1;i>0;i--){ const j=Math.floor(rand()*(i+1)); [ids[i],ids[j]]=[ids[j],ids[i]]; }
+  return ids.map((materialId,index)=>{
+    const m=MATERIAL_CATALOG[materialId];
+    return { slotId:`${rotationId}:${index}`, materialId, name:m.name, rarity:m.rarity, price:m.price, index };
+  });
+}
+function ensureShopPurchases(a) {
+  if(!a.shopPurchases || typeof a.shopPurchases!=="object" || Array.isArray(a.shopPurchases)) a.shopPurchases={};
+  const current=shopRotationInfo().rotationId;
+  for(const key of Object.keys(a.shopPurchases)) if(Number(key)<current-1 || Number(key)>current) delete a.shopPurchases[key];
+  return a.shopPurchases;
+}
+function purchasedShopSlots(a, rotationId) {
+  const map=ensureShopPurchases(a); const key=String(rotationId);
+  if(!Array.isArray(map[key])) map[key]=[];
+  map[key]=[...new Set(map[key].map(x=>String(x||"")).filter(Boolean))].slice(0,SHOP_SLOT_COUNT);
+  return map[key];
+}
+
 function ensureSocialState(a) {
   if (!a || typeof a !== "object") return a;
   const cleanIds = arr => [...new Set((Array.isArray(arr) ? arr : []).map(x=>String(x||"")).filter(x=>/^\d{1,5}$/.test(x)))].slice(0,200);
@@ -167,18 +227,18 @@ function friendPublicSummary(uid){
 function socialRequestSummary(uid){ const a=accountDb.byId[String(uid)]; return a?{userId:a.userId,username:a.username||"",displayName:a.displayName||"",title:a.title||""}:null; }
 function normalizedTransferPart(raw){
   const obj=raw&&typeof raw==="object"?raw:{};
-  const cubits=Math.max(0,Math.min(100000000,Math.floor(Number(obj.cubits)||0)));
+  const goldCubits=Math.max(0,Math.min(100000000,Math.floor(Number(obj.goldCubits ?? obj.cubits)||0)));
   const species=safeText(obj.species,24).toLowerCase();
   const cards=Math.max(0,Math.min(1000000,Math.floor(Number(obj.cards)||0)));
-  return {cubits,species,cards};
+  return {goldCubits,species,cards};
 }
 function hasTransfer(a,part){
-  if(!a)return false; if(Math.floor(Number(a.cubits)||0)<part.cubits)return false;
+  if(!a)return false; if(ensureGoldCubits(a)<part.goldCubits)return false;
   if(part.cards>0){ const owned=Math.floor(Number(a.speciesCards?.[part.species])||0); if(!part.species||owned<part.cards)return false; }
   return true;
 }
 function applyTransfer(from,to,part){
-  if(part.cubits>0){ from.cubits=Math.max(0,Math.floor(Number(from.cubits)||0)-part.cubits); to.cubits=Math.max(0,Math.floor(Number(to.cubits)||0)+part.cubits); }
+  if(part.goldCubits>0){ setGoldCubits(from,ensureGoldCubits(from)-part.goldCubits); addGoldCubits(to,part.goldCubits); }
   if(part.cards>0&&part.species){ if(!from.speciesCards||typeof from.speciesCards!=="object")from.speciesCards={}; if(!to.speciesCards||typeof to.speciesCards!=="object")to.speciesCards={}; from.speciesCards[part.species]=Math.max(0,Math.floor(Number(from.speciesCards[part.species])||0)-part.cards); to.speciesCards[part.species]=Math.max(0,Math.floor(Number(to.speciesCards[part.species])||0)+part.cards); }
 }
 function normalizeLoadedAccounts() {
@@ -213,6 +273,7 @@ function normalizeLoadedAccounts() {
   accountDb.globalCodeClaims = newClaims;
 }
 normalizeLoadedAccounts();
+for (const a of Object.values(accountDb.byId || {})) ensureGoldCubits(a);
 saveAccounts();
 function publicAccount(a) {
   return {
@@ -221,7 +282,7 @@ function publicAccount(a) {
     displayName: a.displayName || "",
     email: a.email || "",
     picture: a.picture || "",
-    cubits: Math.max(0, Math.floor(Number(a.cubits) || 0)),
+    goldCubits: ensureGoldCubits(a),
     unlockedThemes: Array.isArray(a.unlockedThemes) ? a.unlockedThemes : [],
     achievements: a.achievements && typeof a.achievements === "object" ? a.achievements : {},
     lastDailyCubits: a.lastDailyCubits || "",
@@ -298,22 +359,22 @@ function applyDailyCubits(account) {
   const today = utcDayKey();
   if (account.lastDailyCubits === today) return false;
   account.lastDailyCubits = today;
-  account.cubits = Math.max(0, Math.floor(Number(account.cubits) || 0) + 10);
+  addGoldCubits(account, 10);
   return true;
 }
 
 // Official HOSTL promo codes. Add future codes here and redeploy.
 // Rewards are applied server-side so each account can only claim a code once.
 const PROMO_CODES = new Map([
-  ["HOSTLSTART", { cubits: 150, themes: ["Golden"], label: "+150 Cubits and the Golden theme" }],
+  ["HOSTLSTART", { goldCubits: 150, themes: ["Golden"], label: "+150 Gold Cubits and the Golden theme" }],
   ["SCCTT", {
-    cubits: 14000,
+    goldCubits: 14000,
     speciesCards: { saber: 500 },
     title: "#1 Tester",
     testerRank: 1,
     starterPetEntitlement: { type: "saber", stage: "adult" },
     globalOnce: true,
-    label: "+14,000 Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
+    label: "+14,000 Gold Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
   }]
 ]);
 function normalizePromoCode(value) {
@@ -329,13 +390,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 538, gameBuild: 610, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 541, gameBuild: 613, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 538, gameBuild: 610 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 541, gameBuild: 613 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -366,7 +427,7 @@ app.post("/auth/google", async (req, res) => {
         profileNamesInitialized: true,
         email: safeText(p.email, 120).toLowerCase(),
         picture: safeText(p.picture, 500),
-        cubits: 500,
+        goldCubits: 500,
         unlockedThemes: [],
         achievements: {},
         lastDailyCubits: "",
@@ -448,7 +509,8 @@ app.put("/api/account", requireAccount, async (req, res) => {
     if (!requestedTitle) a.title = "";
     else if (a.unlockedTitles.includes(requestedTitle)) a.title = requestedTitle;
   }
-  if (Number.isFinite(Number(body.cubits))) a.cubits = Math.max(0, Math.min(1000000000, Math.floor(Number(body.cubits))));
+  if (Number.isFinite(Number(body.goldCubits))) setGoldCubits(a, body.goldCubits);
+  else if (Number.isFinite(Number(body.cubits))) setGoldCubits(a, body.cubits); // legacy client compatibility
   if (Array.isArray(body.unlockedThemes)) a.unlockedThemes = [...new Set(body.unlockedThemes.map(x => safeText(x, 40)).filter(Boolean))].slice(0, 100);
   if (body.achievements && typeof body.achievements === "object" && !Array.isArray(body.achievements)) a.achievements = body.achievements;
   if (typeof body.lastDailyCubits === "string") a.lastDailyCubits = safeText(body.lastDailyCubits, 20);
@@ -468,11 +530,38 @@ app.put("/api/account", requireAccount, async (req, res) => {
 
 
 
+app.get("/api/time", (req,res)=>{
+  const now=Date.now(); const d=new Date(now); const next=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()+1));
+  res.setHeader("Cache-Control","no-store");
+  res.json({ok:true,serverNow:now,utcDay:d.toISOString().slice(0,10),nextUtcDayAt:next.getTime()});
+});
+app.get("/api/shop/stock", (req,res)=>{
+  const now=Date.now(); const info=shopRotationInfo(now); const stock=generateShopStock(info.rotationId);
+  const uid=verifySession(requestSessionToken(req)); const a=uid?accountDb.byId[uid]:null;
+  const purchased=a?purchasedShopSlots(a,info.rotationId):[];
+  res.setHeader("Cache-Control","no-store");
+  res.json({ok:true,serverNow:now,utcDay:new Date(now).toISOString().slice(0,10),rotationId:info.rotationId,nextRefreshAt:info.nextRefreshAt,
+    listings:stock.map(x=>({...x,purchased:purchased.includes(x.slotId)}))});
+});
+app.post("/api/shop/buy-stock", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a);
+  const info=shopRotationInfo(); const stock=generateShopStock(info.rotationId);
+  const slotId=safeText(req.body?.slotId,64); const listing=stock.find(x=>x.slotId===slotId);
+  if(!listing)return res.status(409).json({ok:false,error:"shop_refreshed",rotationId:info.rotationId,nextRefreshAt:info.nextRefreshAt,account:publicAccount(a)});
+  const bought=purchasedShopSlots(a,info.rotationId);
+  if(bought.includes(slotId))return res.status(409).json({ok:false,error:"already_purchased",account:publicAccount(a)});
+  const item=MATERIAL_CATALOG[listing.materialId];
+  if(ensureGoldCubits(a)<item.price)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:item.price,account:publicAccount(a)});
+  setGoldCubits(a,ensureGoldCubits(a)-item.price); addMaterial(a,listing.materialId,1); bought.push(slotId);
+  a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,listing:{...listing,purchased:true},account:publicAccount(a),rotationId:info.rotationId,nextRefreshAt:info.nextRefreshAt});
+});
+// Legacy direct purchase endpoint kept for older clients only. New builds use rotating stock slots.
 app.post("/api/shop/buy-material", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a);
   const id=safeText(req.body?.id,32); const item=MATERIAL_CATALOG[id]; if(!item)return res.status(404).json({ok:false,error:"unknown_material"});
-  if(Math.floor(Number(a.cubits)||0)<item.price)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:item.price,account:publicAccount(a)});
-  a.cubits=Math.max(0,Math.floor(Number(a.cubits)||0)-item.price); addMaterial(a,id,1); a.updatedAt=new Date().toISOString(); await saveAccounts();
+  if(ensureGoldCubits(a)<item.price)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:item.price,account:publicAccount(a)});
+  setGoldCubits(a,ensureGoldCubits(a)-item.price); addMaterial(a,id,1); a.updatedAt=new Date().toISOString(); await saveAccounts();
   res.json({ok:true,material:id,account:publicAccount(a)});
 });
 app.post("/api/build-starter", requireAccount, async (req,res)=>{
@@ -492,9 +581,9 @@ app.post("/api/open-chest", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); if(!a.speciesCards||typeof a.speciesCards!=="object")a.speciesCards={}; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const kind=safeText(req.body?.kind,20).toLowerCase(); const daily=kind==="daily"; const forest=kind==="forest"; if(!daily&&!forest)return res.status(400).json({ok:false,error:"unknown_chest"});
   const day=new Date().toISOString().slice(0,10); const cost=forest?1200:0; if(daily&&a.lastDailyChest===day)return res.status(409).json({ok:false,error:"already_claimed",account:publicAccount(a)});
-  if((a.cubits||0)<cost)return res.status(409).json({ok:false,error:"not_enough_cubits",cost,account:publicAccount(a)}); if(cost)a.cubits-=cost;
+  if(ensureGoldCubits(a)<cost)return res.status(409).json({ok:false,error:"not_enough_cubits",cost,account:publicAccount(a)}); if(cost)setGoldCubits(a,ensureGoldCubits(a)-cost);
   const rewards=[]; const rand=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
-  const cubits=daily?rand(18,45):rand(260,620); a.cubits+=cubits; rewards.push(`+${cubits} Cubits`);
+  const goldCubits=daily?rand(18,45):rand(260,620); addGoldCubits(a,goldCubits); rewards.push(`+${goldCubits} Gold Cubits`);
   const materialRolls=daily?rand(1,2):rand(2,4);
   const matRewards={}; for(let i=0;i<materialRolls;i++){const id=randomMaterialId(); const rarity=MATERIAL_CATALOG[id]?.rarity||"Common"; const qty=(rarity==="Common"||rarity==="Uncommon")?(daily?rand(1,2):rand(1,3)):1; addMaterial(a,id,qty); matRewards[id]=(matRewards[id]||0)+qty;}
   for(const [id,qty] of Object.entries(matRewards))rewards.push(`+${qty} ${MATERIAL_CATALOG[id].name}`);
@@ -552,7 +641,7 @@ app.post("/api/friends/chat/:id", requireAccount, async (req,res)=>{
 });
 app.post("/api/friends/gift", requireAccount, async (req,res)=>{
   const from=accountDb.byId[req.hostlUserId], targetId=String(req.body?.playerId||""); const to=accountDb.byId[targetId]; if(!to||!areFriends(from.userId,targetId))return res.status(403).json({ok:false,error:"not_friends"});
-  const part=normalizedTransferPart(req.body||{}); if(part.cubits<=0&&part.cards<=0)return res.status(400).json({ok:false,error:"nothing_to_gift"}); if(!hasTransfer(from,part))return res.status(409).json({ok:false,error:"not_enough"});
+  const part=normalizedTransferPart(req.body||{}); if(part.goldCubits<=0&&part.cards<=0)return res.status(400).json({ok:false,error:"nothing_to_gift"}); if(!hasTransfer(from,part))return res.status(409).json({ok:false,error:"not_enough"});
   applyTransfer(from,to,part); from.updatedAt=to.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,account:publicAccount(from),friend:friendPublicSummary(targetId)});
 });
 app.get("/api/friends/trades", requireAccount, (req,res)=>{
@@ -561,7 +650,7 @@ app.get("/api/friends/trades", requireAccount, (req,res)=>{
 });
 app.post("/api/friends/trade", requireAccount, async (req,res)=>{
   const from=accountDb.byId[req.hostlUserId], targetId=String(req.body?.playerId||""); if(!accountDb.byId[targetId]||!areFriends(from.userId,targetId))return res.status(403).json({ok:false,error:"not_friends"});
-  const give=normalizedTransferPart(req.body?.give), want=normalizedTransferPart(req.body?.want); if(give.cubits<=0&&give.cards<=0&&want.cubits<=0&&want.cards<=0)return res.status(400).json({ok:false,error:"empty_trade"}); if(!hasTransfer(from,give))return res.status(409).json({ok:false,error:"not_enough"});
+  const give=normalizedTransferPart(req.body?.give), want=normalizedTransferPart(req.body?.want); if(give.goldCubits<=0&&give.cards<=0&&want.goldCubits<=0&&want.cards<=0)return res.status(400).json({ok:false,error:"empty_trade"}); if(!hasTransfer(from,give))return res.status(409).json({ok:false,error:"not_enough"});
   const id=crypto.randomUUID(); const offer={id,from:from.userId,to:targetId,give,want,status:"pending",createdAt:Date.now()}; accountDb.tradeOffers[id]=offer; await saveAccounts(); res.json({ok:true,offer});
 });
 app.post("/api/friends/trade/:id/respond", requireAccount, async (req,res)=>{
@@ -583,8 +672,8 @@ app.post("/api/redeem-code", requireAccount, async (req, res) => {
   const existingGlobalClaim = accountDb.globalCodeClaims[code];
   if (reward.globalOnce && existingGlobalClaim && existingGlobalClaim !== a.userId) return res.status(409).json({ ok:false, error:"code_already_claimed" });
 
-  if (Number.isFinite(Number(reward.cubits)) && Number(reward.cubits) > 0) {
-    a.cubits = Math.max(0, Math.floor(Number(a.cubits) || 0) + Math.floor(Number(reward.cubits)));
+  if (Number.isFinite(Number(reward.goldCubits)) && Number(reward.goldCubits) > 0) {
+    addGoldCubits(a, reward.goldCubits);
   }
   if (Array.isArray(reward.themes) && reward.themes.length) {
     if (!Array.isArray(a.unlockedThemes)) a.unlockedThemes = [];
@@ -620,15 +709,15 @@ async function rewardTesterKill(accountId) {
   if (!a.achievements || typeof a.achievements !== "object") a.achievements = {};
   const achievementId = "tester_hunter_1";
   if (a.achievements[achievementId]) return { granted:false, account:publicAccount(a) };
-  const cubits = 3000, saberCards = 100;
-  a.cubits = Math.max(0, Math.floor(Number(a.cubits)||0) + cubits);
+  const goldCubits = 3000, saberCards = 100;
+  addGoldCubits(a, goldCubits);
   if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
   a.speciesCards.saber = Math.max(0, Math.floor(Number(a.speciesCards.saber)||0) + saberCards);
-  const rewardSummary = `+${cubits.toLocaleString()} Cubits · +${saberCards} Saber Cards`;
+  const rewardSummary = `+${goldCubits.toLocaleString()} Gold Cubits · +${saberCards} Saber Cards`;
   a.achievements[achievementId] = { at:Date.now(), species:"saber", rewardSummary, serverVerified:true };
   a.updatedAt = new Date().toISOString();
   await saveAccounts();
-  return { granted:true, rewardSummary, cubits, saberCards, account:publicAccount(a) };
+  return { granted:true, rewardSummary, goldCubits, saberCards, account:publicAccount(a) };
 }
 
 configureHostlAccountHooks({
