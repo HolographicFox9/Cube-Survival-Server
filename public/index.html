@@ -24530,7 +24530,6 @@ function syncAccountUi(msg="") {
     ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Gold Cubits claimed for today." : "Daily Gold Cubits available.")
     : "";
   const am = document.getElementById("accountMsg"); if (am) am.textContent = msg;
-  renderThemeGrid();
   syncChestUi();
   syncPromoCodeUi();
   renderMaterialsAndRecipes();
@@ -24552,7 +24551,7 @@ function closeExpandedShop() { document.getElementById("expandedShopModal")?.cla
 function selectShopPage(page) {
   document.querySelectorAll(".shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
   document.querySelectorAll(".shop-page").forEach(p=>p.classList.remove("active"));
-  const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", themes:"shopPageThemes", chests:"shopPageChests", codes:"shopPageCodes" };
+  const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", chests:"shopPageChests", codes:"shopPageCodes" };
   document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
   if (page === "codes") syncPromoCodeUi();
   if (page === "shop") loadRotatingShopStock(false); else if (page === "build" || page === "learn") renderMaterialsAndRecipes();
@@ -25300,7 +25299,6 @@ syncAchievementAccountBridge();
       <button class="shop-tab active" data-shop-page="shop">Shop</button>
       <button class="shop-tab" data-shop-page="build">Build</button>
       <button class="shop-tab" data-shop-page="learn">Learn</button>
-      <button class="shop-tab" data-shop-page="themes">Themes</button>
       <button class="shop-tab" data-shop-page="chests">Chests</button>
       <button class="shop-tab" data-shop-page="codes">Codes</button>
     </div>
@@ -25342,12 +25340,6 @@ syncAchievementAccountBridge();
       <h3>Learn</h3>
       <p class="muted">Skills are learned from books plus other study materials. Learning costs no Gold Cubits once you have everything required.</p>
       <div id="learnRecipeGrid" class="recipe-grid"></div>
-    </section>
-
-    <section id="shopPageThemes" class="shop-page">
-      <h3>Themes</h3>
-      <p class="muted">Guests can use 10 free themes. Logged-in accounts can unlock more permanently.</p>
-      <div id="themeGrid" class="theme-grid"></div>
     </section>
 
     <section id="shopPageChests" class="shop-page">
