@@ -54,6 +54,66 @@ function saveAccounts() {
 function safeText(value, max = 80) {
   return String(value ?? "").trim().slice(0, max);
 }
+function cleanDisplayName(value) {
+  const raw = safeText(value, 20).replace(/\s+/g, " ");
+  const cleaned = raw.replace(/[^A-Za-z0-9 _\-.'!]/g, "").trim();
+  return cleaned.slice(0, 20);
+}
+function allocateNumericUserId(used = new Set(Object.keys(accountDb?.byId || {}))) {
+  for (let tries = 0; tries < 5000; tries++) {
+    const candidate = String(1 + Math.floor(Math.random() * 99999));
+    if (!used.has(candidate)) return candidate;
+  }
+  for (let i = 1; i <= 99999; i++) {
+    const candidate = String(i);
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new Error("HOSTL player ID space is full");
+}
+function ensureTitleState(a) {
+  if (!Array.isArray(a.unlockedTitles)) a.unlockedTitles = [];
+  a.unlockedTitles = [...new Set(a.unlockedTitles.map(x => safeText(x, 32)).filter(Boolean))].slice(0, 100);
+  // Migrate the old tester title name to the official SCCTT title.
+  if (Number(a.testerRank) === 1) {
+    a.unlockedTitles = a.unlockedTitles.map(t => t === "Tester" ? "#1 Tester" : t);
+    if (!a.unlockedTitles.includes("#1 Tester")) a.unlockedTitles.push("#1 Tester");
+    if (a.title === "Tester" || !a.title) a.title = "#1 Tester";
+  }
+  const current = safeText(a.title, 32);
+  if (current && !a.unlockedTitles.includes(current)) a.unlockedTitles.push(current);
+  if (current && !a.unlockedTitles.includes(current)) a.title = "";
+  return a;
+}
+function normalizeLoadedAccounts() {
+  const oldById = accountDb.byId || {};
+  const newById = {};
+  const idMap = new Map();
+  const used = new Set();
+  for (const [oldId, a0] of Object.entries(oldById)) {
+    const a = a0 && typeof a0 === "object" ? a0 : {};
+    let newId = /^\d{1,5}$/.test(String(oldId)) && !used.has(String(oldId)) ? String(oldId) : allocateNumericUserId(used);
+    used.add(newId);
+    idMap.set(String(oldId), newId);
+    a.userId = newId;
+    a.username = cleanDisplayName(a.username) || "Player";
+    ensureTitleState(a);
+    newById[newId] = a;
+  }
+  accountDb.byId = newById;
+  const newByGoogleSub = {};
+  for (const [sub, oldId] of Object.entries(accountDb.byGoogleSub || {})) {
+    const mapped = idMap.get(String(oldId));
+    if (mapped && newById[mapped]) newByGoogleSub[sub] = mapped;
+  }
+  accountDb.byGoogleSub = newByGoogleSub;
+  const newClaims = {};
+  for (const [code, oldId] of Object.entries(accountDb.globalCodeClaims || {})) {
+    newClaims[code] = idMap.get(String(oldId)) || String(oldId);
+  }
+  accountDb.globalCodeClaims = newClaims;
+}
+normalizeLoadedAccounts();
+saveAccounts();
 function publicAccount(a) {
   return {
     userId: a.userId,
@@ -67,6 +127,7 @@ function publicAccount(a) {
     lastDailyChest: a.lastDailyChest || "",
     createdAt: a.createdAt || "",
     title: a.title || "",
+    unlockedTitles: Array.isArray(a.unlockedTitles) ? a.unlockedTitles : [],
     testerRank: Math.max(0, Math.floor(Number(a.testerRank) || 0)),
     speciesCards: a.speciesCards && typeof a.speciesCards === "object" ? a.speciesCards : {},
     starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? a.starterPetEntitlement : null
@@ -120,11 +181,11 @@ const PROMO_CODES = new Map([
   ["SCCTT", {
     cubits: 14000,
     speciesCards: { saber: 500 },
-    title: "Tester",
+    title: "#1 Tester",
     testerRank: 1,
     starterPetEntitlement: { type: "saber", stage: "adult" },
     globalOnce: true,
-    label: "+14,000 Cubits, +500 Saber Cards, Adult Saber starter access, and the Tester title"
+    label: "+14,000 Cubits, +500 Saber Cards, Adult Saber starter access, and the #1 Tester title"
   }]
 ]);
 function normalizePromoCode(value) {
@@ -140,13 +201,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 522, gameBuild: 594, rulesVersion: "594", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 524, gameBuild: 596, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 522, gameBuild: 594 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 524, gameBuild: 596 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -168,8 +229,8 @@ app.post("/auth/google", async (req, res) => {
     let created = false;
     if (!account) {
       created = true;
-      userId = `hostl_${crypto.randomUUID()}`;
-      const suggestedName = safeText(p.given_name || p.name || "Player", 20) || "Player";
+      userId = allocateNumericUserId();
+      const suggestedName = cleanDisplayName(p.given_name || p.name || "Player") || "Player";
       account = {
         userId,
         googleSub: p.sub,
@@ -184,6 +245,7 @@ app.post("/auth/google", async (req, res) => {
         redeemedCodes: [],
         speciesCards: {},
         title: "",
+        unlockedTitles: [],
         testerRank: 0,
         starterPetEntitlement: null,
         createdAt: new Date().toISOString(),
@@ -194,6 +256,8 @@ app.post("/auth/google", async (req, res) => {
     } else {
       account.email = safeText(p.email, 120).toLowerCase();
       account.picture = safeText(p.picture, 500);
+      account.username = cleanDisplayName(account.username) || "Player";
+      ensureTitleState(account);
       account.updatedAt = new Date().toISOString();
     }
     const dailyGranted = applyDailyCubits(account);
@@ -213,7 +277,16 @@ app.get("/api/account", requireAccount, (req, res) => {
 app.put("/api/account", requireAccount, async (req, res) => {
   const a = accountDb.byId[req.hostlUserId];
   const body = req.body || {};
-  if (typeof body.username === "string") a.username = safeText(body.username, 20) || a.username;
+  if (typeof body.username === "string") {
+    const nextName = cleanDisplayName(body.username);
+    if (nextName.length >= 2) a.username = nextName;
+  }
+  ensureTitleState(a);
+  if (typeof body.title === "string") {
+    const requestedTitle = safeText(body.title, 32);
+    if (!requestedTitle) a.title = "";
+    else if (a.unlockedTitles.includes(requestedTitle)) a.title = requestedTitle;
+  }
   if (Number.isFinite(Number(body.cubits))) a.cubits = Math.max(0, Math.min(1000000000, Math.floor(Number(body.cubits))));
   if (Array.isArray(body.unlockedThemes)) a.unlockedThemes = [...new Set(body.unlockedThemes.map(x => safeText(x, 40)).filter(Boolean))].slice(0, 100);
   if (body.achievements && typeof body.achievements === "object" && !Array.isArray(body.achievements)) a.achievements = body.achievements;
@@ -258,7 +331,12 @@ app.post("/api/redeem-code", requireAccount, async (req, res) => {
       if (key && amount) a.speciesCards[key]=Math.max(0,Math.floor(Number(a.speciesCards[key])||0)+amount);
     }
   }
-  if (reward.title) a.title=safeText(reward.title,32);
+  if (reward.title) {
+    ensureTitleState(a);
+    const grantedTitle = safeText(reward.title,32);
+    if (grantedTitle && !a.unlockedTitles.includes(grantedTitle)) a.unlockedTitles.push(grantedTitle);
+    if (!a.title && grantedTitle) a.title = grantedTitle;
+  }
   if (Number(reward.testerRank)>0) a.testerRank=Math.max(0,Math.floor(Number(reward.testerRank)||0));
   if (reward.starterPetEntitlement && typeof reward.starterPetEntitlement === "object") {
     a.starterPetEntitlement={type:safeText(reward.starterPetEntitlement.type,24).toLowerCase(),stage:safeText(reward.starterPetEntitlement.stage,24).toLowerCase()};

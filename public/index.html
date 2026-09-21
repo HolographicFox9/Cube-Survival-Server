@@ -4010,6 +4010,11 @@
   #accountModal .modal-card h3, #accountSettingsModal .modal-card h3{color:#ffe29a;}
   #accountModal #accountName, #accountSettingsModal .account-detail-grid .value{color:#ffffff;}
   #accountSettingsModal .account-detail-grid .label{color:#e3d5bc;opacity:1;}
+  #accountSettingsModal .settings-control{width:100%;box-sizing:border-box;border:1px solid rgba(240,230,200,.24);background:rgba(0,0,0,.28);color:#fff8e7;border-radius:10px;padding:9px 10px;font:800 14px inherit;outline:none;}
+  #accountSettingsModal .settings-control:focus{border-color:#f4c65f;box-shadow:0 0 0 2px rgba(244,198,95,.12);}
+  #accountSettingsModal select.settings-control option{background:#241f19;color:#fff8e7;}
+  #accountSettingsModal .settings-save-row{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;flex-wrap:wrap;}
+  #accountSettingsModal .settings-hint{font-size:12px;color:#d9ccb4;margin-top:4px;}
   #accountModal .reward-badge, #accountSettingsModal .reward-badge{color:#fff3c5;}
   .game-message-modal{position:fixed;inset:0;z-index:13000;display:none;align-items:center;justify-content:center;background:rgba(5,7,8,.72);padding:18px;}
   .game-message-modal.on{display:flex;}
@@ -23840,7 +23845,7 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"" };
+let accountState = { loggedIn:false, userId:"", username:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"" };
 
 function utcDayKey() {
   const d = new Date();
@@ -23867,7 +23872,7 @@ function setAccountFromServer(p={}) {
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
-    title:String(p.title||""), testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)),
+    title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)),
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||""
   };
@@ -23889,7 +23894,7 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        username:accountState.username, cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        username:accountState.username, title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -23937,7 +23942,7 @@ async function restoreAccountSession() {
     syncAccountUi("Account restored.");
   } catch (_) {
     hostlSessionToken="";
-    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
+    accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
     saveAccountSession();
     syncAccountUi();
   }
@@ -23955,8 +23960,8 @@ function syncAccountUi(msg="") {
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
   if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
-  const sName=document.getElementById("settingsDisplayName"); if(sName) sName.textContent=accountState.username||"Player";
-  const sTitle=document.getElementById("settingsTitle"); if(sTitle) sTitle.textContent=accountState.title ? (accountState.testerRank===1 ? `${accountState.title} #1` : accountState.title) : "None";
+  const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.username||"Player";
+  populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
   const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.cubits||0);
@@ -24281,11 +24286,46 @@ function logoutAccount(showMessage=true) {
   clearTimeout(accountSaveTimer);
   if(accountState.loggedIn) pushAccountProfileNow();
   hostlSessionToken="";
-  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
+  accountState = { loggedIn:false,userId:"",username:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"" };
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
   syncAccountUi(showMessage ? "Logged out. Guest progress will not be saved." : "");
 }
+function populateTitleDropdown(){
+  const sel=document.getElementById("settingsTitleSelect");
+  if(!sel) return;
+  const titles=[...new Set((Array.isArray(accountState.unlockedTitles)?accountState.unlockedTitles:[]).map(x=>String(x).trim()).filter(Boolean))];
+  if(accountState.title && !titles.includes(accountState.title)) titles.push(accountState.title);
+  const current=accountState.title||"";
+  sel.replaceChildren();
+  const none=document.createElement("option"); none.value=""; none.textContent="No title"; sel.appendChild(none);
+  for(const t of titles){ const opt=document.createElement("option"); opt.value=t; opt.textContent=t; sel.appendChild(opt); }
+  sel.value=current;
+}
+async function saveAccountSettings(){
+  if(!accountState.loggedIn || !hostlSessionToken) return;
+  const nameInput=document.getElementById("settingsDisplayName");
+  const titleSelect=document.getElementById("settingsTitleSelect");
+  const msg=document.getElementById("accountSettingsSaveMsg");
+  const rawName=String(nameInput?.value||"").trim().replace(/\s+/g," ");
+  if(rawName.length<2 || rawName.length>20){ if(msg) msg.textContent="Display name must be 2–20 characters."; return; }
+  const chosenTitle=String(titleSelect?.value||"");
+  const btn=document.getElementById("saveAccountSettingsBtn");
+  if(btn){btn.disabled=true;btn.textContent="Saving…";}
+  if(msg) msg.textContent="Saving account settings…";
+  try{
+    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({username:rawName,title:chosenTitle})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
+    setAccountFromServer(data.account);
+    syncAccountUi();
+    if(msg) msg.textContent="Account settings saved.";
+    showGameMessage("Account Updated", "Your display name and title have been saved.");
+  }catch(err){
+    if(msg) msg.textContent="Could not save account settings. Try again.";
+  }finally{ if(btn){btn.disabled=false;btn.textContent="Save Changes";} }
+}
+
 function openAccountSettings(){
   if(!accountState.loggedIn){ openAccountModal(); return; }
   syncAccountUi();
@@ -24348,6 +24388,7 @@ function bindAccountAndShopUi() {
   once(document.getElementById("logoutBtn"), "click", ()=>logoutAccount(true));
   once(document.getElementById("accountSettingsBtn"), "click", openAccountSettings);
   once(document.getElementById("accountSettingsClose"), "click", closeAccountSettings);
+  once(document.getElementById("saveAccountSettingsBtn"), "click", saveAccountSettings);
   once(document.getElementById("openDeleteAccountBtn"), "click", beginDeleteHostlAccount);
   once(document.getElementById("cancelDeleteAccountBtn"), "click", ()=>{ document.getElementById("deleteConfirmBox")?.classList.remove("on"); const m=document.getElementById("deleteSettingsMsg"); if(m)m.textContent=""; });
   once(document.getElementById("deleteConfirmInput"), "input", updateDeleteConfirmState);
@@ -24489,12 +24530,16 @@ syncAchievementAccountBridge();
     </div>
     <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
     <div class="account-detail-grid">
-      <div class="label">Display name</div><div class="value" id="settingsDisplayName">—</div>
-      <div class="label">Title</div><div class="value" id="settingsTitle">None</div>
+      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is the name other players see.</div></div>
+      <div class="label">Choose title</div><div class="value"><select id="settingsTitleSelect" class="settings-control"><option value="">No title</option></select><div class="settings-hint">Titles come from achievements, codes, and special rewards.</div></div>
       <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>
       <div class="label">Google-linked email</div><div class="value" id="settingsEmail">—</div>
       <div class="label">Gold Cubits</div><div class="value" id="settingsCubits">0</div>
       <div class="label">Account created</div><div class="value" id="settingsCreatedAt">—</div>
+    </div>
+    <div class="settings-save-row">
+      <span id="accountSettingsSaveMsg" class="muted" style="margin-right:auto;align-self:center"></span>
+      <button id="saveAccountSettingsBtn" class="account-btn" type="button">Save Changes</button>
     </div>
     <div class="danger-zone">
       <h3>Delete account?</h3>
