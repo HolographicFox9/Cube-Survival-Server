@@ -4726,6 +4726,14 @@
     color:#fff7f2 !important;
   }
 
+
+  /* ---------- 617 Shop has NO Themes control ---------- */
+  #expandedShopModal [data-shop-page="themes"],
+  #expandedShopModal #shopPageThemes,
+  #expandedShopModal .shop-page-themes,
+  #expandedShopModal .theme-card,
+  #expandedShopModal .theme-grid{display:none !important;pointer-events:none !important;}
+  body.hostl-shop-open #homeThemesBtn{visibility:hidden !important;pointer-events:none !important;}
 </style>
 </head>
 <body>
@@ -24620,17 +24628,35 @@ function openAccountModal() {
   syncAccountUi();
 }
 function closeAccountModal() { document.getElementById("accountModal")?.classList.remove("on"); }
+function removeThemesFromShopCompletely(){
+  const modal=document.getElementById("expandedShopModal");
+  if(!modal) return;
+  // Themes live ONLY in the separate Home Themes screen. Never allow a Shop theme tab/page.
+  modal.querySelectorAll('[data-shop-page="themes"],#shopPageThemes,.shop-page-themes').forEach(el=>el.remove());
+  modal.querySelectorAll('.shop-tabs button,.shop-tab').forEach(btn=>{
+    if(String(btn.textContent||"").trim().toLowerCase()==="themes") btn.remove();
+  });
+  modal.querySelectorAll('.theme-card,.theme-grid').forEach(el=>el.remove());
+}
 function openExpandedShop(page="shop") {
   document.getElementById("accountModal")?.classList.remove("on");
+  removeThemesFromShopCompletely();
+  document.body.classList.add("hostl-shop-open");
   document.getElementById("expandedShopModal")?.classList.add("on");
   selectShopPage(page);
   syncAccountUi();
   loadRotatingShopStock(false);
 }
-function closeExpandedShop() { document.getElementById("expandedShopModal")?.classList.remove("on"); }
+function closeExpandedShop() {
+  document.getElementById("expandedShopModal")?.classList.remove("on");
+  document.body.classList.remove("hostl-shop-open");
+}
 function selectShopPage(page) {
-  document.querySelectorAll(".shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
-  document.querySelectorAll(".shop-page").forEach(p=>p.classList.remove("active"));
+  // Defensive: old cached/legacy code must never reopen Themes from inside Shop.
+  if(page === "themes") page = "shop";
+  removeThemesFromShopCompletely();
+  document.querySelectorAll("#expandedShopModal .shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
+  document.querySelectorAll("#expandedShopModal .shop-page").forEach(p=>p.classList.remove("active"));
   const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", chests:"shopPageChests", codes:"shopPageCodes" };
   document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
   if (page === "codes") syncPromoCodeUi();
@@ -25430,6 +25456,14 @@ syncAchievementAccountBridge();
 setInterval(()=>{ try{ updateShopRefreshUi(); }catch(_){} }, 1000);
 setInterval(()=>{ try{ refreshServerDay(); }catch(_){} }, 60000);
 setTimeout(()=>{ try{ refreshServerDay(); }catch(_){} }, 1500);
+// If any legacy/cached Shop code tries to inject a Themes tab later, remove it immediately.
+setTimeout(()=>{
+  const shop=document.getElementById("expandedShopModal");
+  if(!shop || shop.__hostlNoThemesObserver) return;
+  shop.__hostlNoThemesObserver=true;
+  removeThemesFromShopCompletely();
+  new MutationObserver(()=>removeThemesFromShopCompletely()).observe(shop,{childList:true,subtree:true});
+},0);
 </script>
 </body>
 </html>
