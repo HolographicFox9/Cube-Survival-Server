@@ -7725,6 +7725,9 @@ function saveMeta() {
     delete saveCopy.achievements;
     localStorage.setItem(META_KEY, JSON.stringify(saveCopy));
   } catch (e) {}
+  // If a HOSTL account is signed in, Gold Cubits live in the normal game Cubits counter
+  // and are mirrored back to the account for cross-device persistence.
+  try { window.__hostlAccountCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
 }
 let meta = loadMeta();
 // Old browser-wide achievement records are intentionally ignored from this build onward.
@@ -23814,8 +23817,17 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
       if(!meta.starterPetType) meta.starterPetType=ent.type;
       if(!game.startPet) game.startPet=ent.type;
     }
-    if(payload.title){ player.title=String(payload.title); player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0)); }
+    if(payload.username){
+      const nm=String(payload.username).trim().slice(0,20);
+      if(nm){ meta.username=nm; player.username=nm; }
+    }
+    if(Number.isFinite(Number(payload.cubits))){
+      meta.servs=Math.max(0,Math.floor(Number(payload.cubits)||0));
+    }
+    player.title=String(payload.title||"");
+    player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
     saveMeta();
+    try{ setupHome(); }catch(_){}
     try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
     return {ok:true};
   } catch(err) {
@@ -23856,6 +23868,8 @@ function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
   try {
     window.__hostlApplyAccountEntitlements?.({
+      username:accountState.username||"Player",
+      cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
       title:accountState.title||"",
       testerRank:accountState.testerRank||0,
@@ -23913,6 +23927,17 @@ function persistAccountProfile() {
   clearTimeout(accountSaveTimer);
   accountSaveTimer = setTimeout(pushAccountProfileNow, 250);
 }
+window.__hostlAccountCubitsChanged = function(value){
+  if(!accountState.loggedIn) return;
+  const next=Math.max(0,Math.floor(Number(value)||0));
+  if(next===Math.floor(Number(accountState.cubits)||0)) return;
+  accountState.cubits=next;
+  const hs=document.getElementById("homeServs"); if(hs) hs.textContent=next;
+  const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
+  const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
+  const as=document.getElementById("settingsCubits"); if(as) as.textContent=next;
+  persistAccountProfile();
+};
 function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
     if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
@@ -23955,7 +23980,7 @@ function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.username}${accountState.title ? " · " + accountState.title : ""}` : "Account";
+    btn.textContent = accountState.loggedIn ? `${accountState.username}` : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
@@ -23975,7 +24000,10 @@ function syncAccountUi(msg="") {
   const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
-  const homeCubits = document.getElementById("homeServs"); if (homeCubits) homeCubits.textContent = Math.floor(accountState.loggedIn ? (accountState.cubits||0) : (meta.servs||0));
+  if(accountState.loggedIn){
+    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.cubits||0);
+    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.cubits||0);
+  }
   const ds = document.getElementById("dailyCubitStatus");
   if (ds) ds.textContent = accountState.loggedIn
     ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Cubits claimed for today." : "Daily Cubits available.")
@@ -24254,27 +24282,9 @@ async function initializeGoogleSignIn() {
       }; tick();
     });
     await waitForGoogle();
-    try { google.accounts.id.cancel(); } catch (_) {}
-    window.handleGoogleCredential = handleGoogleCredential;
-    google.accounts.id.initialize({
-      client_id: cfg.googleClientId,
-      callback: handleGoogleCredential,
-      auto_select: false,
-      cancel_on_tap_outside: false,
-      use_fedcm_for_prompt: false,
-      use_fedcm_for_button: false
-    });
+    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback:handleGoogleCredential, use_fedcm_for_prompt:true });
     holder.innerHTML="";
     google.accounts.id.renderButton(holder,{ theme:"filled_blue",size:"large",shape:"pill",text:"continue_with",width:300,logo_alignment:"left" });
-    holder.addEventListener("pointerdown", () => {
-      googleCredentialReturned = false;
-      clearTimeout(googleSignInWatchdog);
-      googleSignInWatchdog = setTimeout(() => {
-        if (!googleCredentialReturned && !accountState.loggedIn) {
-          syncAccountUi("Google closed without returning the login to HOSTL. Please press Continue with Google and try once more.");
-        }
-      }, 7000);
-    }, true);
     googleAuthReady=true;
     if(status) status.textContent="Use Google to create or restore your HOSTL account.";
   } catch (err) {
@@ -24282,74 +24292,23 @@ async function initializeGoogleSignIn() {
   }
 }
 async function handleGoogleCredential(response) {
-  googleCredentialReturned = true;
-  clearTimeout(googleSignInWatchdog);
-  if (!response?.credential) {
-    syncAccountUi("Google did not return a sign-in credential. Please try again.");
-    return;
-  }
-  syncAccountUi("Google accepted your account. Finishing HOSTL sign-in…");
-
-  async function finishLoginAttempt() {
-    const r = await fetch("/auth/google", {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Accept":"application/json"},
-      cache:"no-store",
-      credentials:"same-origin",
-      body:JSON.stringify({credential:response.credential})
-    });
-    const data = await r.json().catch(()=>({}));
-    if (!r.ok || !data?.token || !data?.account) {
-      const code = String(data?.error || `http_${r.status}`);
-      throw new Error(code);
-    }
-    return data;
-  }
-
+  if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
+  syncAccountUi("Signing in with Google…");
   try {
-    let data;
-    try {
-      data = await finishLoginAttempt();
-    } catch (firstErr) {
-      // One retry covers a brief Render wake/redeploy/network interruption after
-      // the Google account picker has already succeeded.
-      await new Promise(resolve=>setTimeout(resolve, 650));
-      data = await finishLoginAttempt().catch(()=>{ throw firstErr; });
-    }
-
-    // Save the signed session first. UI/game entitlement code must never be able
-    // to erase an otherwise successful Google login.
-    hostlSessionToken = String(data.token || "");
-    try { localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken); } catch (_) {}
-
-    try {
-      setAccountFromServer(data.account);
-    } catch (uiErr) {
-      console.warn("HOSTL account UI hydration warning:", uiErr);
-      // Keep a minimal signed-in state so reload can restore from the server.
-      accountState.loggedIn = true;
-      accountState.userId = String(data.account?.userId || "");
-      accountState.username = String(data.account?.username || "Player");
-      accountState.email = String(data.account?.email || "");
-      accountState.cubits = Number(data.account?.cubits) || 0;
-    }
-
-    try { syncAchievementAccountBridge(); } catch (e) { console.warn(e); }
+    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({credential:response.credential}) });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
+    hostlSessionToken=data.token;
+    setAccountFromServer(data.account);
+    saveAccountSession();
+    syncAchievementAccountBridge();
     const bits=[];
     if(data.created) bits.push("HOSTL account created with 500 Cubits");
     if(data.dailyGranted) bits.push("+10 daily Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
   } catch (err) {
     console.error("HOSTL Google sign-in completion failed:", err);
-    const code=String(err?.message||"unknown_error");
-    const messages={
-      google_auth_not_configured:"HOSTL's Google Client ID is not configured on the server.",
-      missing_credential:"Google did not send HOSTL a credential.",
-      invalid_google_account:"Google returned an account HOSTL could not verify.",
-      google_verification_failed:"HOSTL's server could not verify the Google login. Check Render logs and GOOGLE_CLIENT_ID.",
-      not_authenticated:"HOSTL could not create the login session."
-    };
-    syncAccountUi(messages[code] || `HOSTL sign-in failed (${code}).`);
+    syncAccountUi("Google sign-in could not finish. Please try again.");
   }
 }
 function logoutAccount(showMessage=true) {

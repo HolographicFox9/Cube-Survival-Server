@@ -73,11 +73,11 @@ function allocateNumericUserId(used = new Set(Object.keys(accountDb?.byId || {})
 function ensureTitleState(a) {
   if (!Array.isArray(a.unlockedTitles)) a.unlockedTitles = [];
   a.unlockedTitles = [...new Set(a.unlockedTitles.map(x => safeText(x, 32)).filter(Boolean))].slice(0, 100);
-  // Migrate the old tester title name to the official SCCTT title.
-  if (Number(a.testerRank) === 1) {
-    a.unlockedTitles = a.unlockedTitles.map(t => t === "Tester" ? "#1 Tester" : t);
+  // Migrate the original tester title to its final public name.
+  if (Math.max(0, Math.floor(Number(a.testerRank)||0)) === 1) {
+    a.unlockedTitles = a.unlockedTitles.filter(t => t !== "Tester");
     if (!a.unlockedTitles.includes("#1 Tester")) a.unlockedTitles.push("#1 Tester");
-    if (a.title === "Tester" || !a.title) a.title = "#1 Tester";
+    if (safeText(a.title,32) === "Tester" || !safeText(a.title,32)) a.title = "#1 Tester";
   }
   const current = safeText(a.title, 32);
   if (current && !a.unlockedTitles.includes(current)) a.unlockedTitles.push(current);
@@ -86,98 +86,31 @@ function ensureTitleState(a) {
 }
 function normalizeLoadedAccounts() {
   const oldById = accountDb.byId || {};
-  const oldByGoogleSub = accountDb.byGoogleSub || {};
   const newById = {};
   const idMap = new Map();
   const used = new Set();
-
   for (const [oldId, a0] of Object.entries(oldById)) {
     const a = a0 && typeof a0 === "object" ? a0 : {};
-    const oldKey = String(oldId);
-    let newId = /^\d{1,5}$/.test(oldKey) && !used.has(oldKey)
-      ? oldKey
-      : allocateNumericUserId(used);
-
+    let newId = /^\d{1,5}$/.test(String(oldId)) && !used.has(String(oldId)) ? String(oldId) : allocateNumericUserId(used);
     used.add(newId);
-    idMap.set(oldKey, newId);
-
-    // Keep the old ID only as migration metadata. It is never shown to players.
-    if (oldKey !== newId) {
-      if (!Array.isArray(a.legacyUserIds)) a.legacyUserIds = [];
-      if (!a.legacyUserIds.includes(oldKey)) a.legacyUserIds.push(oldKey);
-      a.legacyUserIds = a.legacyUserIds.map(String).slice(-10);
-    }
-
+    idMap.set(String(oldId), newId);
     a.userId = newId;
     a.username = cleanDisplayName(a.username) || "Player";
     ensureTitleState(a);
     newById[newId] = a;
   }
-
   accountDb.byId = newById;
-
-  // Rebuild Google -> HOSTL ID primarily from googleSub stored on each account.
-  // This repairs accounts whose old byGoogleSub mapping was lost during an ID migration.
   const newByGoogleSub = {};
-  for (const [newId, a] of Object.entries(newById)) {
-    const sub = safeText(a?.googleSub, 256);
-    if (sub && !newByGoogleSub[sub]) newByGoogleSub[sub] = newId;
+  for (const [sub, oldId] of Object.entries(accountDb.byGoogleSub || {})) {
+    const mapped = idMap.get(String(oldId));
+    if (mapped && newById[mapped]) newByGoogleSub[sub] = mapped;
   }
-
-  // Preserve any valid legacy mapping that was not recoverable from the account record.
-  for (const [sub0, oldId] of Object.entries(oldByGoogleSub)) {
-    const sub = safeText(sub0, 256);
-    const mapped = idMap.get(String(oldId)) || String(oldId);
-    if (sub && newById[mapped] && !newByGoogleSub[sub]) newByGoogleSub[sub] = mapped;
-  }
-
   accountDb.byGoogleSub = newByGoogleSub;
-
   const newClaims = {};
   for (const [code, oldId] of Object.entries(accountDb.globalCodeClaims || {})) {
     newClaims[code] = idMap.get(String(oldId)) || String(oldId);
   }
   accountDb.globalCodeClaims = newClaims;
-}
-
-// Find an existing Google-linked account even if its lookup table was damaged.
-// If we find one, repair the mapping immediately.
-function findAndRepairGoogleAccount(googleSub, email = "") {
-  const sub = safeText(googleSub, 256);
-  const normalizedEmail = safeText(email, 120).toLowerCase();
-
-  let userId = sub ? accountDb.byGoogleSub[sub] : "";
-  let account = userId ? accountDb.byId[userId] : null;
-
-  if (!account && sub) {
-    for (const [id, a] of Object.entries(accountDb.byId || {})) {
-      if (safeText(a?.googleSub, 256) === sub) {
-        userId = id;
-        account = a;
-        break;
-      }
-    }
-  }
-
-  // Last-resort repair for accounts created before googleSub was persisted correctly.
-  // Only use a unique exact email match.
-  if (!account && normalizedEmail) {
-    const matches = Object.entries(accountDb.byId || {}).filter(([, a]) =>
-      safeText(a?.email, 120).toLowerCase() === normalizedEmail
-    );
-    if (matches.length === 1) {
-      [userId, account] = matches[0];
-      if (!account.googleSub && sub) account.googleSub = sub;
-    }
-  }
-
-  if (account && userId && sub) {
-    account.userId = String(userId);
-    account.googleSub = sub;
-    accountDb.byGoogleSub[sub] = String(userId);
-  }
-
-  return { userId: userId ? String(userId) : "", account: account || null };
 }
 normalizeLoadedAccounts();
 saveAccounts();
@@ -268,13 +201,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 529, gameBuild: 601, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 523, gameBuild: 595, rulesVersion: "591", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 529, gameBuild: 601 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 523, gameBuild: 595 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -291,7 +224,8 @@ app.post("/auth/google", async (req, res) => {
     const p = ticket.getPayload();
     if (!p?.sub || !p?.email) return res.status(401).json({ ok: false, error: "invalid_google_account" });
 
-    let { userId, account } = findAndRepairGoogleAccount(p.sub, p.email);
+    let userId = accountDb.byGoogleSub[p.sub];
+    let account = userId ? accountDb.byId[userId] : null;
     let created = false;
     if (!account) {
       created = true;
@@ -320,9 +254,6 @@ app.post("/auth/google", async (req, res) => {
       accountDb.byId[userId] = account;
       accountDb.byGoogleSub[p.sub] = userId;
     } else {
-      accountDb.byGoogleSub[p.sub] = userId;
-      account.googleSub = p.sub;
-      account.userId = userId;
       account.email = safeText(p.email, 120).toLowerCase();
       account.picture = safeText(p.picture, 500);
       account.username = cleanDisplayName(account.username) || "Player";
@@ -334,9 +265,7 @@ app.post("/auth/google", async (req, res) => {
     res.json({ ok: true, created, dailyGranted, token: signSession(userId), account: publicAccount(account) });
   } catch (err) {
     console.error("Google login failed:", err?.message || err);
-    const msg = String(err?.message || "").toLowerCase();
-    const error = msg.includes("audience") || msg.includes("wrong recipient") ? "google_client_mismatch" : "google_verification_failed";
-    res.status(401).json({ ok: false, error });
+    res.status(401).json({ ok: false, error: "google_verification_failed" });
   }
 });
 
