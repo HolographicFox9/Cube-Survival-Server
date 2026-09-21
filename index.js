@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import { OAuth2Client } from "google-auth-library";
 import { Server } from "@colyseus/core";
 import { WebSocketTransport } from "@colyseus/ws-transport";
-import { WorldRoom, getCubeServerStats } from "./WorldRoom.js";
+import { WorldRoom, getCubeServerStats, configureHostlAccountHooks } from "./WorldRoom.js";
 
 const port = Number(process.env.PORT) || 2567;
 const __filename = fileURLToPath(import.meta.url);
@@ -29,15 +29,16 @@ if (!GOOGLE_CLIENT_ID) {
 fs.mkdirSync(DATA_DIR, { recursive: true });
 function loadAccounts() {
   try {
-    if (!fs.existsSync(ACCOUNT_FILE)) return { byId: {}, byGoogleSub: {} };
+    if (!fs.existsSync(ACCOUNT_FILE)) return { byId: {}, byGoogleSub: {}, globalCodeClaims: {} };
     const parsed = JSON.parse(fs.readFileSync(ACCOUNT_FILE, "utf8"));
     return {
       byId: parsed?.byId && typeof parsed.byId === "object" ? parsed.byId : {},
-      byGoogleSub: parsed?.byGoogleSub && typeof parsed.byGoogleSub === "object" ? parsed.byGoogleSub : {}
+      byGoogleSub: parsed?.byGoogleSub && typeof parsed.byGoogleSub === "object" ? parsed.byGoogleSub : {},
+      globalCodeClaims: parsed?.globalCodeClaims && typeof parsed.globalCodeClaims === "object" ? parsed.globalCodeClaims : {}
     };
   } catch (err) {
     console.error("Failed to load HOSTL accounts:", err);
-    return { byId: {}, byGoogleSub: {} };
+    return { byId: {}, byGoogleSub: {}, globalCodeClaims: {} };
   }
 }
 let accountDb = loadAccounts();
@@ -64,7 +65,11 @@ function publicAccount(a) {
     achievements: a.achievements && typeof a.achievements === "object" ? a.achievements : {},
     lastDailyCubits: a.lastDailyCubits || "",
     lastDailyChest: a.lastDailyChest || "",
-    createdAt: a.createdAt || ""
+    createdAt: a.createdAt || "",
+    title: a.title || "",
+    testerRank: Math.max(0, Math.floor(Number(a.testerRank) || 0)),
+    speciesCards: a.speciesCards && typeof a.speciesCards === "object" ? a.speciesCards : {},
+    starterPetEntitlement: a.starterPetEntitlement && typeof a.starterPetEntitlement === "object" ? a.starterPetEntitlement : null
   };
 }
 function b64url(input) {
@@ -108,18 +113,40 @@ function applyDailyCubits(account) {
   return true;
 }
 
+// Official HOSTL promo codes. Add future codes here and redeploy.
+// Rewards are applied server-side so each account can only claim a code once.
+const PROMO_CODES = new Map([
+  ["HOSTLSTART", { cubits: 150, themes: ["Golden"], label: "+150 Cubits and the Golden theme" }],
+  ["SCCTT", {
+    cubits: 14000,
+    speciesCards: { saber: 500 },
+    title: "Tester",
+    testerRank: 1,
+    starterPetEntitlement: { type: "saber", stage: "adult" },
+    globalOnce: true,
+    label: "+14,000 Cubits, +500 Saber Cards, Adult Saber starter access, and the Tester title"
+  }]
+]);
+function normalizePromoCode(value) {
+  return safeText(value, 32).toUpperCase().replace(/\s+/g, "");
+}
+function ensureRedeemedCodes(account) {
+  if (!Array.isArray(account.redeemedCodes)) account.redeemedCodes = [];
+  return account.redeemedCodes;
+}
+
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 507, gameBuild: 579, rulesVersion: "579", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 509, gameBuild: 581, rulesVersion: "581", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 506, gameBuild: 578 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 509, gameBuild: 581 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -154,6 +181,11 @@ app.post("/auth/google", async (req, res) => {
         achievements: {},
         lastDailyCubits: "",
         lastDailyChest: "",
+        redeemedCodes: [],
+        speciesCards: {},
+        title: "",
+        testerRank: 0,
+        starterPetEntitlement: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -187,9 +219,83 @@ app.put("/api/account", requireAccount, async (req, res) => {
   if (body.achievements && typeof body.achievements === "object" && !Array.isArray(body.achievements)) a.achievements = body.achievements;
   if (typeof body.lastDailyCubits === "string") a.lastDailyCubits = safeText(body.lastDailyCubits, 20);
   if (typeof body.lastDailyChest === "string") a.lastDailyChest = safeText(body.lastDailyChest, 20);
+  if (body.speciesCards && typeof body.speciesCards === "object" && !Array.isArray(body.speciesCards)) {
+    if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
+    for (const [species, raw] of Object.entries(body.speciesCards)) {
+      const key = safeText(species, 24).toLowerCase();
+      const n = Math.max(0, Math.min(1000000, Math.floor(Number(raw) || 0)));
+      if (key) a.speciesCards[key] = n;
+    }
+  }
   a.updatedAt = new Date().toISOString();
   await saveAccounts();
   res.json({ ok: true, account: publicAccount(a) });
+});
+
+app.post("/api/redeem-code", requireAccount, async (req, res) => {
+  const a = accountDb.byId[req.hostlUserId];
+  const code = normalizePromoCode(req.body?.code);
+  if (!code) return res.status(400).json({ ok:false, error:"missing_code" });
+  const reward = PROMO_CODES.get(code);
+  if (!reward) return res.status(404).json({ ok:false, error:"invalid_code" });
+  const redeemed = ensureRedeemedCodes(a);
+  if (redeemed.includes(code)) return res.status(409).json({ ok:false, error:"already_redeemed" });
+  if (!accountDb.globalCodeClaims || typeof accountDb.globalCodeClaims !== "object") accountDb.globalCodeClaims = {};
+  const existingGlobalClaim = accountDb.globalCodeClaims[code];
+  if (reward.globalOnce && existingGlobalClaim && existingGlobalClaim !== a.userId) return res.status(409).json({ ok:false, error:"code_already_claimed" });
+
+  if (Number.isFinite(Number(reward.cubits)) && Number(reward.cubits) > 0) {
+    a.cubits = Math.max(0, Math.floor(Number(a.cubits) || 0) + Math.floor(Number(reward.cubits)));
+  }
+  if (Array.isArray(reward.themes) && reward.themes.length) {
+    if (!Array.isArray(a.unlockedThemes)) a.unlockedThemes = [];
+    a.unlockedThemes = [...new Set([...a.unlockedThemes, ...reward.themes.map(x=>safeText(x,40)).filter(Boolean)])].slice(0,100);
+  }
+  if (reward.speciesCards && typeof reward.speciesCards === "object") {
+    if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
+    for (const [species, raw] of Object.entries(reward.speciesCards)) {
+      const key=safeText(species,24).toLowerCase(), amount=Math.max(0,Math.floor(Number(raw)||0));
+      if (key && amount) a.speciesCards[key]=Math.max(0,Math.floor(Number(a.speciesCards[key])||0)+amount);
+    }
+  }
+  if (reward.title) a.title=safeText(reward.title,32);
+  if (Number(reward.testerRank)>0) a.testerRank=Math.max(0,Math.floor(Number(reward.testerRank)||0));
+  if (reward.starterPetEntitlement && typeof reward.starterPetEntitlement === "object") {
+    a.starterPetEntitlement={type:safeText(reward.starterPetEntitlement.type,24).toLowerCase(),stage:safeText(reward.starterPetEntitlement.stage,24).toLowerCase()};
+  }
+  if (reward.globalOnce) accountDb.globalCodeClaims[code]=a.userId;
+  redeemed.push(code);
+  a.updatedAt = new Date().toISOString();
+  await saveAccounts();
+  res.json({ ok:true, code, message:`Code redeemed: ${reward.label || "reward added"}.`, account:publicAccount(a) });
+});
+
+async function rewardTesterKill(accountId) {
+  const a = accountDb.byId[String(accountId || "")];
+  if (!a) return { granted:false, reason:"account_missing" };
+  if (!a.achievements || typeof a.achievements !== "object") a.achievements = {};
+  const achievementId = "tester_hunter_1";
+  if (a.achievements[achievementId]) return { granted:false, account:publicAccount(a) };
+  const cubits = 3000, saberCards = 100;
+  a.cubits = Math.max(0, Math.floor(Number(a.cubits)||0) + cubits);
+  if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
+  a.speciesCards.saber = Math.max(0, Math.floor(Number(a.speciesCards.saber)||0) + saberCards);
+  const rewardSummary = `+${cubits.toLocaleString()} Cubits · +${saberCards} Saber Cards`;
+  a.achievements[achievementId] = { at:Date.now(), species:"saber", rewardSummary, serverVerified:true };
+  a.updatedAt = new Date().toISOString();
+  await saveAccounts();
+  return { granted:true, rewardSummary, cubits, saberCards, account:publicAccount(a) };
+}
+
+configureHostlAccountHooks({
+  resolveSession(token) {
+    const uid = verifySession(token);
+    if (!uid) return null;
+    const a = accountDb.byId[uid];
+    if (!a) return null;
+    return { userId:uid, title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)) };
+  },
+  rewardTesterKill
 });
 
 app.delete("/api/account", requireAccount, async (req, res) => {
