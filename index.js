@@ -479,6 +479,13 @@ const PROMO_CODES = new Map([
     starterPetEntitlement: { type: "snake", stage: "adult" },
     globalOnce: true,
     label: "+10,000 Gold Cubits, +50 Viper Cards, Adult Viper starter access, and the Owner title"
+  }],
+  ["STC", {
+    speciesCards: { saber: 50 },
+    themes: ["celestialCrown"],
+    starterPetEntitlement: { type: "saber", stage: "adult" },
+    globalOnce: true,
+    label: "+50 Saber Cards, Adult Saber starter access, and the Celestial Crown theme"
   }]
 ]);
 function normalizePromoCode(value) {
@@ -494,13 +501,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 550, gameBuild: 622, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 551, gameBuild: 623, rulesVersion: "593", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 550, gameBuild: 622 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 551, gameBuild: 623 });
 });
 
 app.get("/auth/config", (_req, res) => {
