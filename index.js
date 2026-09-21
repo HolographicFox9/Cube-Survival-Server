@@ -113,9 +113,9 @@ function friendChatKey(a,b){ return [String(a),String(b)].sort((x,y)=>Number(x)-
 function areFriends(a,b){ const aa=accountDb.byId[String(a)]; return !!aa && ensureSocialState(aa).friends.includes(String(b)); }
 function friendPublicSummary(uid){
   const a=accountDb.byId[String(uid)]; if(!a)return null; ensureSocialState(a); const p=presenceFor(uid);
-  return { userId:a.userId, username:a.username||"Player", displayName:a.displayName||a.username||"Player", title:a.title||"", online:p.online, playing:p.playing, worldId:p.worldId };
+  return { userId:a.userId, username:a.username||"", displayName:a.displayName||"", title:a.title||"", online:p.online, playing:p.playing, worldId:p.worldId };
 }
-function socialRequestSummary(uid){ const a=accountDb.byId[String(uid)]; return a?{userId:a.userId,username:a.username||"Player",displayName:a.displayName||a.username||"Player",title:a.title||""}:null; }
+function socialRequestSummary(uid){ const a=accountDb.byId[String(uid)]; return a?{userId:a.userId,username:a.username||"",displayName:a.displayName||"",title:a.title||""}:null; }
 function normalizedTransferPart(raw){
   const obj=raw&&typeof raw==="object"?raw:{};
   const cubits=Math.max(0,Math.min(100000000,Math.floor(Number(obj.cubits)||0)));
@@ -143,8 +143,8 @@ function normalizeLoadedAccounts() {
     used.add(newId);
     idMap.set(String(oldId), newId);
     a.userId = newId;
-    a.username = cleanDisplayName(a.username) || "Player";
-    a.displayName = cleanDisplayName(a.displayName || a.username) || a.username;
+    a.username = cleanDisplayName(a.username || "");
+    a.displayName = cleanDisplayName(a.displayName || "");
     ensureTitleState(a);
     ensureSocialState(a);
     newById[newId] = a;
@@ -167,8 +167,8 @@ saveAccounts();
 function publicAccount(a) {
   return {
     userId: a.userId,
-    username: a.username || "Player",
-    displayName: a.displayName || a.username || "Player",
+    username: a.username || "",
+    displayName: a.displayName || "",
     email: a.email || "",
     picture: a.picture || "",
     cubits: Math.max(0, Math.floor(Number(a.cubits) || 0)),
@@ -276,13 +276,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 531, gameBuild: 603, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 533, gameBuild: 605, rulesVersion: "592", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 531, gameBuild: 603 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 533, gameBuild: 605 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -305,12 +305,12 @@ app.post("/auth/google", async (req, res) => {
     if (!account) {
       created = true;
       userId = allocateNumericUserId();
-      const suggestedName = cleanDisplayName(p.given_name || p.name || "Player") || "Player";
       account = {
         userId,
         googleSub: p.sub,
-        username: suggestedName,
-        displayName: suggestedName,
+        username: "",
+        displayName: "",
+        profileNamesInitialized: true,
         email: safeText(p.email, 120).toLowerCase(),
         picture: safeText(p.picture, 500),
         cubits: 500,
@@ -333,8 +333,22 @@ app.post("/auth/google", async (req, res) => {
     } else {
       account.email = safeText(p.email, 120).toLowerCase();
       account.picture = safeText(p.picture, 500);
-      account.username = cleanDisplayName(account.username) || "Player";
-      account.displayName = cleanDisplayName(account.displayName || account.username) || account.username;
+      // Username and Display Name are HOSTL profile fields chosen by the player.
+      // They are intentionally NOT connected to the Google profile name.
+      if (!account.profileNamesInitialized) {
+        const oldGoogleName = cleanDisplayName(p.given_name || p.name || "");
+        const oldUser = cleanDisplayName(account.username || "");
+        const oldDisplay = cleanDisplayName(account.displayName || "");
+        // Migrate old test accounts that were auto-filled from Google by older HOSTL builds.
+        if (oldGoogleName && oldUser === oldGoogleName) account.username = "";
+        else account.username = oldUser;
+        if (oldGoogleName && oldDisplay === oldGoogleName) account.displayName = "";
+        else account.displayName = oldDisplay;
+        account.profileNamesInitialized = true;
+      } else {
+        account.username = cleanDisplayName(account.username || "");
+        account.displayName = cleanDisplayName(account.displayName || "");
+      }
       ensureTitleState(account);
       ensureSocialState(account);
       account.updatedAt = new Date().toISOString();
@@ -367,11 +381,11 @@ app.put("/api/account", requireAccount, async (req, res) => {
   const body = req.body || {};
   if (typeof body.username === "string") {
     const nextUsername = cleanDisplayName(body.username).slice(0, 14);
-    if (nextUsername.length >= 2) a.username = nextUsername;
+    if (nextUsername.length >= 2) { a.username = nextUsername; a.profileNamesInitialized = true; }
   }
   if (typeof body.displayName === "string") {
     const nextName = cleanDisplayName(body.displayName);
-    if (nextName.length >= 2) a.displayName = nextName;
+    if (nextName.length >= 2) { a.displayName = nextName; a.profileNamesInitialized = true; }
   }
   ensureTitleState(a);
   if (typeof body.title === "string") {

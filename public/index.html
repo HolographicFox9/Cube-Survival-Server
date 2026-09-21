@@ -4820,7 +4820,7 @@
 
           <div class="home-name-row">
             <span class="home-field-label">Player Name</span>
-            <input type="text" id="username" placeholder="Username" maxlength="14" value="Cube">
+            <input type="text" id="username" placeholder="Choose username" maxlength="14" value="">
             <button class="btn" id="choosePlayerDesignBtn" type="button">Character Design</button>
           </div>
 
@@ -24118,7 +24118,7 @@ function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
   try {
     window.__hostlApplyAccountEntitlements?.({
-      username:accountState.username||"Player",
+      username:accountState.username||"",
       cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
       title:accountState.title||"",
@@ -24133,7 +24133,7 @@ function applyAccountGameEntitlements(){
 function setAccountFromServer(p={}) {
   window.__hostlAccountSessionActive = true;
   accountState = {
-    loggedIn:true, userId:p.userId||"", username:p.username||"Player", displayName:p.displayName||p.username||"Player", email:p.email||"", picture:p.picture||"",
+    loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
     cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
@@ -24168,7 +24168,7 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        username:accountState.username||"Player", displayName:accountState.displayName||accountState.username||"Player", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        username:accountState.username||"", displayName:accountState.displayName||"", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24202,7 +24202,7 @@ function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
     if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
     window.__cubeAchievementAccount = {
-      loggedIn:true, userId:accountState.userId, username:accountState.username||"Player", achievements:accountState.achievements,
+      loggedIn:true, userId:accountState.userId, username:accountState.username||"Cube", achievements:accountState.achievements,
       persist(achievements){
         accountState.achievements = (achievements && typeof achievements==="object") ? achievements : {};
         persistAccountProfile();
@@ -24248,16 +24248,16 @@ function syncAccountUi(msg="") {
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.username||"Player"}` : "Account";
+    btn.textContent = accountState.loggedIn ? (accountState.username || "Account") : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
   if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
   const friendsCorner=document.getElementById("friendsCorner");
   if(friendsCorner) friendsCorner.classList.toggle("show", !!accountState.loggedIn);
-  const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"Player";
-  const sName=document.getElementById("settingsDisplayName"); if(sName && document.activeElement!==sName) sName.value=accountState.displayName||accountState.username||"Player";
-  const homeUser=document.getElementById("username"); if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"Player";
+  const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"";
+  const sName=document.getElementById("settingsDisplayName"); if(sName && !window.__hostlDisplayNameDirty && document.activeElement!==sName) sName.value=accountState.displayName||"";
+  const homeUser=document.getElementById("username"); if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"";
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
@@ -24269,7 +24269,7 @@ function syncAccountUi(msg="") {
   const user = document.getElementById("accountUserView");
   if (guest) guest.style.display = accountState.loggedIn ? "none" : "";
   if (user) user.style.display = accountState.loggedIn ? "" : "none";
-  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
+  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Choose a username";
   const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
   const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
   if(accountState.loggedIn){
@@ -24633,6 +24633,7 @@ async function saveAccountSettings(){
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
     setAccountFromServer(data.account);
     window.__hostlUsernameDirty = false;
+    window.__hostlDisplayNameDirty = false;
     syncAccountUi();
     if(msg) msg.textContent="Account settings saved.";
     meta.username=accountState.username||meta.username||"Cube";
@@ -24646,6 +24647,7 @@ async function saveAccountSettings(){
 
 function openAccountSettings(){
   if(!accountState.loggedIn){ openAccountModal(); return; }
+  window.__hostlDisplayNameDirty = false;
   syncAccountUi();
   document.getElementById("accountSettingsModal")?.classList.add("on");
   document.getElementById("deleteConfirmBox")?.classList.remove("on");
@@ -24760,6 +24762,14 @@ function bindAccountAndShopUi() {
 
   once(document.getElementById("accountSettingsClose"), "click", closeAccountSettings);
   once(document.getElementById("saveAccountSettingsBtn"), "click", saveAccountSettings);
+  const displayNameInput=document.getElementById("settingsDisplayName");
+  if(displayNameInput && !displayNameInput.dataset.hostlDisplayEditBound){
+    displayNameInput.dataset.hostlDisplayEditBound="1";
+    displayNameInput.addEventListener("input",()=>{ window.__hostlDisplayNameDirty=true; });
+    displayNameInput.addEventListener("keydown",e=>{
+      if(e.key==="Enter"){ e.preventDefault(); saveAccountSettings(); displayNameInput.blur(); }
+    });
+  }
   once(document.getElementById("openDeleteAccountBtn"), "click", beginDeleteHostlAccount);
   once(document.getElementById("cancelDeleteAccountBtn"), "click", ()=>{ document.getElementById("deleteConfirmBox")?.classList.remove("on"); const m=document.getElementById("deleteSettingsMsg"); if(m)m.textContent=""; });
   once(document.getElementById("deleteConfirmInput"), "input", updateDeleteConfirmState);
@@ -24902,8 +24912,8 @@ syncAchievementAccountBridge();
     </div>
     <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
     <div class="account-detail-grid">
-      <div class="label">Username</div><div class="value"><input id="settingsUsername" class="settings-control" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Username"><div class="settings-hint">2–14 characters. This is your in-game name and the name other players see while playing.</div></div>
-      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is your social name shown to friends.</div></div>
+      <div class="label">Username</div><div class="value"><input id="settingsUsername" class="settings-control" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Username"><div class="settings-hint">2–14 characters. You choose this. It is not taken from Google. This is your in-game name and the name other players see while playing.</div></div>
+      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. You choose this separately. It is not taken from Google. This is your social name shown to friends.</div></div>
       <div class="label">Choose title</div><div class="value"><select id="settingsTitleSelect" class="settings-control"><option value="">No title</option></select><div class="settings-hint">Titles come from achievements, codes, and special rewards.</div></div>
       <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>
       <div class="label">Google-linked email</div><div class="value" id="settingsEmail">—</div>
