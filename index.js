@@ -226,9 +226,14 @@ function randomChestSpecies(){
   return rows[0]?.v||"dog";
 }
 const CHEST_THEMES=["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement","arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus","dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
-const THEME_GUEST_FREE=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
-const THEME_ACCOUNT_FREE=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
-const THEME_AD=new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+// Theme unlock assignment v1 (frozen).
+// This list was randomized ONCE during development and is now hard-coded.
+// Nothing here rolls, reshuffles, or changes a theme's unlock method at runtime.
+// Classics stay free forever; every non-classic theme has exactly one fixed method.
+const THEME_GUEST_FREE=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"]);
+const THEME_ACCOUNT_FREE=new Set(["stoneElement","strawberryMilk","honeyBee","candyComet","pumpkinMoon","arcticPulse","viperwave","hologram","hacker","blackNeon","thunderStorm","auroraVale","oceanAbyss","dragonForge","celestialCrown","goldenEclipse","crystalCavern","rainyWindow","owlNight","beardedDunes","moonPetal","kemonoCamp"]);
+const THEME_AD=new Set(["waterElement","lightningElement","powerElement","windElement","soundElement","rabbitMeadow","cottonCandy","roseQuartz","nightDrive","hyperwave","blackNight","glitch","prismTech","auroraBorealis","emberKingdom","ancientRuins","explosion","castorianopsia","deerGrove","autumnHearth","goldenPrairie"]);
+const THEME_GOLD=new Set(["fireElement","plantElement","earthElement","peachBunny","bubblegumSky","cozyPlush","blossomCandy","chromeWave","toxicReactor","solarPunk","cyberCircuit","slime","computerVirus","titanStorm","saberFang","voidObsidian","bloodMoon","sakuraBreeze","lavenderDream","quietMeadow","midnightGarden"]);
 const THEME_ELEMENT=new Set(["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement"]);
 const THEME_EPIC=new Set(["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"]);
 const THEME_COOL=new Set(["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus"]);
@@ -242,7 +247,7 @@ function themeGoldPrice(id){
   if(THEME_RELAX.has(id))return 9500;
   return 12000;
 }
-function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_ELEMENT.has(id)||THEME_EPIC.has(id)||THEME_COOL.has(id)||THEME_CUTE.has(id)||THEME_RELAX.has(id);}
+function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_GOLD.has(id);}
 function accountCanUseTheme(a,id){return isKnownTheme(id) && (THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||(Array.isArray(a?.unlockedThemes)&&a.unlockedThemes.includes(id)));}
 
 function ensureEconomyState(a){
@@ -675,13 +680,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 564, gameBuild: 636, rulesVersion: "597", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 566, gameBuild: 638, rulesVersion: "597", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 564, gameBuild: 636 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 566, gameBuild: 638 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -901,7 +906,7 @@ app.post("/api/learn-skill", requireAccount, async (req,res)=>{
 app.post("/api/themes/buy", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const id=safeText(req.body?.themeId,40);
-  if(!isKnownTheme(id)||THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id))return res.status(404).json({ok:false,error:"theme_not_for_sale"});
+  if(!THEME_GOLD.has(id))return res.status(404).json({ok:false,error:"theme_not_for_sale"});
   if(a.unlockedThemes.includes(id))return res.json({ok:true,alreadyOwned:true,account:publicAccount(a)});
   const price=themeGoldPrice(id); if(ensureGoldCubits(a)<price)return res.status(409).json({ok:false,error:"not_enough_cubits",price,account:publicAccount(a)});
   setGoldCubits(a,ensureGoldCubits(a)-price); a.unlockedThemes.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();

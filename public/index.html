@@ -7360,12 +7360,35 @@ function buildHomeThemeGrid(force=false) {
   const known = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
   const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !known.includes(id));
 
-  const guestFree = new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
-  const accountFree = new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
-  const adThemes = new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+  // Theme unlock assignment v1 (frozen).
+  // These methods were randomized ONCE while building this version, then written
+  // directly into the game. They NEVER reroll when the menu opens, on a new day,
+  // after a login, or after an update unless we intentionally edit this table.
+  const guestFree = new Set([...classicThemeOrder]);
+  const accountFree = new Set([
+    "stoneElement",
+    "strawberryMilk","honeyBee","candyComet","pumpkinMoon",
+    "arcticPulse","viperwave","hologram","hacker","blackNeon","thunderStorm","auroraVale","oceanAbyss",
+    "dragonForge","celestialCrown","goldenEclipse","crystalCavern",
+    "rainyWindow","owlNight","beardedDunes","moonPetal","kemonoCamp"
+  ]);
+  const adThemes = new Set([
+    "waterElement","lightningElement","powerElement","windElement","soundElement",
+    "rabbitMeadow","cottonCandy","roseQuartz",
+    "nightDrive","hyperwave","blackNight","glitch","prismTech","auroraBorealis",
+    "emberKingdom","ancientRuins","explosion","castorianopsia",
+    "deerGrove","autumnHearth","goldenPrairie"
+  ]);
+  const goldThemes = new Set([
+    "fireElement","plantElement","earthElement",
+    "peachBunny","bubblegumSky","cozyPlush","blossomCandy",
+    "chromeWave","toxicReactor","solarPunk","cyberCircuit","slime","computerVirus",
+    "titanStorm","saberFang","voidObsidian","bloodMoon",
+    "sakuraBreeze","lavenderDream","quietMeadow","midnightGarden"
+  ]);
   const account = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[],goldCubits:0};
   const owned = new Set(Array.isArray(account.unlockedThemes) ? account.unlockedThemes : []);
-  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : "gold";
+  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : goldThemes.has(id) ? "gold" : "gold";
   const priceOf = id => {
     if (elementThemeOrder.includes(id)) return 6500;
     if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 28000 : 20000;
@@ -7383,13 +7406,24 @@ function buildHomeThemeGrid(force=false) {
   // "Owned Themes" means every theme the current player can use right now.
   // Permanent purchases/ad/code unlocks are shown first (newest first), followed
   // by free/account themes. Lower groups contain only themes not yet owned.
-  const otherOwned = allThemeOrder.filter(id=>HOME_THEMES[id] && isUnlocked(id) && !permanentOwned.has(id));
+  // Stable pseudo-random order: mixed-looking, but it does not reshuffle while
+  // the player is browsing. This prevents CUTE/COOL/EPIC/etc. from forming
+  // long blocks inside one acquisition section.
+  const themeMixKey = id => {
+    let h=2166136261>>>0;
+    const text=`hostl-theme-mix-v1:${id}`;
+    for(let i=0;i<text.length;i++){ h=Math.imul(h^text.charCodeAt(i),16777619)>>>0; }
+    return h;
+  };
+  const mixThemeOrder = ids => [...ids].sort((a,b)=>(themeMixKey(a)-themeMixKey(b)) || a.localeCompare(b));
+
+  const otherOwned = mixThemeOrder(allThemeOrder.filter(id=>HOME_THEMES[id] && isUnlocked(id) && !permanentOwned.has(id)));
   const allOwnedThemes = [...permanentNewestFirst,...otherOwned];
   const groups = [
     {key:"owned",title:"Owned Themes",desc:"Every theme you can use. New permanent unlocks appear first.",ids:allOwnedThemes},
-    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:allThemeOrder.filter(id=>accountFree.has(id) && !isUnlocked(id))},
-    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:allThemeOrder.filter(id=>categoryOf(id)==="gold" && !isUnlocked(id))},
-    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:allThemeOrder.filter(id=>adThemes.has(id) && !isUnlocked(id))},
+    {key:"account",title:"Free with Account",desc:"A mixed selection of styles that unlock automatically with a HOSTL account.",ids:mixThemeOrder(allThemeOrder.filter(id=>accountFree.has(id) && !isUnlocked(id)))},
+    {key:"gold",title:"Gold Cubits",desc:"A mixed selection of permanent themes purchased with Gold Cubits.",ids:mixThemeOrder(allThemeOrder.filter(id=>goldThemes.has(id) && !isUnlocked(id)))},
+    {key:"ad",title:"Watch Ad",desc:"A mixed selection of permanent themes earned by watching a rewarded ad.",ids:mixThemeOrder(allThemeOrder.filter(id=>adThemes.has(id) && !isUnlocked(id)))},
   ];
 
   const addHeading = g => {
@@ -7450,8 +7484,8 @@ function buildHomeThemeGrid(force=false) {
 
 window.__hostlRefreshThemeAccess = function(){
   const account=window.__hostlThemeAccountState||{loggedIn:false,unlockedThemes:[]};
-  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
-  const acct=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"]);
+  const acct=new Set(["stoneElement","strawberryMilk","honeyBee","candyComet","pumpkinMoon","arcticPulse","viperwave","hologram","hacker","blackNeon","thunderStorm","auroraVale","oceanAbyss","dragonForge","celestialCrown","goldenEclipse","crystalCavern","rainyWindow","owlNight","beardedDunes","moonPetal","kemonoCamp"]);
   const owned=new Set(Array.isArray(account.unlockedThemes)?account.unlockedThemes:[]);
   const allowed=guest.has(currentHomeTheme)||(account.loggedIn&&(acct.has(currentHomeTheme)||owned.has(currentHomeTheme)));
   if(!allowed) applyHomeTheme("forestGold",true); else buildHomeThemeGrid();
@@ -19175,7 +19209,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 562;
+const RESET_CORE_BUILD = 563;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
