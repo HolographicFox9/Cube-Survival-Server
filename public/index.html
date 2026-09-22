@@ -1656,7 +1656,7 @@
 
   .theme-choice{
     position:relative;
-    min-height:138px;
+    min-height:158px;
     padding:13px;
     border-radius:16px;
     border:1px solid rgba(255,255,255,.12);
@@ -1716,35 +1716,57 @@
     text-shadow:0 2px 7px rgba(0,0,0,.42);
   }
 
-  .theme-swatch-row{
-    position:absolute;
-    left:13px;
-    right:13px;
-    bottom:13px;
-    z-index:2;
+  .theme-card-meta{
+    position:relative;
+    z-index:3;
     display:flex;
     align-items:center;
-    gap:6px;
+    flex-wrap:wrap;
+    gap:5px;
+    margin-bottom:5px;
+  }
+  .theme-card-meta .theme-element-badge{margin-bottom:0;}
+
+  .theme-card-footer{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:11px;
+    z-index:4;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+
+  .theme-swatch-row{
+    position:static;
+    z-index:auto;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    min-width:0;
   }
 
   .theme-mini-swatch{
-    width:26px;
-    height:26px;
-    border-radius:8px;
+    width:22px;
+    height:22px;
+    flex:0 0 22px;
+    border-radius:7px;
     border:1px solid rgba(255,255,255,.28);
     box-shadow:0 3px 8px rgba(0,0,0,.18);
   }
 
   .theme-selected-pill{
-    margin-left:auto;
-    padding:5px 8px;
+    padding:4px 6px;
     border-radius:999px;
     background:rgba(255,255,255,.16);
     border:1px solid rgba(255,255,255,.18);
     color:#fff;
-    font-size:9px;
+    font-size:8px;
     font-weight:900;
     opacity:0;
+    white-space:nowrap;
   }
 
   .theme-choice.selected .theme-selected-pill{opacity:1;}
@@ -1756,12 +1778,12 @@
   .theme-group-title{font-size:15px;font-weight:1000;color:var(--ht-text);margin-bottom:3px;}
   .theme-group-desc{font-size:11px;line-height:1.4;color:var(--ht-muted);}
   .theme-choice.locked{opacity:1;filter:none;}
-  .theme-choice .theme-lock-state{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;justify-content:space-between;z-index:4;}
-  .theme-choice .theme-unlock-badge{font-size:9px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);}
-  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 10px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:30px;}
+  .theme-choice .theme-lock-state{position:static;display:flex;align-items:center;justify-content:flex-end;z-index:auto;flex:0 0 auto;}
+  .theme-choice .theme-unlock-badge{font-size:8px;font-weight:1000;letter-spacing:.055em;text-transform:uppercase;padding:3px 6px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);white-space:nowrap;max-width:126px;overflow:hidden;text-overflow:ellipsis;}
+  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 9px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 7px;cursor:pointer;min-height:28px;white-space:nowrap;}
   .theme-choice .theme-action:hover{transform:none;filter:brightness(1.08);}
   .theme-choice.locked .theme-choice-bg{filter:saturate(.75) brightness(.72);}
-  .theme-choice.locked .theme-choice-content{padding-bottom:46px;}
+  .theme-choice.locked .theme-choice-content{padding-bottom:42px;}
   .theme-choice.unlocked-account .theme-unlock-badge{background:rgba(54,108,171,.82);}
   .theme-choice.unlocked-ad .theme-unlock-badge{background:rgba(130,72,170,.82);}
   .theme-choice.unlocked-gold .theme-unlock-badge{background:rgba(156,109,20,.88);}
@@ -4777,7 +4799,7 @@
     -webkit-backdrop-filter:none !important;
   }
 
-  /* ---------- 635 persistent themes + stable hover ---------- */
+  /* ---------- 636 owned themes + acquisition labels beside type ---------- */
   /* The home screen may still receive account/theme refreshes while a run is active.
      This class makes those refreshes incapable of putting Home back over gameplay. */
   body.hostl-game-active #home{
@@ -7355,13 +7377,19 @@ function buildHomeThemeGrid(force=false) {
   const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
 
   const unlockedOrder = Array.isArray(account.unlockedThemes) ? account.unlockedThemes.map(String).filter(id=>HOME_THEMES[id]) : [];
-  const ownedNewestFirst = [...new Set(unlockedOrder)].reverse();
+  const permanentNewestFirst = [...new Set(unlockedOrder)].reverse();
+  const permanentOwned = new Set(permanentNewestFirst);
+  const allThemeOrder = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...otherThemeOrder];
+  // "Owned Themes" means every theme the current player can use right now.
+  // Permanent purchases/ad/code unlocks are shown first (newest first), followed
+  // by free/account themes. Lower groups contain only themes not yet owned.
+  const otherOwned = allThemeOrder.filter(id=>HOME_THEMES[id] && isUnlocked(id) && !permanentOwned.has(id));
+  const allOwnedThemes = [...permanentNewestFirst,...otherOwned];
   const groups = [
-    {key:"owned",title:"Owned Themes",desc:"Themes permanently unlocked on this account. New unlocks appear first.",ids:ownedNewestFirst},
-    {key:"guest",title:"Guest Free",desc:"Available to everyone, even without an account.",ids:[...classicThemeOrder,...otherThemeOrder].filter(id=>guestFree.has(id))},
-    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:known.filter(id=>accountFree.has(id))},
-    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold" && !owned.has(id))},
-    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id) && !owned.has(id))},
+    {key:"owned",title:"Owned Themes",desc:"Every theme you can use. New permanent unlocks appear first.",ids:allOwnedThemes},
+    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:allThemeOrder.filter(id=>accountFree.has(id) && !isUnlocked(id))},
+    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:allThemeOrder.filter(id=>categoryOf(id)==="gold" && !isUnlocked(id))},
+    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:allThemeOrder.filter(id=>adThemes.has(id) && !isUnlocked(id))},
   ];
 
   const addHeading = g => {
@@ -7380,22 +7408,31 @@ function buildHomeThemeGrid(force=false) {
       btn.dataset.unlocked=unlocked?"1":"0";
       btn.className=`theme-choice ${unlocked?"":"locked"} unlocked-${cat}` + (id===currentHomeTheme?" selected":"");
       const moodBadge = elementThemeOrder.includes(id) ? "ELEMENT" : cuteThemeOrder.includes(id) ? "CUTE" : coolThemeOrder.includes(id) ? "COOL" : epicThemeOrder.includes(id) ? "EPIC" : relaxingThemeOrder.includes(id) ? "RELAX" : "CLASSIC";
-      let unlockText = group.key==="owned" ? "Owned" : cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
-      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad to Unlock" : `Buy ${price.toLocaleString()}`;
+      // Acquisition info lives beside COOL / EPIC / CUTE / etc., never over
+      // the color palette. Once a paid theme is owned, its old price disappears.
+      let unlockText = unlocked
+        ? (cat==="guest" ? "Free" : cat==="account" ? "Account Free" : "Owned")
+        : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
+      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad" : "Buy";
       btn.innerHTML = `
         <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
         <span class="theme-choice-content">
-          <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+          <span class="theme-card-meta">
+            <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+            <span class="theme-unlock-badge">${unlockText}</span>
+          </span>
           <span class="theme-choice-name">${theme.name}</span>
           <span class="theme-choice-desc">${theme.desc}</span>
         </span>
-        <span class="theme-swatch-row">
-          <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
-          <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
-          <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
-          <span class="theme-selected-pill">${id===currentHomeTheme?"Selected":""}</span>
-        </span>
-        <span class="theme-lock-state"><span class="theme-unlock-badge">${unlockText}</span><button class="theme-action" type="button">${actionText}</button></span>`;
+        <span class="theme-card-footer">
+          <span class="theme-swatch-row">
+            <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
+            <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
+            <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
+            <span class="theme-selected-pill">${id===currentHomeTheme?"Selected":""}</span>
+          </span>
+          <span class="theme-lock-state"><button class="theme-action" type="button">${actionText}</button></span>
+        </span>`;
       const action=btn.querySelector(".theme-action");
       action.addEventListener("click", async (e)=>{
         e.stopPropagation();
