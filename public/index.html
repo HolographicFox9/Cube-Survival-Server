@@ -5542,7 +5542,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "595";
+const CUBE_SHARED_RULES_VERSION = "596";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -9035,7 +9035,10 @@ function syncNetworkSharedResourceState() {
     r.type = s.type || "rock";
     r.x = Number(s.x) || 0;
     r.y = Number(s.y) || 0;
-    r.hp = Math.max(0, Number(s.hp) || 0);
+    // Do not let an older topology snapshot visually heal a resource after an
+    // authoritative pet/player damage event. The damage lock is released once
+    // the live schema catches up to the same or lower HP.
+    r.hp = damageLockedHp(r, Math.max(0, Number(s.hp) || 0));
     r.maxHp = Math.max(1, Number(s.maxHp) || 1);
     r.alive = s.alive !== false && r.hp > 0;
     r.solidR = Number(s.solidR) || 12;
@@ -17348,17 +17351,14 @@ function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
   }
   return best;
 }
-function petAttackStuckResource(pet, targetX = null, targetY = null) {
+function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly = false) {
   if (!pet || pet.dead || net.room) return false;
-  // Following the owner has priority over chewing a resource. The resource can
-  // still be bitten while the owner is nearby/stationary, but it must never turn
-  // into a state that makes the pet stop following a moving owner.
+  // Following stays the movement goal. A physically stuck pet can bite the
+  // blocker while it keeps trying to route around it, but the resource never
+  // replaces the owner as a movement/combat target.
   if (player.riding !== pet && pet.follow && pet.orderMode === "follow") {
     const ownerDistance = dist(pet.x, pet.y, player.x, player.y);
-    const followRange = petFollowRangeFor(pet);
-    const ownerMoveSpeed = Math.hypot(Number(player._actualMoveVX) || 0, Number(player._actualMoveVY) || 0);
-    const ownerMoving = !!player._actualMoving || ownerMoveSpeed > 2.5 || movementInputActive();
-    if (ownerMoving || ownerDistance > followRange.stop + 18) {
+    if (ownerDistance > petFollowRangeFor(pet).sprint + 900) {
       pet._blockingResourceTarget = null;
       return false;
     }
@@ -17370,13 +17370,15 @@ function petAttackStuckResource(pet, targetX = null, targetY = null) {
     return false;
   }
   let best = pet._blockingResourceTarget;
-  if (!animalResourceBlocksPath(pet,best,targetX,targetY)) best = findBlockingResourceForAnimal(pet,targetX,targetY);
+  const contactFresh = !contactOnly || (performance.now() - (Number(pet._blockingResourceContactAt)||0) < 220);
+  if (!contactFresh || !animalResourceBlocksPath(pet,best,targetX,targetY)) {
+    if (contactOnly) { pet._blockingResourceTarget = null; return false; }
+    best = findBlockingResourceForAnimal(pet,targetX,targetY);
+  }
   pet._blockingResourceTarget = best || null;
   if (!best) return false;
-  const c=resourceSolidCenter(best);
-  smoothTurn(pet, angTo(pet.x,pet.y,c.x,c.y), .12, 8);
-  // Returning true even during cooldown keeps the pet committed to biting the
-  // blocker until it breaks or stops being in the path.
+  // A resource is never a steering/combat target. Keep the pet's current heading
+  // and bite only because the object is physically blocking its path.
   if ((pet.atkCd||0) <= 0) {
     pet.atkCd = animalAttackCooldown(pet.type,pet.stage,true);
     pet.attackAnim=.22;
@@ -17402,9 +17404,9 @@ function movePetChaseWithRecovery(pet, target, speed, dt) {
   }
 
   pet._combatStuckT = (Number(pet._combatStuckT) || 0) + dt;
-  // If a resource is the blocker, the swept mover already selected it and the
-  // pet should keep biting it instead of endlessly steering into the same edge.
-  if (!net.room && pet._blockingResourceTarget && pet._combatStuckT > 0.16) return;
+  // Bite a physical blocker, but keep the avoidance movement active. Resources
+  // are obstacles, not targets that suspend the chase until they break.
+  if (!net.room && pet._blockingResourceTarget && pet._combatStuckT > 0.16) petAttackStuckResource(pet);
   if (pet._combatStuckT < 0.11) return;
 
   if (!Number.isFinite(pet._combatAvoidSide)) {
@@ -17774,8 +17776,10 @@ function resolveAnimalWorld(a) {
       }
     }
   }
-  if (collidedResource) a._blockingResourceTarget = collidedResource;
-  else if (a._blockingResourceTarget && !animalResourceBlocksPath(a,a._blockingResourceTarget)) a._blockingResourceTarget = null;
+  if (collidedResource) {
+    a._blockingResourceTarget = collidedResource;
+    a._blockingResourceContactAt = performance.now();
+  } else if (a._blockingResourceTarget && !animalResourceBlocksPath(a,a._blockingResourceTarget)) a._blockingResourceTarget = null;
   for (const g of queryStaticNearby("gold", a.x, a.y, searchRange)) {
     if (!g.infinite && g.goldLeft <= 0) continue;
     const gh = goldSolidHitbox(g);
@@ -18350,12 +18354,12 @@ function updateAnimals(dt) {
       const mountedSpeed = Math.hypot(Number(player._actualMoveVX)||0, Number(player._actualMoveVY)||0);
       p._visualMoveSpeed = mountedSpeed;
       if (mountedSpeed > 0.3) p._visualMoveAt = performance.now();
-      // If the mount is genuinely pressing into a resource, it chews the same
-      // blocker until it breaks or is no longer in front of it. Network play
-      // performs this authoritatively on the server.
+      // If the mount physically bumps a resource, it may bite that blocker, but
+      // it never locks/turns toward it. Rider steering always stays in control.
+      // Network play performs the same rule authoritatively on the server.
       if (!net.room && movementInputActive() && p._blockingResourceTarget) {
         const look = Math.max(90,(p.r||18)*2.4);
-        petAttackStuckResource(p,p.x+Math.cos(p.angle||0)*look,p.y+Math.sin(p.angle||0)*look);
+        petAttackStuckResource(p,p.x+Math.cos(p.angle||0)*look,p.y+Math.sin(p.angle||0)*look,true);
       }
       resolveAnimalWorld(p);
       player.x = p.x; player.y = p.y;
@@ -18550,8 +18554,10 @@ function updateAnimals(dt) {
           p._followStuckT = (Number(p._followStuckT) || 0) + dt;
           if (p._followStuckT > 0.12) {
             p._stuckResourceCd = Math.max(0, (Number(p._stuckResourceCd)||0) - dt);
-            const chewingBlocker = p._followStuckT > 0.42 && petAttackStuckResource(p,player.x,player.y);
-            if (!chewingBlocker) {
+            if (p._followStuckT > 0.42) petAttackStuckResource(p,player.x,player.y);
+            // Attack the obstacle and keep trying to route around it; never wait
+            // for the resource to be destroyed before following again.
+            {
               if (!Number.isFinite(p._followAvoidSide)) {
                 const key = String(p.id || p.netId || p.type || "pet");
                 p._followAvoidSide = (key.length & 1) ? 1 : -1;
@@ -19080,7 +19086,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 559;
+const RESET_CORE_BUILD = 560;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;

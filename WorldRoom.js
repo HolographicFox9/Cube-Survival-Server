@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "595";
+const CUBE_SHARED_RULES_VERSION = "596";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1819,7 +1819,12 @@ export class WorldRoom extends Room {
       }
       if(rideMount&&!rideMount.dead&&rideMount._lastResourceContactId&&dist(p.x,p.y,tx,ty)>2.5){
         const r=this.state.resources.get(rideMount._lastResourceContactId);
-        if(this.resourceBlocksCreaturePath(rideMount,r))rideMount._blockingResourceId=rideMount._lastResourceContactId;
+        if(this.resourceBlocksCreaturePath(rideMount,r)){
+          rideMount._blockingResourceId=rideMount._lastResourceContactId;
+          rideMount._blockingResourceUntil=this.state.worldTime+.24;
+        }
+      }else if(rideMount&&!rideMount.dead&&(Number(rideMount._blockingResourceUntil)||0)<this.state.worldTime){
+        rideMount._blockingResourceId="";
       }
     }
   }
@@ -2914,21 +2919,33 @@ export class WorldRoom extends Room {
 
   animalResourceStrengthMultiplier(a){const raw=animalBalance(a?.type).attack/7.5;return clamp(1+(raw-1)*.45,.72,1.35);}
   petResourceDamage(p,r=null,ability=false){const maxHp=Math.max(1,Number(r?.maxHp)||Number(r?.hp)||1),pct=ANIMAL_RESOURCE_STAGE_PERCENT[p?.stage]??ANIMAL_RESOURCE_STAGE_PERCENT.adult,abilityMul=ability?1.25:1;return Math.max(.05,maxHp*pct*this.animalResourceStrengthMultiplier(p)*abilityMul);}
-  petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,r,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));}return true;}
+  petHitResource(ownerId,p,rid,r,ability=false){if(!p||!r||!r.alive)return false;const dmg=this.petResourceDamage(p,r,ability);r.hp=Math.max(0,(r.hp||1)-dmg);const key=r.type==="bush"?"berries":(r.type==="rock"?"stone":"wood");const amount=ability?Math.max(1,Math.round(dmg*.25)):1;const c=this.clientById(ownerId);if(c)c.send("resourceReward",{id:rid||"",kind:key,amount});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:key==="wood"?"#c99a5b":key==="stone"?"#a9b3bd":"#d1315c"});this.broadcastEntityHealth("resource",rid,r);if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",rid,r);this.resourceRespawns.set(rid,rand(12,22));}return true;}
   petDamageResourcesAround(ownerId,p,x,y,range,ability=true){for(const s of this.nearbySolids(x,y,range+120)){if(s.kind!=="resource")continue;const r=this.state.resources.get(s.id);if(!r||!r.alive)continue;if(dist(x,y,s.x,s.y)<=range+s.r)this.petHitResource(ownerId,p,s.id,r,ability);}}
-  petAttackStuckResource(ownerId,p){
+  petAttackStuckResource(ownerId,p,opts={}){
     if(!p||p.dead)return false;
     const owner=this.state.players.get(ownerId);
     const mounted=!!(owner?.ridingPetId&&this.state.pets.get(owner.ridingPetId)===p);
     if(!mounted&&p.orderMode==="follow"&&owner){
-      const followRange=petFollowRangeFor(p),ownerDistance=dist(p.x,p.y,owner.x,owner.y);
-      const ownerMoving=!!owner.moving||Math.hypot(owner.moveX||0,owner.moveY||0)>.05;
-      if(ownerMoving||ownerDistance>followRange.stop+18){p._blockingResourceId="";return false;}
+      // Following remains the movement goal, but a physically stuck pet may bite
+      // the obstacle while it keeps trying to route around it. Never replace the
+      // owner with the resource as a target.
+      const ownerDistance=dist(p.x,p.y,owner.x,owner.y);
+      if(ownerDistance>petFollowRangeFor(p).sprint+900){p._blockingResourceId="";return false;}
     }
     let rid=p._blockingResourceId||"",r=rid?this.state.resources.get(rid):null;
-    if(!this.resourceBlocksCreaturePath(p,r)){const found=this.findBlockingResourceForCreature(p);rid=found?.id||"";r=found?.r||null;}
+    // Riding uses only a resource that the mount physically contacted very recently.
+    // Never scan for a nearby resource while mounted: a blocker is an obstacle to
+    // bite on contact, not a combat target to acquire or steer toward.
+    const contactOnly=!!opts.contactOnly||mounted;
+    const contactFresh=!contactOnly||((Number(p._blockingResourceUntil)||0)>=this.state.worldTime);
+    if(!contactFresh||!this.resourceBlocksCreaturePath(p,r)){
+      if(contactOnly){p._blockingResourceId="";return false;}
+      const found=this.findBlockingResourceForCreature(p);rid=found?.id||"";r=found?.r||null;
+    }
     if(!rid||!r){p._blockingResourceId="";return false;}
-    p._blockingResourceId=rid;smoothTurn(p,angTo(p.x,p.y,r.x,r.y),.12,8);
+    p._blockingResourceId=rid;
+    // IMPORTANT: do not smoothTurn toward resources. The pet keeps its movement/
+    // rider steering heading and simply attacks the thing currently blocking it.
     if((p.atkCd||0)>0)return true;
     p.atkCd=animalAttackCooldown(p.type,p.stage,true);p.attackAnim=.22;
     this.petHitResource(ownerId,p,rid,r,false);
@@ -2957,7 +2974,8 @@ export class WorldRoom extends Room {
     a.atkCd=animalAttackCooldown(a.type,a.stage,false);a.attackAnim=.22;
     const dmg=this.petResourceDamage(a,r,false);
     r.hp=Math.max(0,(r.hp||1)-dmg);this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});
-    if(r.hp<=0){r.hp=0;r.alive=false;this.resourceRespawns.set(rid,rand(12,22));a._blockingResourceId="";}
+    this.broadcastEntityHealth("resource",rid,r);
+    if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",rid,r);this.resourceRespawns.set(rid,rand(12,22));a._blockingResourceId="";}
     return true;
   }
   mountedPetAttack(ownerId,owner){if(!owner?.ridingPetId)return false;const pet=this.state.pets.get(owner.ridingPetId);if(!pet||pet.dead||pet.atkCd>0)return false;let target=this.nearestHostile(pet.x,pet.y,Math.max(70,(pet.r||18)*2.6));if(!target)return false;const face=animalFaceGeometry(pet);const contact=target.kind==="animal"?petAttackContact(pet,{kind:"animal",id:target.id},target.obj):dist(face.x,face.y,target.obj.x,target.obj.y)<=face.r+(target.obj.r||18)+16;if(!contact)return false;const raw=petAtkDmg(pet);pet.atkCd=animalAttackCooldown(pet.type,pet.stage,true);pet.attackAnim=.18;if(target.kind==="enemy")this.hitEnemy(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});else this.hitWild(target.id,target.obj,raw,ownerId,false,{kind:"pet",id:owner.ridingPetId});return true;}
@@ -2975,7 +2993,7 @@ export class WorldRoom extends Room {
     if(moved>=Math.max(.18,expected*.22)){cs.stuckT=Math.max(0,cs.stuckT-dt*3.2);return;}
     cs.stuckT+=dt;
     // Resource blockers are intentionally chewed on the next server tick.
-    if(p._blockingResourceId&&cs.stuckT>.14)return;
+    if(p._blockingResourceId&&cs.stuckT>.14)this.petAttackStuckResource(p.ownerId,p);
     if(cs.stuckT<.11)return;
     const direct=angTo(p.x,p.y,target.x,target.y);p.angle=direct+cs.avoidSide*.76;
     const ax=p.x,ay=p.y;this.moveCreatureSwept(p,speed*.88,dt);
@@ -3021,7 +3039,8 @@ export class WorldRoom extends Room {
         p._mountedCollision=true;p.x=owner.x;p.y=owner.y;
         const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
         if(ml>.05)smoothTurn(p,Math.atan2(owner.moveY||0,owner.moveX||0),dt,mountedPetTurnSpeed(p));
-        if(owner.moving&&p._blockingResourceId)this.petAttackStuckResource(p.ownerId,p);
+        if(owner.moving&&p._blockingResourceId)this.petAttackStuckResource(p.ownerId,p,{contactOnly:true});
+        else if((Number(p._blockingResourceUntil)||0)<this.state.worldTime)p._blockingResourceId="";
         this.resolveStatic(p,(p.r||18)*.72);
         owner.x=p.x;owner.y=p.y;
         continue;
@@ -3100,9 +3119,10 @@ export class WorldRoom extends Room {
         const ownerMovingNow=!!owner.moving||Math.hypot(owner.moveX||0,owner.moveY||0)>.05;
         const followNeedsMovement=p.orderMode==="follow"&&(ownerMovingNow||dist(p.x,p.y,owner.x,owner.y)>followRangeNow.stop+18);
         if(followNeedsMovement)p._blockingResourceId="";
-        else if(p._blockingResourceId&&this.petAttackStuckResource(p.ownerId,p)){
-          this.resolveStatic(p,(p.r||18)*.72);
-          continue;
+        else if(p._blockingResourceId){
+          // Bite the blocker without turning it into a target or pausing the rest
+          // of the pet AI for the whole time the resource is alive.
+          this.petAttackStuckResource(p.ownerId,p);
         }
       }
 
@@ -3219,8 +3239,10 @@ export class WorldRoom extends Room {
           // still the owner, so this cannot turn into the old wandering formation.
           if(ownerDistance>followRange.run&&moved<Math.max(.20,expected*.18)){
             fs.stuckT+=dt;
-            const chewing=fs.stuckT>.42&&this.petAttackStuckResource(p.ownerId,p);
-            if(fs.stuckT>.12&&!chewing){
+            if(fs.stuckT>.42)this.petAttackStuckResource(p.ownerId,p);
+            // Keep trying to slide around the obstacle even while biting it. A
+            // resource must never freeze follow movement until it is destroyed.
+            if(fs.stuckT>.12){
               const direct=angTo(p.x,p.y,followX,followY);
               p.angle=direct+fs.avoidSide*.72;
               const ax=p.x,ay=p.y;
