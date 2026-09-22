@@ -243,6 +243,7 @@ function themeGoldPrice(id){
   return 12000;
 }
 function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_ELEMENT.has(id)||THEME_EPIC.has(id)||THEME_COOL.has(id)||THEME_CUTE.has(id)||THEME_RELAX.has(id);}
+function accountCanUseTheme(a,id){return isKnownTheme(id) && (THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||(Array.isArray(a?.unlockedThemes)&&a.unlockedThemes.includes(id)));}
 
 function ensureEconomyState(a){
   if(!a.materials||typeof a.materials!=="object"||Array.isArray(a.materials))a.materials={};
@@ -439,6 +440,7 @@ function accountRecoverySnapshot(a) {
     profileNamesInitialized:!!a.profileNamesInitialized,
     goldCubits:ensureGoldCubits(a),
     unlockedThemes:Array.isArray(a.unlockedThemes)?[...new Set(a.unlockedThemes.map(x=>safeText(x,40)).filter(Boolean))].slice(0,100):[],
+    selectedTheme:accountCanUseTheme(a,safeText(a.selectedTheme||"",40))?safeText(a.selectedTheme,40):"",
     achievements:cloneObj(a.achievements),
     lastDailyCubits:safeText(a.lastDailyCubits||"",20),
     lastDailyChest:safeText(a.lastDailyChest||"",20),
@@ -494,7 +496,7 @@ function restoreAccountFromRecovery(payload,googleProfile) {
     username:cleanDisplayName(snap.username||"").slice(0,14), displayName:cleanDisplayName(snap.displayName||""), profileNamesInitialized:!!snap.profileNamesInitialized,
     email:safeText(googleProfile.email,120).toLowerCase(), picture:safeText(googleProfile.picture,500),
     goldCubits:Math.max(0,Math.min(1000000000,Math.floor(Number(snap.goldCubits)||0))),
-    unlockedThemes:Array.isArray(snap.unlockedThemes)?snap.unlockedThemes:[], achievements:(snap.achievements&&typeof snap.achievements==="object"&&!Array.isArray(snap.achievements))?snap.achievements:{},
+    unlockedThemes:Array.isArray(snap.unlockedThemes)?snap.unlockedThemes:[], selectedTheme:safeText(snap.selectedTheme||"",40), achievements:(snap.achievements&&typeof snap.achievements==="object"&&!Array.isArray(snap.achievements))?snap.achievements:{},
     lastDailyCubits:safeText(snap.lastDailyCubits||"",20), lastDailyChest:safeText(snap.lastDailyChest||"",20), redeemedCodes:Array.isArray(snap.redeemedCodes)?snap.redeemedCodes:[],
     speciesCards:(snap.speciesCards&&typeof snap.speciesCards==="object"&&!Array.isArray(snap.speciesCards))?snap.speciesCards:{}, ownedStarters:(snap.ownedStarters&&typeof snap.ownedStarters==="object"&&!Array.isArray(snap.ownedStarters))?snap.ownedStarters:{},
     petStages:(snap.petStages&&typeof snap.petStages==="object"&&!Array.isArray(snap.petStages))?snap.petStages:{}, petStatUpgrades:(snap.petStatUpgrades&&typeof snap.petStatUpgrades==="object"&&!Array.isArray(snap.petStatUpgrades))?snap.petStatUpgrades:{},
@@ -508,6 +510,7 @@ function restoreAccountFromRecovery(payload,googleProfile) {
     createdAt:safeText(snap.createdAt||new Date().toISOString(),40), updatedAt:new Date().toISOString()
   };
   ensureGoldCubits(a); ensureTitleState(a); ensureEconomyState(a); ensurePetProgressState(a); ensureSocialState(a); ensureStarterPetEntitlements(a); ensureShopPurchases(a); ensureRedeemedCodes(a); repairSpecialPromoEntitlements(a);
+  if(!accountCanUseTheme(a,a.selectedTheme)) a.selectedTheme="";
   accountDb.byId[userId]=a; accountDb.byGoogleSub[googleProfile.sub]=userId;
   // Rebuild global one-use code ownership when its rightful signed account returns after storage loss.
   for(const code of a.redeemedCodes){const def=PROMO_CODES.get(String(code).toUpperCase());if(def?.globalOnce&&!accountDb.globalCodeClaims[String(code).toUpperCase()])accountDb.globalCodeClaims[String(code).toUpperCase()]=userId;}
@@ -522,6 +525,7 @@ function publicAccount(a) {
     picture: a.picture || "",
     goldCubits: ensureGoldCubits(a),
     unlockedThemes: Array.isArray(a.unlockedThemes) ? a.unlockedThemes : [],
+    selectedTheme: accountCanUseTheme(a, safeText(a.selectedTheme||"",40)) ? safeText(a.selectedTheme,40) : "",
     achievements: a.achievements && typeof a.achievements === "object" ? a.achievements : {},
     lastDailyCubits: a.lastDailyCubits || "",
     lastDailyChest: a.lastDailyChest || "",
@@ -671,13 +675,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 562, gameBuild: 634, rulesVersion: "597", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 563, gameBuild: 635, rulesVersion: "597", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 562, gameBuild: 634 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 563, gameBuild: 635 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -722,6 +726,7 @@ app.post("/auth/google", async (req, res) => {
         picture: safeText(p.picture, 500),
         goldCubits: 500,
         unlockedThemes: [],
+        selectedTheme: "forestGold",
         achievements: {},
         lastDailyCubits: "",
         lastDailyChest: "",
@@ -810,6 +815,10 @@ app.put("/api/account", requireAccount, async (req, res) => {
   if (Number.isFinite(Number(body.goldCubits))) setGoldCubits(a, body.goldCubits);
   else if (Number.isFinite(Number(body.cubits))) setGoldCubits(a, body.cubits); // legacy client compatibility
   if (Array.isArray(body.unlockedThemes)) a.unlockedThemes = [...new Set(body.unlockedThemes.map(x => safeText(x, 40)).filter(Boolean))].slice(0, 100);
+  if (typeof body.selectedTheme === "string") {
+    const requestedTheme=safeText(body.selectedTheme,40);
+    if(accountCanUseTheme(a,requestedTheme)) a.selectedTheme=requestedTheme;
+  }
   if (body.achievements && typeof body.achievements === "object" && !Array.isArray(body.achievements)) a.achievements = body.achievements;
   if (typeof body.lastDailyCubits === "string") a.lastDailyCubits = safeText(body.lastDailyCubits, 20);
   if (typeof body.lastDailyChest === "string") a.lastDailyChest = safeText(body.lastDailyChest, 20);

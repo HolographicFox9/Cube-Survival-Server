@@ -1666,19 +1666,19 @@
     text-align:left;
     font-family:inherit;
     box-shadow:0 10px 22px rgba(0,0,0,.18);
-    transform:translateZ(0) scale(1);
-    transform-origin:center center;
-    will-change:transform;
+    transform:none;
     z-index:0;
-    transition:transform .12s ease,border-color .12s,filter .12s;
+    transition:border-color .12s,filter .12s,box-shadow .12s;
   }
 
-  /* Keep hover geometry stable. Moving the whole card upward can move its
-     hitbox out from under a pointer near the bottom edge, causing hover to
-     rapidly toggle on/off. Grow in place instead. */
+  /* Stable hover: never resize/transform the hit target. The brighter border
+     and outward shadow create the small "bigger" look without changing card
+     geometry, so hover cannot pulse even with the pointer in the center. */
   .theme-choice:hover{
-    transform:translateZ(0) scale(1.018);
+    transform:none !important;
     filter:brightness(1.07);
+    border-color:color-mix(in srgb,var(--ht-accent) 58%,rgba(255,255,255,.35));
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 30%,transparent),0 14px 28px rgba(0,0,0,.26);
     z-index:3;
   }
 
@@ -4777,7 +4777,7 @@
     -webkit-backdrop-filter:none !important;
   }
 
-  /* ---------- 634 stable theme-card hover ---------- */
+  /* ---------- 635 persistent themes + stable hover ---------- */
   /* The home screen may still receive account/theme refreshes while a run is active.
      This class makes those refreshes incapable of putting Home back over gameplay. */
   body.hostl-game-active #home{
@@ -7283,8 +7283,11 @@ function applyHomeTheme(themeId, save = false) {
   }
   document.body.classList.toggle("home-ui-glitch", currentHomeTheme === "glitch");
 
-  if (save) localStorage.setItem(HOME_THEME_STORAGE_KEY, currentHomeTheme);
-  buildHomeThemeGrid();
+  if (save) {
+    localStorage.setItem(HOME_THEME_STORAGE_KEY, currentHomeTheme);
+    try { window.__hostlSaveSelectedTheme?.(currentHomeTheme); } catch (_) {}
+  }
+  updateHomeThemeSelectionUi();
   renderHomeThemeEffects();
   updateHomeBackgroundEffectsToggle();
   syncHomeWorldThemeState();
@@ -7298,6 +7301,19 @@ function themePreviewBackground(theme) {
 }
 
 let homeThemeGridSignature = "";
+function updateHomeThemeSelectionUi() {
+  const grid=document.getElementById("homeThemeGrid");
+  if(!grid) return;
+  grid.querySelectorAll(".theme-choice[data-theme-id]").forEach(card=>{
+    const id=card.dataset.themeId||"";
+    const selected=id===currentHomeTheme;
+    card.classList.toggle("selected",selected);
+    const pill=card.querySelector(".theme-selected-pill");
+    if(pill) pill.textContent=selected?"Selected":"";
+    const action=card.querySelector(".theme-action");
+    if(action && card.dataset.unlocked==="1") action.textContent=selected?"Selected":"Use Theme";
+  });
+}
 function buildHomeThemeGrid(force=false) {
   const grid = document.getElementById("homeThemeGrid");
   if (!grid) return;
@@ -7308,7 +7324,7 @@ function buildHomeThemeGrid(force=false) {
   // theme access or the selected theme actually changed.
   const sigAccount = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[]};
   const sigUnlocked = Array.isArray(sigAccount.unlockedThemes) ? [...sigAccount.unlockedThemes].map(String).sort().join(",") : "";
-  const nextSignature = `${currentHomeTheme}|${sigAccount.loggedIn?1:0}|${sigUnlocked}`;
+  const nextSignature = `${sigAccount.loggedIn?1:0}|${sigUnlocked}`;
   if (!force && homeThemeGridSignature === nextSignature && grid.childElementCount > 0) return;
   homeThemeGridSignature = nextSignature;
   grid.innerHTML = "";
@@ -7338,11 +7354,14 @@ function buildHomeThemeGrid(force=false) {
   };
   const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
 
+  const unlockedOrder = Array.isArray(account.unlockedThemes) ? account.unlockedThemes.map(String).filter(id=>HOME_THEMES[id]) : [];
+  const ownedNewestFirst = [...new Set(unlockedOrder)].reverse();
   const groups = [
+    {key:"owned",title:"Owned Themes",desc:"Themes permanently unlocked on this account. New unlocks appear first.",ids:ownedNewestFirst},
     {key:"guest",title:"Guest Free",desc:"Available to everyone, even without an account.",ids:[...classicThemeOrder,...otherThemeOrder].filter(id=>guestFree.has(id))},
     {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:known.filter(id=>accountFree.has(id))},
-    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold")},
-    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id))},
+    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold" && !owned.has(id))},
+    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id) && !owned.has(id))},
   ];
 
   const addHeading = g => {
@@ -7357,9 +7376,11 @@ function buildHomeThemeGrid(force=false) {
     for (const id of ids) {
       const theme=HOME_THEMES[id]; const unlocked=isUnlocked(id); const cat=categoryOf(id); const price=priceOf(id);
       const btn=document.createElement("div");
+      btn.dataset.themeId=id;
+      btn.dataset.unlocked=unlocked?"1":"0";
       btn.className=`theme-choice ${unlocked?"":"locked"} unlocked-${cat}` + (id===currentHomeTheme?" selected":"");
       const moodBadge = elementThemeOrder.includes(id) ? "ELEMENT" : cuteThemeOrder.includes(id) ? "CUTE" : coolThemeOrder.includes(id) ? "COOL" : epicThemeOrder.includes(id) ? "EPIC" : relaxingThemeOrder.includes(id) ? "RELAX" : "CLASSIC";
-      let unlockText = cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
+      let unlockText = group.key==="owned" ? "Owned" : cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
       let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad to Unlock" : `Buy ${price.toLocaleString()}`;
       btn.innerHTML = `
         <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
@@ -7372,7 +7393,7 @@ function buildHomeThemeGrid(force=false) {
           <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
           <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
           <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
-          <span class="theme-selected-pill">Selected</span>
+          <span class="theme-selected-pill">${id===currentHomeTheme?"Selected":""}</span>
         </span>
         <span class="theme-lock-state"><span class="theme-unlock-badge">${unlockText}</span><button class="theme-action" type="button">${actionText}</button></span>`;
       const action=btn.querySelector(".theme-action");
@@ -7387,6 +7408,7 @@ function buildHomeThemeGrid(force=false) {
       grid.appendChild(btn);
     }
   }
+  updateHomeThemeSelectionUi();
 }
 
 window.__hostlRefreshThemeAccess = function(){
@@ -24645,7 +24667,7 @@ let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
 let hostlServerDayKey = "";
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], selectedTheme:"", achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 // Single source of truth used by the in-game HUD. Null means guest mode, so the
 // gameplay layer may use its local guest balance.
@@ -24687,7 +24709,7 @@ function setAccountFromServer(p={}) {
   window.__hostlAccountSessionActive = true;
   accountState = {
     loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
-    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[], selectedTheme:String(p.selectedTheme||""),
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
     ownedStarters:(p.ownedStarters&&typeof p.ownedStarters==="object")?p.ownedStarters:{}, petStages:(p.petStages&&typeof p.petStages==="object")?p.petStages:{},
@@ -24703,8 +24725,19 @@ function setAccountFromServer(p={}) {
   // Push the server balance into gameplay immediately, before any HUD/home redraw can
   // render the guest fallback value.
   try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
-  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0,selectedTheme:accountState.selectedTheme||""};
   try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
+  try {
+    if (accountState.selectedTheme && HOME_THEMES?.[accountState.selectedTheme]) {
+      applyHomeTheme(accountState.selectedTheme,false);
+      localStorage.setItem(HOME_THEME_STORAGE_KEY, accountState.selectedTheme);
+    } else if (accountState.loggedIn && HOME_THEMES?.[currentHomeTheme]) {
+      // Migrate older accounts that predate server-side theme selection: keep
+      // the player's already-selected browser theme if this account can use it.
+      accountState.selectedTheme=currentHomeTheme;
+      setTimeout(()=>{ try{ window.__hostlSaveSelectedTheme?.(currentHomeTheme); }catch(_){} },0);
+    }
+  } catch (_) {}
   try {
     if (!window.__hostlUsernameDirty) {
       meta.username=accountState.username||meta.username||"Cube";
@@ -24727,6 +24760,16 @@ function accountAuthHeaders() {
 }
 
 window.__hostlOpenAccountForTheme = function(){ try{ openAccountModal(); }catch(_){ document.getElementById("accountBtn")?.click(); } };
+window.__hostlSaveSelectedTheme = async function(themeId){
+  themeId=String(themeId||"");
+  if(!HOME_THEMES?.[themeId]) return;
+  accountState.selectedTheme=themeId;
+  if(!accountState.loggedIn || !hostlSessionToken) return;
+  try{
+    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({selectedTheme:themeId})});
+    if(r.ok){ const d=await r.json().catch(()=>({})); if(d?.account?.recoveryToken) rememberAccountRecoveryToken(d.account.recoveryToken); if(d?.account?.selectedTheme) accountState.selectedTheme=String(d.account.selectedTheme); }
+  }catch(_){}
+};
 window.__hostlBuyTheme = async function(themeId, shownPrice){
   if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
   try{
@@ -24757,7 +24800,7 @@ async function pushAccountProfileNow() {
       body:JSON.stringify({
         // Username and Display Name are saved only by their dedicated profile editors.
         // Background Cubit/theme saves must never overwrite a name the player just chose.
-        title:accountState.title||"", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
+        title:accountState.title||"", selectedTheme:accountState.selectedTheme||currentHomeTheme||"forestGold", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24836,7 +24879,7 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],selectedTheme:"",achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
     try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
@@ -24850,7 +24893,7 @@ function claimDailyCubits() {
   return false;
 }
 function syncAccountUi(msg="") {
-  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0,selectedTheme:accountState.selectedTheme||""};
   try{ buildHomeThemeGrid(); }catch(_){}
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
@@ -25272,7 +25315,7 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],selectedTheme:"",achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
