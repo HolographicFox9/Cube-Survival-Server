@@ -5,51 +5,7 @@
 <title>HOSTL</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <script>
-// One-time HOSTL browser-data reset. Existing players are reset the next time they load this build.
-(function(){
-  const RESET_KEY = "hostlBrowserResetVersion";
-  const RESET_VERSION = "2026-09-21-reset-1";
-  try {
-    if (localStorage.getItem(RESET_KEY) === RESET_VERSION) return;
-  } catch (_) {}
-
-  try { localStorage.clear(); } catch (_) {}
-  try { sessionStorage.clear(); } catch (_) {}
-
-  // Clear same-origin cookies that are accessible to the game.
-  try {
-    document.cookie.split(";").forEach(function(cookie){
-      const eq = cookie.indexOf("=");
-      const name = (eq > -1 ? cookie.slice(0, eq) : cookie).trim();
-      if (!name) return;
-      document.cookie = name + "=; Max-Age=0; path=/; SameSite=Lax";
-    });
-  } catch (_) {}
-
-  // Clear Cache Storage / service workers if the browser supports them.
-  try {
-    if (window.caches && caches.keys) {
-      caches.keys().then(function(keys){ keys.forEach(function(k){ caches.delete(k); }); }).catch(function(){});
-    }
-  } catch (_) {}
-  try {
-    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
-      navigator.serviceWorker.getRegistrations().then(function(regs){ regs.forEach(function(r){ r.unregister(); }); }).catch(function(){});
-    }
-  } catch (_) {}
-
-  // Clear IndexedDB databases owned by this HOSTL origin when the browser exposes the database list.
-  try {
-    if (window.indexedDB && indexedDB.databases) {
-      indexedDB.databases().then(function(dbs){
-        dbs.forEach(function(db){ if (db && db.name) { try { indexedDB.deleteDatabase(db.name); } catch (_) {} } });
-      }).catch(function(){});
-    }
-  } catch (_) {}
-
-  // Mark the reset after clearing so it only happens once per browser/profile.
-  try { localStorage.setItem(RESET_KEY, RESET_VERSION); } catch (_) {}
-})();
+// Browser storage is intentionally preserved. HOSTL account recovery backups live here.
 </script>
 <style>
   :root{
@@ -931,7 +887,7 @@
     font-weight:900;
   }
 
-  #starterShopOverlay{
+  #starterShopOverlay{display:none!important;
     position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(7,12,15,.88);
     opacity:0;visibility:hidden;pointer-events:none;
@@ -1621,12 +1577,45 @@
 
   #homeThemesBtn{
     min-width:0 !important;
+    min-height:44px !important;
     padding:11px 17px !important;
     border-radius:14px !important;
     font-family:inherit;
     font-size:13px !important;
     font-weight:900;
     cursor:pointer;
+    position:relative;
+    z-index:3;
+    overflow:visible;
+    transform:translateZ(0) scale(1);
+    transform-origin:center;
+    transition:transform .14s ease, filter .14s ease, border-color .14s ease, box-shadow .14s ease !important;
+    will-change:transform;
+    pointer-events:auto;
+  }
+  /* Extra invisible hit area keeps the pointer on Themes while the visual button grows. */
+  #homeThemesBtn::before{
+    content:"";
+    position:absolute;
+    inset:-8px;
+    border-radius:20px;
+    background:transparent;
+  }
+  @media (hover:hover) and (pointer:fine){
+    #homeThemesBtn:hover{
+      transform:translateZ(0) scale(1.10) !important;
+      z-index:30;
+      filter:brightness(1.13) !important;
+      box-shadow:0 10px 24px rgba(0,0,0,.26),0 0 0 2px color-mix(in srgb,var(--ht-accent) 28%,transparent) !important;
+    }
+  }
+  #homeThemesBtn:focus-visible{
+    transform:translateZ(0) scale(1.06) !important;
+    outline:2px solid var(--ht-accent);
+    outline-offset:3px;
+  }
+  #homeThemesBtn:active{
+    transform:translateZ(0) scale(1.04) !important;
   }
 
   #homeThemeOverlay{
@@ -1751,6 +1740,23 @@
   }
 
   .theme-choice.selected .theme-selected-pill{opacity:1;}
+
+  .theme-unlock-summary{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 16px;}
+  .theme-unlock-summary .pill{font-size:10px;font-weight:900;letter-spacing:.05em;padding:6px 9px;border:1px solid color-mix(in srgb,var(--ht-accent) 45%,transparent);border-radius:999px;background:color-mix(in srgb,var(--ht-panel2) 82%,transparent);color:var(--ht-text);}
+  .theme-group{grid-column:1/-1;margin:12px 0 2px;padding-top:10px;border-top:1px solid color-mix(in srgb,var(--ht-accent) 28%,transparent);}
+  .theme-group:first-child{border-top:0;padding-top:0;margin-top:0;}
+  .theme-group-title{font-size:15px;font-weight:1000;color:var(--ht-text);margin-bottom:3px;}
+  .theme-group-desc{font-size:11px;line-height:1.4;color:var(--ht-muted);}
+  .theme-choice.locked{opacity:1;filter:none;}
+  .theme-choice .theme-lock-state{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;justify-content:space-between;z-index:4;}
+  .theme-choice .theme-unlock-badge{font-size:9px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);}
+  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 10px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:30px;}
+  .theme-choice .theme-action:hover{transform:translateY(-1px);filter:brightness(1.08);}
+  .theme-choice.locked .theme-choice-bg{filter:saturate(.75) brightness(.72);}
+  .theme-choice.locked .theme-choice-content{padding-bottom:46px;}
+  .theme-choice.unlocked-account .theme-unlock-badge{background:rgba(54,108,171,.82);}
+  .theme-choice.unlocked-ad .theme-unlock-badge{background:rgba(130,72,170,.82);}
+  .theme-choice.unlocked-gold .theme-unlock-badge{background:rgba(156,109,20,.88);}
 
   @media(max-width:700px){
     .theme-picker-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -4046,6 +4052,53 @@
   .code-result.error{color:#ff9a9a}
   @media(max-width:520px){.code-entry-row{flex-direction:column}.code-entry-row button{width:100%}}
 
+  .material-grid,.recipe-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:10px}
+  .material-card,.recipe-card{border:1px solid rgba(240,230,200,.16);border-radius:14px;padding:12px;background:rgba(255,255,255,.025)}
+  .material-card h4,.recipe-card h4{margin:0 0 6px;color:#fff2c7}
+  .material-rarity{display:inline-block;margin:0 0 6px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:1000;letter-spacing:.04em;border:1px solid rgba(255,255,255,.18)}
+  .rarity-Common{color:#e5e7eb}.rarity-Uncommon{color:#9ef0b3}.rarity-Rare{color:#91c8ff}.rarity-Epic{color:#d4a5ff}.rarity-Legendary{color:#ffd36a}.rarity-Mythical{color:#ff9ee8;text-shadow:0 0 10px rgba(255,158,232,.35)}
+  .material-card .owned-count,.recipe-card .owned-count{font-size:12px;font-weight:900;color:#bde9f2;margin:5px 0}
+  .ingredient-list{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}
+  .ingredient-chip{font-size:11px;padding:4px 7px;border-radius:999px;border:1px solid rgba(240,230,200,.18);background:rgba(0,0,0,.18)}
+  .ingredient-chip.missing{border-color:rgba(255,100,100,.42);color:#ffb0b0}
+  .recipe-chance{font-size:12px;font-weight:900;margin:6px 0;color:#ffd98a}
+  .shop-inventory-bar{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 12px}
+  .shop-inventory-chip{font-size:11px;font-weight:800;padding:5px 8px;border-radius:999px;background:rgba(189,233,242,.08);border:1px solid rgba(189,233,242,.24)}
+
+  #expandedShopModal{align-items:center;justify-content:center;padding:clamp(12px,2vw,28px);}
+  #expandedShopModal .expanded-shop-card{width:min(1280px,96vw);max-height:92vh;overflow:hidden;margin:0;display:flex;flex-direction:column;}
+  #expandedShopModal .shop-tabs{flex:0 0 auto;}
+  #expandedShopModal .shop-page.active{min-height:0;overflow:auto;padding-right:4px;scrollbar-width:thin;}
+  .materials-shop-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(320px,.9fr);gap:18px;align-items:stretch;}
+  .rotating-stock-panel,.material-owned-panel,.shopkeeper-panel{border:1px solid rgba(240,230,200,.16);border-radius:16px;background:rgba(0,0,0,.16);padding:13px;min-width:0;}
+  .materials-left-column{min-width:0;display:flex;flex-direction:column;gap:12px;}
+  .shopkeeper-panel{min-height:58vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;position:relative;overflow:hidden;}
+  .shopkeeper-panel:before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 50% 34%,rgba(244,198,95,.11),transparent 48%);pointer-events:none;}
+  .shopkeeper-placeholder{position:relative;z-index:1;width:min(260px,90%);aspect-ratio:4/5;border:1px dashed rgba(244,198,95,.34);border-radius:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;background:rgba(255,255,255,.025);}
+  .shopkeeper-placeholder .shopkeeper-icon{font-size:52px;line-height:1;margin-bottom:12px;}
+  .shopkeeper-placeholder strong{font-size:18px;color:#ffe29a;}
+  .shopkeeper-placeholder span{font-size:12px;color:#d9ccb4;margin-top:7px;line-height:1.4;}
+  .rotating-stock-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px;}
+  .shop-refresh-pill{font-size:12px;font-weight:900;padding:6px 9px;border-radius:999px;border:1px solid rgba(244,198,95,.35);background:rgba(244,198,95,.08);color:#ffe29a;}
+  #materialShopGrid.rotating-material-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;max-height:58vh;overflow-y:auto;overscroll-behavior:contain;padding:2px 5px 4px 0;scrollbar-width:thin;}
+  #materialShopGrid .material-card{min-height:150px;display:flex;flex-direction:column;}
+  #materialShopGrid .material-card button{margin-top:auto;width:100%;}
+  #materialShopGrid .material-card.sold{opacity:.55;}
+  .material-owned-panel{max-height:20vh;overflow-y:auto;overscroll-behavior:contain;}
+  .material-owned-panel h4{margin:0 0 8px;color:#fff2c7;}
+  .material-owned-list{display:grid;gap:7px;}
+  .material-owned-row{display:flex;justify-content:space-between;gap:10px;padding:8px 9px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);font-size:12px;}
+  @media(max-width:760px){
+    #expandedShopModal{justify-content:center;padding:8px;}
+    #expandedShopModal .expanded-shop-card{width:98vw;max-height:94vh;}
+    .materials-shop-layout{grid-template-columns:1fr;}
+    #materialShopGrid.rotating-material-grid{grid-template-columns:1fr;max-height:48vh;}
+    .material-owned-panel{max-height:28vh;}
+    .shopkeeper-panel{min-height:260px;}
+    .shopkeeper-placeholder{max-width:230px;aspect-ratio:5/3;}
+  }
+
+
 
   /* ---------- 460 mobile-mode home screen layout ---------- */
   body.mobile-home-layout #home{
@@ -4492,6 +4545,239 @@
     .legal-support-body{padding:13px 15px 20px;font-size:12px;}
   }
 
+
+
+  /* ---------- 614 themed readable Shop / Friends / Account Settings ---------- */
+  /* HOME_THEMES already writes --ht-* to :root, so these screens update live with the selected theme. */
+  #expandedShopModal,
+  #friendsModal,
+  #accountSettingsModal{
+    color:var(--ht-text) !important;
+    background:
+      radial-gradient(circle at 14% 8%,color-mix(in srgb,var(--ht-accent) 12%,transparent),transparent 32%),
+      radial-gradient(circle at 86% 14%,color-mix(in srgb,var(--ht-secondary) 12%,transparent),transparent 30%),
+      color-mix(in srgb,var(--ht-bg) 78%,black 22%) !important;
+  }
+
+  #expandedShopModal .modal-card,
+  #accountSettingsModal .modal-card,
+  #friendsModal .friends-card{
+    color:var(--ht-text) !important;
+    background:
+      linear-gradient(180deg,
+        color-mix(in srgb,var(--ht-panel) 94%,black 6%),
+        color-mix(in srgb,var(--ht-panel2) 95%,black 5%)
+      ) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 36%,var(--ht-muted) 16%) !important;
+    box-shadow:0 24px 70px rgba(0,0,0,.56),0 0 0 1px color-mix(in srgb,var(--ht-primary) 10%,transparent) inset !important;
+  }
+
+  /* Strong text contrast: don't fade important copy inside these screens. */
+  #expandedShopModal h2,#expandedShopModal h3,#expandedShopModal h4,
+  #friendsModal h2,#friendsModal h3,#friendsModal h4,
+  #accountSettingsModal h2,#accountSettingsModal h3{
+    color:var(--ht-text) !important;
+    opacity:1 !important;
+    text-shadow:0 1px 2px rgba(0,0,0,.48);
+  }
+  #expandedShopModal h3,#expandedShopModal h4,
+  #friendsModal h3,
+  #accountSettingsModal h3{
+    color:color-mix(in srgb,var(--ht-accent) 72%,var(--ht-text) 28%) !important;
+  }
+  #expandedShopModal p,#expandedShopModal .muted,#expandedShopModal .locked-note,
+  #friendsModal p,#friendsModal .friends-note,#friendsModal .friend-status,#friendsModal .friend-chat-meta,
+  #accountSettingsModal p,#accountSettingsModal .muted,#accountSettingsModal .settings-hint,#accountSettingsModal .account-detail-grid .label{
+    color:color-mix(in srgb,var(--ht-muted) 82%,var(--ht-text) 18%) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal b,#expandedShopModal strong,
+  #friendsModal b,#friendsModal strong,.friends-card .friend-name,
+  #accountSettingsModal b,#accountSettingsModal strong,#accountSettingsModal .account-detail-grid .value{
+    color:var(--ht-text) !important;
+  }
+
+  /* Theme-aware controls */
+  #expandedShopModal .account-btn,#expandedShopModal .shop-tab,
+  #friendsModal button,
+  #accountSettingsModal .account-btn{
+    color:var(--ht-text) !important;
+    background:linear-gradient(180deg,
+      color-mix(in srgb,var(--ht-secondary) 70%,var(--ht-panel) 30%),
+      color-mix(in srgb,var(--ht-secondary2) 76%,var(--ht-panel2) 24%)
+    ) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 36%,transparent) !important;
+  }
+  #expandedShopModal .shop-tab.active,
+  #friendsModal button.primary,
+  #accountSettingsModal #saveAccountSettingsBtn{
+    background:linear-gradient(180deg,var(--ht-primary),var(--ht-primary2)) !important;
+    border-color:color-mix(in srgb,var(--ht-primary) 62%,white 38%) !important;
+    color:color-mix(in srgb,var(--ht-bg) 86%,black 14%) !important;
+  }
+  #expandedShopModal .account-btn:hover,#expandedShopModal .shop-tab:hover,
+  #friendsModal button:hover,#accountSettingsModal .account-btn:hover{
+    filter:brightness(1.12);
+    border-color:var(--ht-accent) !important;
+  }
+
+  #expandedShopModal input,#expandedShopModal select,
+  #friendsModal input,#friendsModal select,
+  #accountSettingsModal .settings-control,#accountSettingsModal input,#accountSettingsModal select{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-bg) 88%,black 12%) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 34%,transparent) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal input::placeholder,#friendsModal input::placeholder,#accountSettingsModal input::placeholder{
+    color:color-mix(in srgb,var(--ht-muted) 72%,transparent) !important;
+    opacity:1 !important;
+  }
+  #expandedShopModal input:focus,#expandedShopModal select:focus,
+  #friendsModal input:focus,#friendsModal select:focus,
+  #accountSettingsModal input:focus,#accountSettingsModal select:focus{
+    border-color:var(--ht-accent) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 18%,transparent) !important;
+  }
+  #expandedShopModal select option,#friendsModal select option,#accountSettingsModal select option{
+    background:var(--ht-panel2) !important;
+    color:var(--ht-text) !important;
+  }
+
+  /* Shop surfaces */
+  #expandedShopModal .rotating-stock-panel,
+  #expandedShopModal .material-owned-panel,
+  #expandedShopModal .shopkeeper-panel,
+  #expandedShopModal .material-card,
+  #expandedShopModal .recipe-card,
+  #expandedShopModal .theme-card,
+  #expandedShopModal .chest-card,
+  #expandedShopModal .code-card{
+    background:color-mix(in srgb,var(--ht-panel2) 76%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 22%,transparent) !important;
+    color:var(--ht-text) !important;
+  }
+  #expandedShopModal .material-card:hover,
+  #expandedShopModal .recipe-card:hover,
+  #expandedShopModal .theme-card:hover,
+  #expandedShopModal .chest-card:hover{
+    border-color:color-mix(in srgb,var(--ht-accent) 66%,transparent) !important;
+  }
+  #expandedShopModal .reward-badge,
+  #expandedShopModal .shop-refresh-pill,
+  #expandedShopModal .pill{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-special) 14%,var(--ht-panel2) 86%) !important;
+    border-color:color-mix(in srgb,var(--ht-special) 46%,transparent) !important;
+  }
+  #expandedShopModal .shopkeeper-placeholder{
+    background:color-mix(in srgb,var(--ht-panel) 66%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 42%,transparent) !important;
+  }
+  #expandedShopModal .shopkeeper-placeholder strong{color:var(--ht-accent) !important;}
+  #expandedShopModal .shopkeeper-placeholder span{color:var(--ht-muted) !important;opacity:1 !important;}
+
+  /* Friends surfaces */
+  #friendsModal .friends-panel,
+  #friendsModal .friend-item,
+  #friendsModal .trade-offer{
+    background:color-mix(in srgb,var(--ht-panel2) 78%,transparent) !important;
+    border-color:color-mix(in srgb,var(--ht-muted) 22%,transparent) !important;
+    color:var(--ht-text) !important;
+  }
+  #friendsModal .friends-chat-log{
+    background:color-mix(in srgb,var(--ht-bg) 90%,black 10%) !important;
+    border-color:color-mix(in srgb,var(--ht-accent) 24%,transparent) !important;
+  }
+  #friendsModal .friend-chat-msg{
+    color:var(--ht-text) !important;
+    background:color-mix(in srgb,var(--ht-secondary) 28%,var(--ht-panel2) 72%) !important;
+  }
+  #friendsModal .friend-chat-msg.mine{
+    background:color-mix(in srgb,var(--ht-primary) 24%,var(--ht-panel2) 76%) !important;
+  }
+  #friendsModal .friend-status.online{color:color-mix(in srgb,#8ff0ad 74%,var(--ht-text) 26%) !important;}
+  #friendsModal .friend-status.playing{color:color-mix(in srgb,#8fc8ff 70%,var(--ht-text) 30%) !important;}
+
+  /* Account Settings surfaces */
+  #accountSettingsModal .account-detail-grid,
+  #accountSettingsModal .danger-zone,
+  #accountSettingsModal .delete-confirm-box{
+    color:var(--ht-text) !important;
+  }
+  #accountSettingsModal .danger-zone{
+    background:color-mix(in srgb,#6a2028 24%,var(--ht-panel2) 76%) !important;
+    border-color:color-mix(in srgb,#ff7a84 42%,transparent) !important;
+  }
+  #accountSettingsModal .danger-btn{
+    background:linear-gradient(180deg,#7b2d36,#552027) !important;
+    border-color:#b75a64 !important;
+    color:#fff7f2 !important;
+  }
+
+
+  /* ---------- 617 Shop has NO Themes control ---------- */
+  #expandedShopModal [data-shop-page="themes"],
+  #expandedShopModal #shopPageThemes,
+  #expandedShopModal .shop-page-themes,
+  #expandedShopModal .theme-card,
+  #expandedShopModal .theme-grid{display:none !important;pointer-events:none !important;}
+  body.hostl-shop-open #homeThemesBtn{visibility:hidden !important;pointer-events:none !important;}
+
+
+  /* ---------- 619 clear home-screen modal backdrops ---------- */
+  /* Keep the home screen visible behind menus. The fullscreen overlay itself
+     still owns pointer input, so home controls cannot be clicked through it. */
+  .account-modal,
+  .shop-modal,
+  #friendsModal,
+  #homeThemeOverlay,
+  #playerDesignOverlay,
+  #chooseStarterPetOverlay,
+  #cardInventoryOverlay,
+  #petShopOverlay,
+  #achievementOverlay,
+  #legalSupportOverlay{
+    background:transparent !important;
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
+
+  /* This class is controlled by the modal watcher below. It prevents mouse,
+     touch and keyboard interaction with the visible home screen while any
+     home menu is open, without hiding the home screen itself. */
+  /* Keep the HOME visible and non-clickable without disabling any modal that
+     happens to live inside #home (Friends is one of those modals). */
+  #home.hostl-home-modal-locked{
+    pointer-events:auto !important;
+  }
+  #home.hostl-home-modal-locked > .home-shell,
+  #home.hostl-home-modal-locked > #friendsCorner,
+  #home.hostl-home-modal-locked > #accountSettingsFooter,
+  #home.hostl-home-modal-locked > .legal-support-footer{
+    pointer-events:none !important;
+    user-select:none !important;
+  }
+
+  /* The themed UI rules use ID selectors with !important, so explicitly clear
+     these two full-screen backdrops at equal/higher specificity. The cards
+     themselves stay themed; only the blank screen-filling layer is removed. */
+  #expandedShopModal,
+  #accountSettingsModal{
+    background:transparent !important;
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
+
+  /* ---------- 633 gameplay UI hard guard ---------- */
+  /* The home screen may still receive account/theme refreshes while a run is active.
+     This class makes those refreshes incapable of putting Home back over gameplay. */
+  body.hostl-game-active #home{
+    display:none !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
+  }
+
 </style>
 </head>
 <body>
@@ -4683,6 +4969,9 @@
           <strong id="homeThemeEffectsState">On</strong>
         </span>
       </label>
+      <div class="theme-unlock-summary">
+        <span class="pill">Guest Free</span><span class="pill">Account Free</span><span class="pill">Gold Cubits</span><span class="pill">Watch Ad</span>
+      </div>
       <label class="theme-effects-toggle background-effects-toggle" for="homeBackgroundEffectsToggle">
         <span class="theme-effects-toggle-copy">
           <b>Background Effects</b>
@@ -4820,7 +5109,7 @@
 
           <div class="home-name-row">
             <span class="home-field-label">Player Name</span>
-            <input type="text" id="username" placeholder="Username" maxlength="14" value="Cube">
+            <input type="text" id="username" placeholder="Choose username" maxlength="14" value="">
             <button class="btn" id="choosePlayerDesignBtn" type="button">Character Design</button>
           </div>
 
@@ -4866,9 +5155,9 @@
 
         <div class="home-side-panel home-shop-launcher">
           <button id="openStarterShop" type="button">
-            <span class="shop-launch-kicker">Loadout &amp; Supplies</span>
+            <span class="shop-launch-kicker">Materials · Build · Learn</span>
             <span class="shop-launch-title">Shop</span>
-            <span class="shop-launch-sub">Open the full shop. More items can be added here later without cramming the home screen.</span>
+            <span class="shop-launch-sub">Browse the rotating material stock, build permanent gear, learn skills, open chests, and redeem codes.</span>
             <span class="shop-launch-arrow">→</span>
           </button>
         </div>
@@ -4901,8 +5190,8 @@
           <div id="friendDetailView" class="friends-subview">
             <div class="friends-head"><div><div id="friendDetailName" class="friend-name">Friend</div><div id="friendDetailStatus" class="friend-status"></div></div><div class="friend-actions"><button id="friendChatTab" type="button">Chat</button><button id="friendGiftTab" type="button">Gift</button><button id="friendTradeTab" type="button">Trade</button><button id="removeFriendBtn" class="danger" type="button">Remove</button></div></div>
             <div id="friendChatView" class="friends-subview on"><div id="friendChatLog" class="friends-chat-log"></div><div class="friends-form-row"><input id="friendChatInput" maxlength="240" style="flex:1" placeholder="Message your friend"><button id="sendFriendChatBtn" class="primary" type="button">Send</button></div></div>
-            <div id="friendGiftView" class="friends-subview"><h3>Gift</h3><p class="friends-note">Gifts are immediate and cannot be undone.</p><div class="friends-form-row"><input id="giftCubits" type="number" min="0" placeholder="Cubits"><input id="giftSpecies" maxlength="24" placeholder="Card species (e.g. saber)"><input id="giftCards" type="number" min="0" placeholder="Cards"><button id="sendGiftBtn" class="primary" type="button">Send Gift</button></div></div>
-            <div id="friendTradeView" class="friends-subview"><h3>Trade Offer</h3><div class="friends-note">Choose what you give and what you want. Both players must still own the items when the trade is accepted.</div><h4>You Give</h4><div class="friends-form-row"><input id="tradeGiveCubits" type="number" min="0" placeholder="Cubits"><input id="tradeGiveSpecies" maxlength="24" placeholder="Card species"><input id="tradeGiveCards" type="number" min="0" placeholder="Cards"></div><h4>You Want</h4><div class="friends-form-row"><input id="tradeWantCubits" type="number" min="0" placeholder="Cubits"><input id="tradeWantSpecies" maxlength="24" placeholder="Card species"><input id="tradeWantCards" type="number" min="0" placeholder="Cards"><button id="sendTradeBtn" class="primary" type="button">Send Offer</button></div><h4>Pending Trades</h4><div id="friendTradesList"></div></div>
+            <div id="friendGiftView" class="friends-subview"><h3>Gift</h3><p class="friends-note">Gifts are immediate and cannot be undone.</p><div class="friends-form-row"><input id="giftCubits" type="number" min="0" placeholder="Gold Cubits"><input id="giftSpecies" maxlength="24" placeholder="Card species (e.g. saber)"><input id="giftCards" type="number" min="0" placeholder="Cards"><button id="sendGiftBtn" class="primary" type="button">Send Gift</button></div></div>
+            <div id="friendTradeView" class="friends-subview"><h3>Trade Offer</h3><div class="friends-note">Choose what you give and what you want. Both players must still own the items when the trade is accepted.</div><h4>You Give</h4><div class="friends-form-row"><input id="tradeGiveCubits" type="number" min="0" placeholder="Gold Cubits"><input id="tradeGiveSpecies" maxlength="24" placeholder="Card species"><input id="tradeGiveCards" type="number" min="0" placeholder="Cards"></div><h4>You Want</h4><div class="friends-form-row"><input id="tradeWantCubits" type="number" min="0" placeholder="Gold Cubits"><input id="tradeWantSpecies" maxlength="24" placeholder="Card species"><input id="tradeWantCards" type="number" min="0" placeholder="Cards"><button id="sendTradeBtn" class="primary" type="button">Send Offer</button></div><h4>Pending Trades</h4><div id="friendTradesList"></div></div>
           </div>
         </div>
       </div>
@@ -5262,7 +5551,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "592";
+const CUBE_SHARED_RULES_VERSION = "597";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7005,59 +7294,90 @@ function buildHomeThemeGrid() {
   if (!grid) return;
   grid.innerHTML = "";
 
-  const elementThemeOrder = [
-    "fireElement",
-    "waterElement",
-    "lightningElement",
-    "powerElement",
-    "windElement",
-    "plantElement",
-    "stoneElement",
-    "earthElement",
-    "soundElement"
-  ];
-
+  const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
+  const elementThemeOrder = ["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement"];
   const cuteThemeOrder = ["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon"];
   const coolThemeOrder = ["arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus"];
   const epicThemeOrder = ["dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
   const relaxingThemeOrder = ["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"];
-  const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
-  const featuredThemeIds = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
-  const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !featuredThemeIds.includes(id));
-  // Show the original/classic HOSTL themes first, before the newer theme groups.
-  const themeOrder = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...otherThemeOrder];
+  const known = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
+  const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !known.includes(id));
 
-  for (const id of themeOrder) {
-    const theme = HOME_THEMES[id];
-    if (!theme) continue;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    const isElementTheme = elementThemeOrder.includes(id);
-    const moodBadge = isElementTheme ? "ELEMENT"
-      : cuteThemeOrder.includes(id) ? "CUTE"
-      : coolThemeOrder.includes(id) ? "COOL"
-      : epicThemeOrder.includes(id) ? "EPIC"
-      : relaxingThemeOrder.includes(id) ? "RELAX"
-      : "CLASSIC";
-    btn.className = "theme-choice" + (id === currentHomeTheme ? " selected" : "") + (isElementTheme ? " element-theme-choice" : "") + (moodBadge ? " themed-mood-choice" : "");
-    btn.innerHTML = `
-      <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
-      <span class="theme-choice-content">
-        ${moodBadge ? `<span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>` : ``}
-        <span class="theme-choice-name">${theme.name}</span>
-        <span class="theme-choice-desc">${theme.desc}</span>
-      </span>
-      <span class="theme-swatch-row">
-        <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
-        <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
-        <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
-        <span class="theme-selected-pill">Selected</span>
-      </span>
-    `;
-    btn.addEventListener("click", () => applyHomeTheme(id, true));
-    grid.appendChild(btn);
+  const guestFree = new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
+  const accountFree = new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const adThemes = new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+  const account = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[],goldCubits:0};
+  const owned = new Set(Array.isArray(account.unlockedThemes) ? account.unlockedThemes : []);
+  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : "gold";
+  const priceOf = id => {
+    if (elementThemeOrder.includes(id)) return 6500;
+    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 28000 : 20000;
+    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 16000 : 11000;
+    if (cuteThemeOrder.includes(id)) return 8500;
+    if (relaxingThemeOrder.includes(id)) return 9500;
+    return 12000;
+  };
+  const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
+
+  const groups = [
+    {key:"guest",title:"Guest Free",desc:"Available to everyone, even without an account.",ids:[...classicThemeOrder,...otherThemeOrder].filter(id=>guestFree.has(id))},
+    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:known.filter(id=>accountFree.has(id))},
+    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold")},
+    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id))},
+  ];
+
+  const addHeading = g => {
+    const h=document.createElement("div"); h.className="theme-group";
+    h.innerHTML=`<div class="theme-group-title">${g.title}</div><div class="theme-group-desc">${g.desc}</div>`;
+    grid.appendChild(h);
+  };
+
+  for (const group of groups) {
+    const ids=group.ids.filter(id=>HOME_THEMES[id]); if(!ids.length) continue;
+    addHeading(group);
+    for (const id of ids) {
+      const theme=HOME_THEMES[id]; const unlocked=isUnlocked(id); const cat=categoryOf(id); const price=priceOf(id);
+      const btn=document.createElement("div");
+      btn.className=`theme-choice ${unlocked?"":"locked"} unlocked-${cat}` + (id===currentHomeTheme?" selected":"");
+      const moodBadge = elementThemeOrder.includes(id) ? "ELEMENT" : cuteThemeOrder.includes(id) ? "CUTE" : coolThemeOrder.includes(id) ? "COOL" : epicThemeOrder.includes(id) ? "EPIC" : relaxingThemeOrder.includes(id) ? "RELAX" : "CLASSIC";
+      let unlockText = cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
+      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad to Unlock" : `Buy ${price.toLocaleString()}`;
+      btn.innerHTML = `
+        <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
+        <span class="theme-choice-content">
+          <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+          <span class="theme-choice-name">${theme.name}</span>
+          <span class="theme-choice-desc">${theme.desc}</span>
+        </span>
+        <span class="theme-swatch-row">
+          <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
+          <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
+          <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
+          <span class="theme-selected-pill">Selected</span>
+        </span>
+        <span class="theme-lock-state"><span class="theme-unlock-badge">${unlockText}</span><button class="theme-action" type="button">${actionText}</button></span>`;
+      const action=btn.querySelector(".theme-action");
+      action.addEventListener("click", async (e)=>{
+        e.stopPropagation();
+        if (isUnlocked(id)) { applyHomeTheme(id,true); return; }
+        if (!account.loggedIn) { window.__hostlOpenAccountForTheme?.(); return; }
+        if (cat==="gold") await window.__hostlBuyTheme?.(id,price);
+        else if (cat==="ad") await window.__hostlUnlockAdTheme?.(id);
+      });
+      btn.addEventListener("click",()=>{ if(isUnlocked(id)) applyHomeTheme(id,true); });
+      grid.appendChild(btn);
+    }
   }
 }
+
+window.__hostlRefreshThemeAccess = function(){
+  const account=window.__hostlThemeAccountState||{loggedIn:false,unlockedThemes:[]};
+  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
+  const acct=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const owned=new Set(Array.isArray(account.unlockedThemes)?account.unlockedThemes:[]);
+  const allowed=guest.has(currentHomeTheme)||(account.loggedIn&&(acct.has(currentHomeTheme)||owned.has(currentHomeTheme)));
+  if(!allowed) applyHomeTheme("forestGold",true); else buildHomeThemeGrid();
+};
 
 function openHomeThemes() {
   if (game.started && !game.over) return;
@@ -7161,7 +7481,7 @@ const PET_STAT_UPGRADE_INFO = {
   health:  { name:"Health",  icon:"❤", desc:"More maximum health.", per:0.08 },
   defense: { name:"Defense", icon:"🛡", desc:"Takes less damage from attacks.", per:0.045 },
   attack:  { name:"Attack",  icon:"⚔", desc:"Stronger normal attacks.", per:0.075 },
-  weight:  { name:"Weight",  icon:"◆", desc:"More mass: harder to push, but a little slower.", per:0.12 },
+  weight:  { name:"Weight",  icon:"◆", desc:"More mass: harder to push. Extra weight also reduces final movement speed and turning speed.", per:0.12 },
   regen:   { name:"Regen",   icon:"✚", desc:"Recovers health faster over time.", per:0.12 },
   speed:   { name:"Speed",   icon:"➜", desc:"Moves faster and naturally roams farther from you.", per:0.04 },
 };
@@ -7337,19 +7657,33 @@ function wallDamageForTool(toolName, wall) {
   return wall && wall.kind === "stoneSpike" ? (t.stoneWall || 0.5) : (t.woodWall || 1);
 }
 
+// One canonical animal rarity table.  Viper uses the internal species key `snake`.
+// Bearded Dragon stays Starter-only until its normal rarity is chosen.
+const PET_RARITY = Object.freeze({
+  dog:"Common", cat:"Common", rabbit:"Common",
+  wolf:"Uncommon", bear:"Uncommon", fox:"Uncommon",
+  boar:"Rare", deer:"Rare", owl:"Rare",
+  snake:"Legendary", saber:"Legendary",
+  dragon:"Starter"
+});
+const PET_RARITY_CARD_WEIGHT = Object.freeze({Common:2.4,Uncommon:1.5,Rare:.82,Legendary:.28,Starter:.55});
+const PET_RARITY_TAME_CHANCE = Object.freeze({Common:.50,Uncommon:.40,Rare:.28,Legendary:.18,Starter:.42});
+function petRarity(type){ return PET_RARITY[type] || "Common"; }
+function petCardRarityWeight(type){ return PET_RARITY_CARD_WEIGHT[petRarity(type)] || 1; }
+
 const PET_UNLOCK = {
-  dog:    { cards: 0,  servs: 0,    rarity: "Starter" },
-  cat:    { cards: 0,  servs: 0,    rarity: "Starter" },
-  dragon: { cards: 0,  servs: 0,    rarity: "Starter" },
-  rabbit: { cards: 55, servs: 600,  rarity: "Common" },
-  fox:    { cards: 55, servs: 650,  rarity: "Common" },
-  owl:    { cards: 60, servs: 750,  rarity: "Common" },
-  deer:   { cards: 70, servs: 900,  rarity: "Uncommon" },
-  wolf:   { cards: 80, servs: 1100, rarity: "Uncommon" },
-  snake:  { cards: 85, servs: 1200, rarity: "Uncommon" },
-  boar:   { cards: 95, servs: 1400, rarity: "Rare" },
-  bear:   { cards: 110,servs: 1800, rarity: "Rare" },
-  saber:  { cards: 120,servs: 2200, rarity: "Legendary" },
+  dog:    { cards: 0,  servs: 0,    rarity: PET_RARITY.dog },
+  cat:    { cards: 0,  servs: 0,    rarity: PET_RARITY.cat },
+  dragon: { cards: 0,  servs: 0,    rarity: PET_RARITY.dragon },
+  rabbit: { cards: 55, servs: 600,  rarity: PET_RARITY.rabbit },
+  fox:    { cards: 55, servs: 650,  rarity: PET_RARITY.fox },
+  owl:    { cards: 60, servs: 750,  rarity: PET_RARITY.owl },
+  deer:   { cards: 70, servs: 900,  rarity: PET_RARITY.deer },
+  wolf:   { cards: 80, servs: 1100, rarity: PET_RARITY.wolf },
+  snake:  { cards: 85, servs: 1200, rarity: PET_RARITY.snake },
+  boar:   { cards: 95, servs: 1400, rarity: PET_RARITY.boar },
+  bear:   { cards: 110,servs: 1800, rarity: PET_RARITY.bear },
+  saber:  { cards: 120,servs: 2200, rarity: PET_RARITY.saber },
 };
 const PET_CARD_STAGE_ORDER = ["baby", "adult", "boss", "superboss"];
 const PET_CARD_STAGE_COST = {
@@ -7745,7 +8079,9 @@ function segmentCircleT(x0,y0,x1,y1,cx,cy,r) {
 }
 function animalProjectileSegmentT(a,x0,y0,x1,y1,radius=0) {
   let best=null;
-  for (const h of animalBodyHitboxes(a)) {
+  // Damage geometry is always torso/body + explicit head. No animal attack or
+  // projectile is allowed to require only the torso hitbox.
+  for (const h of animalTargetDamageHitboxes(a)) {
     const t=segmentCircleT(x0,y0,x1,y1,h.x,h.y,radius+h.r);
     if (t!=null && (best==null || t<best)) best=t;
   }
@@ -7821,14 +8157,20 @@ function saveMeta() {
     // Achievement unlock records are account-only. Never put them in the general browser meta save.
     const saveCopy = {...meta};
     delete saveCopy.achievements;
-    // Account Cubits live on the HOSTL server. Never leak an account balance into the
-    // browser's guest save; a logged-out player always starts with 5 Cubits.
+    // Account Gold Cubits live on the HOSTL server. Never leak an account balance into the
+    // browser's guest save; a logged-out player always starts with 5 Gold Cubits.
     if (window.__hostlAccountSessionActive) saveCopy.servs = 5;
     localStorage.setItem(META_KEY, JSON.stringify(saveCopy));
   } catch (e) {}
-  // If a HOSTL account is signed in, Gold Cubits live in the normal game Cubits counter
+  // If a HOSTL account is signed in, Gold Cubits live in the normal game Gold Cubits counter
   // and are mirrored back to the account for cross-device persistence.
-  try { window.__hostlAccountCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
+  try { window.__hostlAccountGoldCubitsChanged?.(Math.max(0,Math.floor(Number(meta.servs)||0))); } catch (_) {}
+  try {
+    window.__hostlAccountProgressChanged?.({
+      speciesCards:{...(meta.speciesCards||{})}, ownedStarters:{...(meta.ownedStarters||{})}, petStages:{...(meta.petStages||{})},
+      petStatUpgrades:JSON.parse(JSON.stringify(meta.petStatUpgrades||{})), starterPetType:meta.starterPetType||"", starterPetName:meta.starterPetName||"", starterPetGender:meta.starterPetGender||"Male"
+    });
+  } catch (_) {}
 }
 let meta = loadMeta();
 // Old browser-wide achievement records are intentionally ignored from this build onward.
@@ -7839,23 +8181,24 @@ const ACHIEVEMENT_SPECIES = Object.keys(PET_TYPES);
 function achievementSpeciesName(type){ return PET_TYPES[type]?.name || type; }
 function achievementDefs(){
   const defs = [
-    {id:"first_tame",icon:"🤝",name:"First Animal Tamed",desc:"Tame any wild animal for the first time.",rewardText:"20 Cubits + 2 cards for that animal",reward:{cubits:20,dynamicCards:2}},
-    {id:"first_death",icon:"💀",name:"Well, That Happened",desc:"Die for the first time.",rewardText:"8 Cubits",reward:{cubits:8}},
-    {id:"moonmark_hunter",icon:"🌙",name:"Moonmark Hunter",desc:"Defeat the Moonmarked Hostl boss.",rewardText:"100 Cubits",reward:{cubits:100}},
-    {id:"survive_5",icon:"⏱️",name:"Five Minutes Strong",desc:"Survive for 5 minutes in one run.",rewardText:"35 Cubits",reward:{cubits:35}},
-    {id:"survive_night",icon:"🌅",name:"First Night Survived",desc:"Reach Morning alive after your first Night.",rewardText:"25 Cubits",reward:{cubits:25}},
-    {id:"survive_10",icon:"🛡️",name:"Ten-Minute Survivor",desc:"Survive for 10 minutes in one run.",rewardText:"60 Cubits",reward:{cubits:60}},
-    {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Cubits",reward:{cubits:150}},
-    {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Cubits",reward:{cubits:50}},
-    {id:"tester_hunter_1",icon:"🎯",name:"Tester Hunter",desc:"Defeat the #1 HOSTL Tester in multiplayer.",rewardText:"3,000 Cubits + 100 Saber Cards",reward:{}},
+    {id:"first_tame",icon:"🤝",name:"First Animal Tamed",desc:"Tame any wild animal for the first time.",rewardText:"20 Gold Cubits + 2 cards for that animal",reward:{goldCubits:20,dynamicCards:2}},
+    {id:"first_death",icon:"💀",name:"Well, That Happened",desc:"Die for the first time.",rewardText:"8 Gold Cubits",reward:{goldCubits:8}},
+    {id:"moonmark_hunter",icon:"🌙",name:"Moonmark Hunter",desc:"Defeat the Moonmarked Hostl boss.",rewardText:"100 Gold Cubits",reward:{goldCubits:100}},
+    {id:"survive_5",icon:"⏱️",name:"Five Minutes Strong",desc:"Survive for 5 minutes in one run.",rewardText:"35 Gold Cubits",reward:{goldCubits:35}},
+    {id:"survive_night",icon:"🌅",name:"First Night Survived",desc:"Reach Morning alive after your first Night.",rewardText:"25 Gold Cubits",reward:{goldCubits:25}},
+    {id:"survive_10",icon:"🛡️",name:"Ten-Minute Survivor",desc:"Survive for 10 minutes in one run.",rewardText:"60 Gold Cubits",reward:{goldCubits:60}},
+    {id:"tame_all",icon:"🐾",name:"Master Tamer",desc:"Tame every animal species at least once.",rewardText:"150 Gold Cubits",reward:{goldCubits:150}},
+    {id:"breed_three",icon:"🍼",name:"Growing Families",desc:"Breed a baby from 3 different species.",rewardText:"50 Gold Cubits",reward:{goldCubits:50}},
+    {id:"tester_hunter_1",icon:"🎯",name:"Tester Hunter",desc:"Defeat the #1 HOSTL Tester in multiplayer.",rewardText:"3,000 Gold Cubits + 100 Saber Cards",reward:{}},
+    {id:"owner_hunter_1",icon:"👑",name:"Owner Hunter",desc:"Defeat the HOSTL Owner in multiplayer.",rewardText:"7,500 Gold Cubits + 250 Viper Cards",reward:{}},
   ];
   for(const type of ACHIEVEMENT_SPECIES){
     const info=PET_TYPES[type];
-    defs.push({id:`tame_${type}`,icon:info.emoji||"🐾",name:`First ${info.name} Tamed`,desc:`Tame a wild ${info.name} for the first time.`,rewardText:`10 Cubits + 4 ${info.name} Cards`,reward:{cubits:10,cards:4,species:type}});
+    defs.push({id:`tame_${type}`,icon:info.emoji||"🐾",name:`First ${info.name} Tamed`,desc:`Tame a wild ${info.name} for the first time.`,rewardText:`10 Gold Cubits + 4 ${info.name} Cards`,reward:{goldCubits:10,cards:4,species:type}});
   }
   for(const type of ACHIEVEMENT_SPECIES){
     const info=PET_TYPES[type];
-    defs.push({id:`breed_${type}`,icon:"🍼",name:`First ${info.name} Baby`,desc:`Breed your first ${info.name} baby.`,rewardText:`12 Cubits + 6 ${info.name} Cards`,reward:{cubits:12,cards:6,species:type}});
+    defs.push({id:`breed_${type}`,icon:"🍼",name:`First ${info.name} Baby`,desc:`Breed your first ${info.name} baby.`,rewardText:`12 Gold Cubits + 6 ${info.name} Cards`,reward:{goldCubits:12,cards:6,species:type}});
   }
   return defs;
 }
@@ -7892,7 +8235,7 @@ function queueAchievementToast(def,rewardSummary){
 }
 function grantAchievementReward(def, context={}){
   const r=def.reward||{}; const bits=[];
-  if(r.cubits){ meta.servs=(meta.servs||0)+r.cubits; bits.push(`+${r.cubits} Cubits`); }
+  if(r.goldCubits){ meta.servs=(meta.servs||0)+r.goldCubits; bits.push(`+${r.goldCubits} Gold Cubits`); }
   const species=r.species || context.species;
   const cards=Number(r.cards||r.dynamicCards||0);
   if(cards>0 && species && PET_TYPES[species]){
@@ -8555,7 +8898,7 @@ function renderPlayerLeaderboard() {
       list.push({
         id,
         username: String(p.username || "Cube").slice(0, 14),
-        title: String(p.title||""), testerRank:Number(p.testerRank)||0,
+        title: String(p.title||""), testerRank:Number(p.testerRank)||0, ownerRank:Number(p.ownerRank)||0,
         kills: Math.max(0, Number(p.kills) || 0),
         gold: Math.max(0, Number(p.gold) || 0)
       });
@@ -8594,7 +8937,7 @@ function renderPlayerLeaderboard() {
 
     const name = document.createElement("span");
     name.className = "leaderboard-name";
-    name.textContent = entry.title ? `${entry.username} · ${entry.testerRank===1?"TESTER #1":entry.title}` : entry.username;
+    name.textContent = (entry.ownerRank===1 || entry.testerRank===1 || entry.title) ? `${entry.username} · ${entry.ownerRank===1?"OWNER":entry.testerRank===1?"TESTER #1":entry.title}` : entry.username;
 
     const kills = document.createElement("span");
     kills.className = "leaderboard-stat leaderboard-kills";
@@ -8703,7 +9046,10 @@ function syncNetworkSharedResourceState() {
     r.type = s.type || "rock";
     r.x = Number(s.x) || 0;
     r.y = Number(s.y) || 0;
-    r.hp = Math.max(0, Number(s.hp) || 0);
+    // Do not let an older topology snapshot visually heal a resource after an
+    // authoritative pet/player damage event. The damage lock is released once
+    // the live schema catches up to the same or lower HP.
+    r.hp = damageLockedHp(r, Math.max(0, Number(s.hp) || 0));
     r.maxHp = Math.max(1, Number(s.maxHp) || 1);
     r.alive = s.alive !== false && r.hp > 0;
     r.solidR = Number(s.solidR) || 12;
@@ -8944,7 +9290,7 @@ function updateNetworkPetInterpolation(dt) {
       const rideTarget = Number.isFinite(p._netAngle)
         ? p._netAngle
         : (rideLen > 0.05 ? Math.atan2(rideMove.y, rideMove.x) : p.angle);
-      if (Number.isFinite(rideTarget)) smoothTurn(p, rideTarget, dt, 2.15);
+      if (Number.isFinite(rideTarget)) smoothTurn(p, rideTarget, dt, mountedPetTurnSpeed(p));
       const rvx = Number(player._actualMoveVX) || 0, rvy = Number(player._actualMoveVY) || 0;
       p._renderVX = rvx; p._renderVY = rvy;
       const renderSpeed = Math.hypot(rvx, rvy);
@@ -9142,50 +9488,88 @@ function applyServerGoldSnapshot(balance) {
   }
 }
 
+function networkReconcileMoveVector() {
+  // When riding, the arrow/joystick is a steering target, not the direction the
+  // mount is actually travelling. Reconcile against real post-collision velocity
+  // (or the mount's facing direction) so a delayed snapshot can never mistake a
+  // normal curved turn for sideways drift and tug the rider backward.
+  if (player.riding && !player.riding.dead) {
+    const vx = Number(player._actualMoveVX) || 0;
+    const vy = Number(player._actualMoveVY) || 0;
+    const vl = Math.hypot(vx, vy);
+    if (vl > 4) return { x: vx / vl, y: vy / vl };
+    const input = currentMoveVector();
+    if (Math.hypot(input.x, input.y) > 0.05 && Number.isFinite(player.riding.angle)) {
+      return { x: Math.cos(player.riding.angle), y: Math.sin(player.riding.angle) };
+    }
+  }
+  return currentMoveVector();
+}
+
 function applyNetworkPlayerPositionCorrection(serverX, serverY) {
   let dx = serverX - player.x, dy = serverY - player.y;
   const error = Math.hypot(dx, dy);
   if (!Number.isFinite(error) || error <= 0.001) return;
 
-  // Large disagreement means the client genuinely desynced or respawned.
-  if (error > 220) {
+  const mounted = !!(player.riding && !player.riding.dead);
+  // A fast mount can legitimately travel much farther between 10 Hz state patches.
+  // Give mounted prediction more room before a hard snap; collision corrections are
+  // still handled immediately by both the client and authoritative server.
+  const hardSnapDistance = mounted ? 460 : 220;
+  if (error > hardSnapDistance) {
     player.x = serverX; player.y = serverY;
-    resolveSolidCollisions();
+    if (mounted) {
+      player.riding.x = player.x; player.riding.y = player.y;
+      resolveAnimalWorld(player.riding);
+      player.x = player.riding.x; player.y = player.riding.y;
+    } else {
+      resolveSolidCollisions();
+    }
     return;
   }
 
-  const mv = currentMoveVector();
+  const mv = networkReconcileMoveVector();
   const ml = Math.hypot(mv.x, mv.y);
   const moving = ml > 0.05;
 
-  // While the player is actively moving, do not let delayed server snapshots
-  // tug them backward OR forward along the movement axis. Local prediction already
-  // owns that axis. We only reconcile lateral drift while moving; very large errors
-  // retain a tiny axial component so a true desync can still recover gradually.
+  // While actively moving, local prediction owns forward/back travel. Only
+  // reconcile true sideways drift. Mounted movement gets a wider grace window
+  // because high-speed curved travel makes old 10 Hz snapshots look far behind.
   if (moving) {
-    if (error < 6.0) return;
+    const smallErrorGrace = mounted ? 18 : 6;
+    if (error < smallErrorGrace) return;
     const ux = mv.x / ml, uy = mv.y / ml;
     const along = dx * ux + dy * uy;
-    const keepAlong = error > 120 ? 0.08 : 0.0;
+    const bigError = mounted ? error > 260 : error > 120;
+    const keepAlong = bigError ? (mounted ? 0.035 : 0.08) : 0.0;
     dx -= ux * along * (1 - keepAlong);
     dy -= uy * along * (1 - keepAlong);
     const lateral = Math.hypot(dx, dy);
-    if (lateral < 2.25 && error < 120) return;
-  } else if (error < 1.25) {
+    const lateralGrace = mounted ? 7.5 : 2.25;
+    const recoveryThreshold = mounted ? 260 : 120;
+    if (lateral < lateralGrace && error < recoveryThreshold) return;
+  } else if (error < (mounted ? 2.5 : 1.25)) {
     return;
   }
 
   const usable = Math.hypot(dx, dy);
   if (usable <= 0.001) return;
-  const rate = moving ? (error > 120 ? 0.065 : 0.045) : 0.24;
-  const maxStep = moving ? (error > 120 ? 3.5 : 2.25) : 12;
+  const bigError = mounted ? error > 260 : error > 120;
+  const rate = moving ? (mounted ? (bigError ? 0.035 : 0.020) : (bigError ? 0.065 : 0.045)) : 0.24;
+  const maxStep = moving ? (mounted ? (bigError ? 2.4 : 1.15) : (bigError ? 3.5 : 2.25)) : 12;
   let sx = dx * rate, sy = dy * rate;
   const sl = Math.hypot(sx, sy);
   if (sl > maxStep) { sx = sx / sl * maxStep; sy = sy / sl * maxStep; }
 
   player.x = clamp(player.x + sx, PLAYER_R, WORLD_W - PLAYER_R);
   player.y = clamp(player.y + sy, PLAYER_R, WORLD_H - PLAYER_R);
-  resolveSolidCollisions();
+  if (mounted) {
+    player.riding.x = player.x; player.riding.y = player.y;
+    resolveAnimalWorld(player.riding);
+    player.x = player.riding.x; player.y = player.riding.y;
+  } else {
+    resolveSolidCollisions();
+  }
 }
 
 function syncNetworkFullWorld(force = false) {
@@ -9336,7 +9720,7 @@ function applyWorldReward(data={}) {
     meta.speciesCards[reward.species] = (meta.speciesCards[reward.species]||0) + reward.amount;
     saveMeta(); buildCardInventory();
     banner(`+${reward.amount} ${PET_TYPES[reward.species].name} Card${reward.amount===1?"":"s"}!`);
-  } else if (reward.kind === "cubits") {
+  } else if (reward.kind === "goldCubits") {
     meta.servs = (meta.servs||0) + reward.amount; saveMeta();
   }
   if (data.kill) { game.kills++; gainSkillXp(5,"combat"); }
@@ -9531,6 +9915,14 @@ async function connectMultiplayer() {
     net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
     net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.lastPhaseIdx = -1;
+    room.onMessage("accountMaterialReward", (data={}) => {
+      if(data?.account)setAccountFromServer(data.account);
+      const qty=Math.max(1,Math.floor(Number(data?.qty)||1));
+      const name=String(data?.name||"Material"), rarity=String(data?.rarity||"");
+      showGameMessage("Material Drop",`${rarity?rarity+" ":""}${name} ×${qty} added to your HOSTL account.`);
+      try{renderMaterialsAndRecipes();}catch(_){}
+    });
+
     room.onMessage("testerKillReward", (data={}) => {
       if(data?.account) setAccountFromServer(data.account);
       saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
@@ -9544,6 +9936,20 @@ async function connectMultiplayer() {
     });
     room.onMessage("testerDown", (data={}) => {
       if(String(data.killerName||"") && String(data.victimName||"")) banner(`${data.killerName} defeated TESTER #1 ${data.victimName}!`);
+    });
+    room.onMessage("ownerKillReward", (data={}) => {
+      if(data?.account) setAccountFromServer(data.account);
+      saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
+      if(data?.granted){
+        const def=ACHIEVEMENT_BY_ID.get("owner_hunter_1");
+        if(def) queueAchievementToast(def,data.rewardSummary||"Owner bounty claimed");
+        banner(`You defeated ${data.victimName||"the Owner"}! ${data.rewardSummary||"Owner bounty claimed."}`);
+      } else {
+        banner(`You defeated ${data.victimName||"the Owner"}! Achievement already claimed.`);
+      }
+    });
+    room.onMessage("ownerDown", (data={}) => {
+      if(String(data.killerName||"") && String(data.victimName||"")) banner(`${data.killerName} defeated OWNER ${data.victimName}!`);
     });
     room.onMessage("rulesMismatch", (data={}) => {
       const sv = String(data.serverRulesVersion || "unknown");
@@ -9866,6 +10272,9 @@ function sendNetworkInput(dt) {
       tool: player.tool || "Fist",
       heldSpecial: player.heldSpecial || "",
       ridingPetId: player.riding && player.riding.netId ? player.riding.netId : "",
+      // Keep authoritative mount collision geometry aligned with the locally
+      // predicted mount during fast turns. The server validates/clamps this angle.
+      ridingAngle: player.riding && Number.isFinite(player.riding.angle) ? player.riding.angle : null,
       attacking: !!mouse.down,
     });
   } catch (_) {}
@@ -9887,7 +10296,7 @@ function updateRemotePlayers(dt) {
         y: Number(p.y) || 0,
         angle: Number(p.angle) || 0,
         username: p.username || "Cube",
-        title: p.title || "", testerRank: Number(p.testerRank)||0,
+        title: p.title || "", testerRank: Number(p.testerRank)||0, ownerRank: Number(p.ownerRank)||0,
         color: p.color || "#3fa7ff",
         health: Number.isFinite(Number(p.health)) ? Number(p.health) : 100,
         maxHealth: Number.isFinite(Number(p.maxHealth)) ? Number(p.maxHealth) : 100,
@@ -9928,7 +10337,7 @@ function updateRemotePlayers(dt) {
     da = Math.atan2(Math.sin(da), Math.cos(da));
     v.angle += da * follow;
     v.username = p.username || "Cube";
-    v.title = p.title || ""; v.testerRank = Number(p.testerRank)||0;
+    v.title = p.title || ""; v.testerRank = Number(p.testerRank)||0; v.ownerRank = Number(p.ownerRank)||0;
     v.color = p.color || "#3fa7ff";
     v.health = Number.isFinite(Number(p.health)) ? Number(p.health) : 100;
     v.maxHealth = Number.isFinite(Number(p.maxHealth)) ? Number(p.maxHealth) : 100;
@@ -10008,9 +10417,9 @@ function drawRemotePlayer(v) {
   ctx.strokeText(v.username || "Cube", v.x, nameY);
   ctx.fillStyle = "#fff7df";
   ctx.fillText(v.username || "Cube", v.x, nameY);
-  if(v.title){
-    const label=v.testerRank===1?"🎯 TESTER #1":String(v.title).toUpperCase();
-    ctx.font="900 11px -apple-system, sans-serif";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.9)";ctx.strokeText(label,v.x,nameY-17);ctx.fillStyle=v.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(label,v.x,nameY-17);
+  if(v.title || v.ownerRank===1 || v.testerRank===1){
+    const label=v.ownerRank===1?"👑 OWNER":v.testerRank===1?"🎯 TESTER #1":String(v.title).toUpperCase();
+    ctx.font="900 11px -apple-system, sans-serif";ctx.lineWidth=3;ctx.strokeStyle="rgba(0,0,0,.9)";ctx.strokeText(label,v.x,nameY-17);ctx.fillStyle=v.ownerRank===1?"#ffd76a":v.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(label,v.x,nameY-17);
   }
 
   const maxHp = Math.max(1, Number(v.maxHealth) || 100);
@@ -10893,7 +11302,7 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
     py: centerY
   };
 
-  const nowMs = performance.now();
+  const nowMs = Number.isFinite(renderFrameNowMs) ? renderFrameNowMs : performance.now();
   const lastVisualAt = Number(a._cuteVisualAt) || nowMs;
   const visualDt = Math.max(0, Math.min(0.05, (nowMs - lastVisualAt) / 1000));
   a._cuteVisualAt = nowMs;
@@ -13130,6 +13539,11 @@ function drawUploadedAnimalSkin(a) {
     if (rabbitStage === "baby" && !a.sleeping) {
       if (drawReassembledRabbitPartsSkin(a, "baby", false)) return true;
     }
+    // Boss rabbit uses the same independently animated tail/body/head system
+    // as the other separated animals, for both awake and sleeping poses.
+    if (rabbitStage === "boss") {
+      if (drawReassembledRabbitPartsSkin(a, "boss", !!a.sleeping)) return true;
+    }
     if (rabbitStage === "superboss") {
       if (drawReassembledRabbitPartsSkin(a, "superboss", !!a.sleeping)) return true;
     }
@@ -13760,13 +14174,7 @@ function starterShellMax(){return meta?.ownedStarters?.ironShell ? 250 : 0;}
 function runPetXpMul(){return runShop.cape==="mentorCape"?1.50:1;}
 function runDefenseMul(){return runShop.armor==="guardianArmor"?.66:runShop.armor==="ironArmor"?.78:runShop.armor==="leatherArmor"?.88:1;}
 
-const TAME_BASE_CHANCE = {
-  dog:.50, cat:.50, rabbit:.50,
-  fox:.42, wolf:.42, deer:.42, dragon:.42,
-  bear:.34, boar:.34,
-  snake:.28, owl:.28,
-  saber:.18
-};
+const TAME_BASE_CHANCE = Object.fromEntries(Object.keys(PET_TYPES).map(type => [type, PET_RARITY_TAME_CHANCE[petRarity(type)] ?? .38]));
 function tameChanceFor(type){return clamp((TAME_BASE_CHANCE[type] ?? .38)+runTameBonus(),.08,.80);}
 
 const CURRENT_BIOME_ID = "forest";
@@ -14007,14 +14415,14 @@ function animalBodyHitbox(a) {
   return { x, y, r: Math.max(maxX-minX,maxY-minY)/2 };
 }
 function animalTouchingCircle(a, x, y, radius=0) {
-  for (const h of animalBodyHitboxes(a)) {
+  for (const h of animalTargetDamageHitboxes(a)) {
     if (dist(x,y,h.x,h.y) < radius + h.r) return h;
   }
   return null;
 }
 function deepestAnimalCircleOverlap(a, x, y, radius=0) {
   let best=null, bestOverlap=0;
-  for (const h of animalBodyHitboxes(a)) {
+  for (const h of animalTargetDamageHitboxes(a)) {
     const d=dist(x,y,h.x,h.y);
     const overlap=radius+h.r-d;
     if (overlap>bestOverlap) { bestOverlap=overlap; best={h,d,overlap}; }
@@ -14349,7 +14757,9 @@ function placeGoldChunks() {
 }
 
 const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber"];
-const WILD_TYPE_TARGETS = { fox: 1.28, wolf: 1.06, bear: 0.92, cat: 1.0, dog: 1.0, rabbit: 1.08, owl: 0.9, snake: 0.9, deer: 1.02, boar: 0.9, saber: 0.82 };
+// World population now follows the same rarity tiers shown in the pet/card UI.
+const WILD_RARITY_TARGET = Object.freeze({Common:1.45,Uncommon:.82,Rare:.44,Legendary:.16,Starter:.28});
+const WILD_TYPE_TARGETS = Object.fromEntries(WILD_SPECIES.map(type => [type, WILD_RARITY_TARGET[petRarity(type)] || .7]));
 
 // Wild animals only start animal-vs-animal fights against normal prey species.
 // Same-species wars are never chosen. Hostls/players are handled separately.
@@ -15032,13 +15442,13 @@ function hideLootPopup() {
 }
 function lootRewardIconHTML(reward, big = false) {
   if (!reward) return '<span class="emoji">🎁</span>';
-  if (reward.kind === "cubits") return big ? '<span class="loot-token-big"></span>' : '<span class="cubit-token"></span>';
+  if (reward.kind === "goldCubits") return big ? '<span class="loot-token-big"></span>' : '<span class="cubit-token"></span>';
   if (reward.kind === "cards") return `<span class="emoji">${PET_TYPES[reward.species].emoji}</span>`;
   const map = { wood: "🪵", stone: "🪨", gold: "🟡", berries: "🍓" };
   return `<span class="emoji">${map[reward.resource] || "📦"}</span>`;
 }
 function rewardName(reward) {
-  if (reward.kind === "cubits") return "Gold Cubits";
+  if (reward.kind === "goldCubits") return "Gold Cubits";
   if (reward.kind === "cards") return PET_TYPES[reward.species].name + " Cards";
   if (reward.resource === "wood") return "Wood";
   if (reward.resource === "stone") return "Stone";
@@ -15049,25 +15459,21 @@ function rewardName(reward) {
 function showLootPopup(rewards) {
   if (!rewards || !rewards.length) return;
   hideLootPopup();
-  const main = rewards.find(r => r.kind === "cards") || rewards.find(r => r.kind === "cubits") || rewards[0];
+  const main = rewards.find(r => r.kind === "cards") || rewards.find(r => r.kind === "goldCubits") || rewards[0];
   document.getElementById("lootIcon").innerHTML = lootRewardIconHTML(main, true);
-  document.getElementById("lootTitle").textContent = main.kind === "cards" ? `${PET_TYPES[main.species].name} Cards!` : main.kind === "cubits" ? "Gold Cubits!" : rewardName(main) + "!";
+  document.getElementById("lootTitle").textContent = main.kind === "cards" ? `${PET_TYPES[main.species].name} Cards!` : main.kind === "goldCubits" ? "Gold Cubits!" : rewardName(main) + "!";
   document.getElementById("lootSub").textContent = rewards.length > 1 ? "Treasure found inside the chest" : "This chest dropped one main reward";
   document.getElementById("lootLines").innerHTML = rewards.map(r => `<div class="loot-line"><div class="left"><div class="ico">${lootRewardIconHTML(r, false)}</div><div class="nm">${rewardName(r)}</div></div><div class="amt">+${r.amount}</div></div>`).join("");
   document.getElementById("lootPopup").classList.add("show");
   lootPopupTimer = setTimeout(hideLootPopup, 2800);
 }
 function randomChestCardSpecies() {
-  return pickWeighted([
-    { v: "dog", w: 2.2 }, { v: "cat", w: 2.2 }, { v: "fox", w: 1.8 }, { v: "rabbit", w: 1.8 },
-    { v: "wolf", w: 1.25 }, { v: "bear", w: 1.05 }, { v: "owl", w: 1.1 }, { v: "snake", w: 1.15 },
-    { v: "deer", w: 1.1 }, { v: "boar", w: 1.0 }, { v: "saber", w: 0.8 }, { v: "dragon", w: 0.55 }
-  ]);
+  return pickWeighted(Object.keys(PET_TYPES).map(type => ({ v:type, w:petCardRarityWeight(type) })));
 }
 function makeChestReward() {
   const roll = Math.random();
   if (roll < 0.34) {
-    return { kind: "cubits", amount: Math.random() < 0.1 ? randi(12, 18) : randi(5, 10) };
+    return { kind: "goldCubits", amount: Math.random() < 0.1 ? randi(12, 18) : randi(5, 10) };
   }
   if (roll < 0.52) {
     return { kind: "cards", species: randomChestCardSpecies(), amount: Math.random() < 0.14 ? 25 : 10 };
@@ -15087,7 +15493,7 @@ function makeChestReward() {
 }
 function awardChestReward(reward) {
   if (!reward) return;
-  if (reward.kind === "cubits") meta.servs += reward.amount;
+  if (reward.kind === "goldCubits") meta.servs += reward.amount;
   else if (reward.kind === "cards") {
     if (!meta.speciesCards) meta.speciesCards = {};
     meta.speciesCards[reward.species] = (meta.speciesCards[reward.species] || 0) + reward.amount;
@@ -15177,7 +15583,7 @@ function meleeAttack() {
     let aimedAnimalId = "";
     for (const a of animals) {
       if (a.dead || !a.netId) continue;
-      const ah = animalBodyHitboxes(a).find(h =>
+      const ah = animalTargetDamageHitboxes(a).find(h =>
         dist(player.x, player.y, h.x, h.y) < t.range + h.r + 8 && isFacing(h.x, h.y, 1.15)
       );
       if (ah) { aimedAnimalId = a.netId; break; }
@@ -15199,7 +15605,7 @@ function meleeAttack() {
   for (const a of animals) {
     if (a.dead || (a.owned && !a.releasedWild)) continue;
     const info = PET_TYPES[a.type];
-    const ah = animalBodyHitboxes(a).find(h => dist(player.x, player.y, h.x, h.y) < t.range + h.r && isFacing(h.x, h.y));
+    const ah = animalTargetDamageHitboxes(a).find(h => dist(player.x, player.y, h.x, h.y) < t.range + h.r && isFacing(h.x, h.y));
     if (ah) {
       let dmg = t.dmg * runDamageMul();
       const crit = Math.random() < 0.12;
@@ -15901,6 +16307,22 @@ function smoothTurn(obj, targetAngle, dt, turnSpeed = 9) {
   obj.angle += clamp(diff, -maxStep, maxStep);
   while (obj.angle > Math.PI) obj.angle -= TAU;
   while (obj.angle < -Math.PI) obj.angle += TAU;
+}
+
+// Riding rule: fast mounts turn faster and slow mounts turn slower.
+// Scaling turn rate from the pet's real owned speed keeps the turning arc
+// roughly consistent across species instead of making fast pets sweep in
+// huge circles. Speed upgrades therefore improve steering too.
+function mountedPetTurnSpeed(pet) {
+  if (!pet) return 2.15;
+  // Recalculate from the live pet upgrades instead of trusting a cached speed.
+  // Speed upgrades make the mount faster; Weight upgrades add mass and reduce
+  // that final speed. Steering then follows the final result, so changing either
+  // stat immediately changes the turning speed too.
+  const finalSpeed = Math.max(24, pet.owned
+    ? upgradedPetSpeed(pet.type, pet.stage)
+    : (Number(pet.speed) || animalSpeed(pet.type, pet.stage, true)));
+  return clamp(2.15 * (finalSpeed / 90), 1.05, 5.60);
 }
 function moveFacing(obj, speed, dt) {
   // Creatures actually travel in the direction they are looking instead of sliding sideways.
@@ -16940,17 +17362,14 @@ function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
   }
   return best;
 }
-function petAttackStuckResource(pet, targetX = null, targetY = null) {
+function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly = false) {
   if (!pet || pet.dead || net.room) return false;
-  // Following the owner has priority over chewing a resource. The resource can
-  // still be bitten while the owner is nearby/stationary, but it must never turn
-  // into a state that makes the pet stop following a moving owner.
+  // Following stays the movement goal. A physically stuck pet can bite the
+  // blocker while it keeps trying to route around it, but the resource never
+  // replaces the owner as a movement/combat target.
   if (player.riding !== pet && pet.follow && pet.orderMode === "follow") {
     const ownerDistance = dist(pet.x, pet.y, player.x, player.y);
-    const followRange = petFollowRangeFor(pet);
-    const ownerMoveSpeed = Math.hypot(Number(player._actualMoveVX) || 0, Number(player._actualMoveVY) || 0);
-    const ownerMoving = !!player._actualMoving || ownerMoveSpeed > 2.5 || movementInputActive();
-    if (ownerMoving || ownerDistance > followRange.stop + 18) {
+    if (ownerDistance > petFollowRangeFor(pet).sprint + 900) {
       pet._blockingResourceTarget = null;
       return false;
     }
@@ -16962,13 +17381,15 @@ function petAttackStuckResource(pet, targetX = null, targetY = null) {
     return false;
   }
   let best = pet._blockingResourceTarget;
-  if (!animalResourceBlocksPath(pet,best,targetX,targetY)) best = findBlockingResourceForAnimal(pet,targetX,targetY);
+  const contactFresh = !contactOnly || (performance.now() - (Number(pet._blockingResourceContactAt)||0) < 220);
+  if (!contactFresh || !animalResourceBlocksPath(pet,best,targetX,targetY)) {
+    if (contactOnly) { pet._blockingResourceTarget = null; return false; }
+    best = findBlockingResourceForAnimal(pet,targetX,targetY);
+  }
   pet._blockingResourceTarget = best || null;
   if (!best) return false;
-  const c=resourceSolidCenter(best);
-  smoothTurn(pet, angTo(pet.x,pet.y,c.x,c.y), .12, 8);
-  // Returning true even during cooldown keeps the pet committed to biting the
-  // blocker until it breaks or stops being in the path.
+  // A resource is never a steering/combat target. Keep the pet's current heading
+  // and bite only because the object is physically blocking its path.
   if ((pet.atkCd||0) <= 0) {
     pet.atkCd = animalAttackCooldown(pet.type,pet.stage,true);
     pet.attackAnim=.22;
@@ -16994,9 +17415,9 @@ function movePetChaseWithRecovery(pet, target, speed, dt) {
   }
 
   pet._combatStuckT = (Number(pet._combatStuckT) || 0) + dt;
-  // If a resource is the blocker, the swept mover already selected it and the
-  // pet should keep biting it instead of endlessly steering into the same edge.
-  if (!net.room && pet._blockingResourceTarget && pet._combatStuckT > 0.16) return;
+  // Bite a physical blocker, but keep the avoidance movement active. Resources
+  // are obstacles, not targets that suspend the chase until they break.
+  if (!net.room && pet._blockingResourceTarget && pet._combatStuckT > 0.16) petAttackStuckResource(pet);
   if (pet._combatStuckT < 0.11) return;
 
   if (!Number.isFinite(pet._combatAvoidSide)) {
@@ -17366,8 +17787,10 @@ function resolveAnimalWorld(a) {
       }
     }
   }
-  if (collidedResource) a._blockingResourceTarget = collidedResource;
-  else if (a._blockingResourceTarget && !animalResourceBlocksPath(a,a._blockingResourceTarget)) a._blockingResourceTarget = null;
+  if (collidedResource) {
+    a._blockingResourceTarget = collidedResource;
+    a._blockingResourceContactAt = performance.now();
+  } else if (a._blockingResourceTarget && !animalResourceBlocksPath(a,a._blockingResourceTarget)) a._blockingResourceTarget = null;
   for (const g of queryStaticNearby("gold", a.x, a.y, searchRange)) {
     if (!g.infinite && g.goldLeft <= 0) continue;
     const gh = goldSolidHitbox(g);
@@ -17942,12 +18365,12 @@ function updateAnimals(dt) {
       const mountedSpeed = Math.hypot(Number(player._actualMoveVX)||0, Number(player._actualMoveVY)||0);
       p._visualMoveSpeed = mountedSpeed;
       if (mountedSpeed > 0.3) p._visualMoveAt = performance.now();
-      // If the mount is genuinely pressing into a resource, it chews the same
-      // blocker until it breaks or is no longer in front of it. Network play
-      // performs this authoritatively on the server.
+      // If the mount physically bumps a resource, it may bite that blocker, but
+      // it never locks/turns toward it. Rider steering always stays in control.
+      // Network play performs the same rule authoritatively on the server.
       if (!net.room && movementInputActive() && p._blockingResourceTarget) {
         const look = Math.max(90,(p.r||18)*2.4);
-        petAttackStuckResource(p,p.x+Math.cos(p.angle||0)*look,p.y+Math.sin(p.angle||0)*look);
+        petAttackStuckResource(p,p.x+Math.cos(p.angle||0)*look,p.y+Math.sin(p.angle||0)*look,true);
       }
       resolveAnimalWorld(p);
       player.x = p.x; player.y = p.y;
@@ -18142,8 +18565,10 @@ function updateAnimals(dt) {
           p._followStuckT = (Number(p._followStuckT) || 0) + dt;
           if (p._followStuckT > 0.12) {
             p._stuckResourceCd = Math.max(0, (Number(p._stuckResourceCd)||0) - dt);
-            const chewingBlocker = p._followStuckT > 0.42 && petAttackStuckResource(p,player.x,player.y);
-            if (!chewingBlocker) {
+            if (p._followStuckT > 0.42) petAttackStuckResource(p,player.x,player.y);
+            // Attack the obstacle and keep trying to route around it; never wait
+            // for the resource to be destroyed before following again.
+            {
               if (!Number.isFinite(p._followAvoidSide)) {
                 const key = String(p.id || p.netId || p.type || "pet");
                 p._followAvoidSide = (key.length & 1) ? 1 : -1;
@@ -18672,7 +19097,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 557;
+const RESET_CORE_BUILD = 561;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -18779,7 +19204,7 @@ function updatePlayer(dt) {
     if (player.riding && !player.riding.dead) {
       const mount = player.riding;
       const desired = Math.atan2(dy, dx);
-      smoothTurn(mount, desired, dt, 2.15);
+      smoothTurn(mount, desired, dt, mountedPetTurnSpeed(mount));
       speed = Math.max(24, mount.speed || animalSpeed(mount.type, mount.stage, true)) * 2.30;
       // Arrow/joystick direction steers the mount, but motion is always along
       // the direction the animal is actually facing right now. This preserves
@@ -18891,6 +19316,18 @@ function updateTameBtn() {
   btn.classList.toggle("show", near);
 }
 
+function goldCubitsForUi() {
+  // Signed-in accounts have one authoritative Gold Cubits balance. Never let the
+  // browser guest fallback (5) flash over the account balance in the HUD.
+  try {
+    const accountValue = window.__hostlGetGoldCubits?.();
+    if (accountValue !== null && accountValue !== undefined && Number.isFinite(Number(accountValue))) {
+      return Math.max(0, Math.floor(Number(accountValue)));
+    }
+  } catch (_) {}
+  return Math.max(0, Math.floor(Number(meta.servs) || 0));
+}
+
 function syncHud() {
   renderPlayerLeaderboard();
   if (el("healthFill")) el("healthFill").style.width = clamp(player.health / player.maxHealth, 0, 1) * 100 + "%";
@@ -18900,12 +19337,13 @@ function syncHud() {
   if (el("resWood")) el("resWood").textContent = player.wood;
   if (el("resStone")) el("resStone").textContent = player.stone;
   if (el("resGold")) el("resGold").textContent = player.gold;
-  if (el("resServs")) el("resServs").textContent = meta.servs;
+  const goldCubits = goldCubitsForUi();
+  if (el("resServs")) el("resServs").textContent = goldCubits;
   if (el("resBerries")) el("resBerries").textContent = player.berries || 0;
   if (el("dockWood")) el("dockWood").textContent = player.wood;
   if (el("dockStone")) el("dockStone").textContent = player.stone;
   if (el("dockGold")) el("dockGold").textContent = player.gold;
-  if (el("dockServs")) el("dockServs").textContent = meta.servs;
+  if (el("dockServs")) el("dockServs").textContent = goldCubits;
   if (el("dockBerries")) el("dockBerries").textContent = player.berries || 0;
   syncHotbar();
   updatePetCardCooldowns();
@@ -21362,6 +21800,27 @@ function drawAnimalFallbackVisible(a) {
 }
 
 function drawAnimal(a) {
+  // Offline wildlife/pet AI intentionally runs below render FPS for performance.
+  // Smooth only the visual pose between simulation steps; combat/collision keeps
+  // using the authoritative x/y/angle. The ridden mount is excluded so it stays
+  // exactly underneath the local rider. Multiplayer already has interpolation.
+  const smoothOffline = !!(game.started && !net.room && a && !a.dead && player.riding !== a);
+  let ox, oy, oa;
+  if (smoothOffline && Number.isFinite(a.x) && Number.isFinite(a.y)) {
+    const dt = Math.max(1/240, Math.min(0.05, Number(resetNetworkVisualDt) || 1/60));
+    if (!Number.isFinite(a._drawX) || !Number.isFinite(a._drawY) || Math.hypot(a.x-a._drawX,a.y-a._drawY)>180) {
+      a._drawX=a.x; a._drawY=a.y; a._drawAngle=Number(a.angle)||0;
+    } else {
+      const follow=1-Math.exp(-22*dt);
+      a._drawX += (a.x-a._drawX)*follow;
+      a._drawY += (a.y-a._drawY)*follow;
+      let da=(Number(a.angle)||0)-(Number(a._drawAngle)||0);
+      da=Math.atan2(Math.sin(da),Math.cos(da));
+      a._drawAngle=(Number(a._drawAngle)||0)+da*(1-Math.exp(-18*dt));
+    }
+    ox=a.x; oy=a.y; oa=a.angle;
+    a.x=a._drawX; a.y=a._drawY; a.angle=a._drawAngle;
+  }
   try {
     drawAnimalUnsafe(a);
     return true;
@@ -21370,6 +21829,8 @@ function drawAnimal(a) {
     resetWorldCanvasStateAfterEntityFault();
     try { drawAnimalFallbackVisible(a); } catch (_) {}
     return false;
+  } finally {
+    if (smoothOffline) { a.x=ox; a.y=oy; a.angle=oa; }
   }
 }
 
@@ -21547,7 +22008,7 @@ function drawPlayer() {
   ctx.font = "11px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText(p.username, p.x, p.y - (p.riding ? 42 : 28));
-  if(p.title){ctx.font="900 10px sans-serif";ctx.fillStyle=p.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(p.testerRank===1?"🎯 TESTER #1":String(p.title).toUpperCase(),p.x,p.y-(p.riding?58:44));}
+  if(p.title || p.ownerRank===1 || p.testerRank===1){ctx.font="900 10px sans-serif";ctx.fillStyle=p.ownerRank===1?"#ffd76a":p.testerRank===1?"#ffcf5c":"#9ee8ff";ctx.fillText(p.ownerRank===1?"👑 OWNER":p.testerRank===1?"🎯 TESTER #1":String(p.title).toUpperCase(),p.x,p.y-(p.riding?58:44));}
 }
 
 function shadeColor(hex, percent) {
@@ -23033,6 +23494,7 @@ window.getCubeFreezeDiagnostics = () => ({...freezeDiagnostics, reliefActive: pe
 let resetSimAccumulator = 0;
 let resetWorldAccumulator = 0;
 let resetNetworkVisualDt = 1 / 60;
+let renderFrameNowMs = performance.now();
 
 function runResetSimulationStep(step) {
   if (!game.started) return;
@@ -23077,6 +23539,9 @@ function runResetSimulationStep(step) {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  // Cache one clock read for the whole render. Animal drawing/interpolation can
+  // touch hundreds of entities, so repeated performance.now() calls add up.
+  renderFrameNowMs = now;
 
   const rawGapMs = Math.max(0, now - previousRawFrameAt);
   previousRawFrameAt = now;
@@ -23205,12 +23670,9 @@ el("tameBtn").addEventListener("touchstart", (e) => { e.preventDefault(); tryTam
 
 // ---------- home screen ----------
 function claimDailyServs() {
-  const today = new Date().toISOString().slice(0, 10);
-  if (meta.lastDaily === today) return false;
-  meta.lastDaily = today;
-  meta.servs = (meta.servs || 0) + 5;
-  saveMeta();
-  return true;
+  // Legacy browser-side +5 reward is retired. Signed-in daily Gold Cubits are
+  // granted by the HOSTL server, and guests simply keep their normal 5-Gold-Cubit start.
+  return false;
 }
 function isPetUnlocked(type) {
   if (PET_TYPES[type] && PET_TYPES[type].startUnlock) return true;
@@ -23247,7 +23709,7 @@ function buildPetShop() {
         <b>${info.emoji} ${info.name}</b>
         ${unlocked ? `<span class="pet-shop-stage">${stageDisplayName(stage)}</span>` : ""}
       </div>
-      <div style="font-size:11px;opacity:0.7;margin-top:4px">${info.elem} · ${unlock.rarity}</div>
+      <div style="font-size:11px;opacity:0.9;margin-top:4px">${info.elem} · <span class="rarity-${unlock.rarity}" style="font-weight:900">${unlock.rarity}</span></div>
       <div style="font-size:11px;margin-top:6px">${status}</div>
       <div class="pet-shop-actions"></div>
     `;
@@ -23346,7 +23808,7 @@ function buildCardInventory() {
     row.innerHTML = `
       <div>
         <div class="card-prog-name">${info.emoji} ${info.name}</div>
-        <div class="card-prog-meta">${unlocked ? `Owned · ${stageDisplayName(stage)} · ${spentLevels} stat upgrade level${spentLevels===1?"":"s"}` : "Locked · View its card page"}</div>
+        <div class="card-prog-meta"><span class="rarity-${petRarity(type)}" style="font-weight:900">${petRarity(type)}</span> · ${unlocked ? `Owned · ${stageDisplayName(stage)} · ${spentLevels} stat upgrade level${spentLevels===1?"":"s"}` : "Locked · View its card page"}</div>
       </div>
       <div class="card-prog-count">${count} card${count===1?"":"s"} ›</div>`;
     row.addEventListener("click", () => { cardInventoryFocus = type; buildCardInventory(); });
@@ -23379,7 +23841,7 @@ function buildPetUpgradePage(type) {
   root.innerHTML = `
     <div class="pet-upgrade-hero">
       <div><div class="pet-upgrade-title">${info.emoji} ${info.name}</div>
-      <div class="card-prog-meta">${unlocked ? `Owned · Starting stage: ${stageDisplayName(stage)}` : "This pet is locked."}</div></div>
+      <div class="card-prog-meta"><span class="rarity-${petRarity(type)}" style="font-weight:900">${petRarity(type)}</span> · ${unlocked ? `Owned · Starting stage: ${stageDisplayName(stage)}` : "This pet is locked."}</div></div>
       <div class="pet-upgrade-cards">${cards} ${info.name} Card${cards===1?"":"s"}</div>
     </div>
     <div class="pet-upgrade-stage" id="petUpgradeStageBox"></div>
@@ -23512,12 +23974,16 @@ function drawHomePreview() {
 function setupHome() {
   const home = el("home");
   applyHomeTheme(currentHomeTheme, false);
+  // setupHome is also called by account/card/theme refreshes. Those refreshes
+  // must never put Home back on top of an active run or death screen.
+  const homeMayShow = !game.started;
   if (home) {
-    home.style.display = "flex";
-    home.style.pointerEvents = "auto";
+    home.style.display = homeMayShow ? "flex" : "none";
+    home.style.visibility = homeMayShow ? "visible" : "hidden";
+    home.style.pointerEvents = homeMayShow ? "auto" : "none";
   }
   syncHomeWorldThemeState();
-  setHomeControlsEnabled(true);
+  setHomeControlsEnabled(homeMayShow);
   // Never stomp a username the player is currently typing. Account/friends
   // refreshes can call setupHome/sync UI while this field is being edited.
   if (!window.__hostlUsernameDirty) el("username").value = meta.username || "Cube";
@@ -23538,16 +24004,12 @@ function setupHome() {
   restoreStarterPetPreference();
   buildCardInventory();
 
-  // daily +5 servs
-  const gotDaily = claimDailyServs();
-  el("homeServs").textContent = meta.servs;
+  // Gold Cubits are account-authoritative when signed in; guest mode starts at 5.
+  claimDailyServs();
+  el("homeServs").textContent = goldCubitsForUi();
   updateAchievementUI();
   const dailyEl = el("dailyServsHint");
-  if (dailyEl) {
-    dailyEl.textContent = gotDaily
-      ? "+5 daily Gold Cubits"
-      : "Daily bonus already claimed";
-  }
+  if (dailyEl) dailyEl.textContent = "";
 
   // colors
   const sw = el("colorSwatches");
@@ -23596,7 +24058,7 @@ function setupHome() {
     div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;"><b>${item.name}</b><span style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border:1px solid rgba(189,233,242,.42);border-radius:999px;background:rgba(189,233,242,.08);white-space:nowrap;">${item.category || "Starter"}</span></div><div style="font-size:11px;opacity:.72;line-height:1.35;margin:5px 0 7px;">${item.desc || "Permanent starter unlock."}</div><div class="price">${owned ? "Owned" : item.price.toLocaleString() + " Gold Cubits"}</div>`;
     div.addEventListener("click", () => {
       if (owned) return;
-      if (meta.servs < item.price) { showGameMessage("Not Enough Cubits", `You need ${item.price.toLocaleString()} Gold Cubits for ${item.name}. You have ${Number(meta.servs||0).toLocaleString()}.`); return; }
+      if (meta.servs < item.price) { showGameMessage("Not Enough Gold Cubits", `You need ${item.price.toLocaleString()} Gold Cubits for ${item.name}. You have ${Number(meta.servs||0).toLocaleString()}.`); return; }
       meta.servs -= item.price;
       meta.ownedStarters[item.id] = true;
       saveMeta();
@@ -23739,10 +24201,14 @@ function closePlayerDesign() {
   el("playerDesignOverlay").classList.remove("show");
 }
 
+function mountStarterShopIntoTabbedShop() {
+  const grid = document.getElementById("shopGrid");
+  const mount = document.getElementById("expandedStarterShopMount");
+  if (grid && mount && grid.parentElement !== mount) mount.appendChild(grid);
+}
 function openStarterShop() {
   if (game.started && !game.over) return;
-  if (el("starterShopServs")) el("starterShopServs").textContent = meta.servs;
-  el("starterShopOverlay").classList.add("show");
+  openExpandedShop("shop");
 }
 function closeStarterShop() {
   el("starterShopOverlay").classList.remove("show");
@@ -23958,8 +24424,10 @@ el("playBtn").addEventListener("click", async () => {
   document.body.classList.toggle("mobile-performance", mobileMode);
   if (!mobileMode) resetMobilePointers();
   setHomeControlsEnabled(false);
+  document.body.classList.add("hostl-game-active");
   const home = document.getElementById("home");
   home.style.display = "none";
+  home.style.visibility = "hidden";
   home.style.pointerEvents = "none";
   syncHomeWorldThemeState();
   document.getElementById("hud").style.display = "block";
@@ -24034,8 +24502,10 @@ el("homeBtn").addEventListener("click", () => {
   setChatOpen(false, false);
 
   document.getElementById("hud").style.display = "none";
+  document.body.classList.remove("hostl-game-active");
   const home = document.getElementById("home");
   home.style.display = "flex";
+  home.style.visibility = "visible";
   home.style.pointerEvents = "auto";
   syncHomeWorldThemeState();
   setHomeControlsEnabled(true);
@@ -24047,23 +24517,55 @@ el("homeBtn").addEventListener("click", () => {
 // Safe bridge used by the account layer (which lives outside this main game scope).
 // Keeping all direct access to meta/player/PET_TYPES inside this scope prevents a
 // successful Google login from failing after the account has already loaded.
+window.__hostlSetGameGoldCubits = function(value) {
+  const next = Math.max(0, Math.floor(Number(value) || 0));
+  meta.servs = next;
+  const ids = ["resServs", "dockServs", "homeServs", "petShopServs", "starterShopServs"];
+  for (const id of ids) { const node = document.getElementById(id); if (node) node.textContent = next; }
+  return next;
+};
+
 window.__hostlApplyAccountEntitlements = function(payload={}) {
   try {
     if(!meta.speciesCards) meta.speciesCards={};
     if(!meta.ownedStarters) meta.ownedStarters={};
     if(!meta.petStages) meta.petStages={};
+    if(!meta.petStatUpgrades) meta.petStatUpgrades={};
+    const serverOwned=(payload.ownedStarters&&typeof payload.ownedStarters==="object")?payload.ownedStarters:{};
+    for(const [k,v] of Object.entries(serverOwned)) if(v) meta.ownedStarters[k]=true;
+    const serverStages=(payload.petStages&&typeof payload.petStages==="object")?payload.petStages:{};
+    const stageRank={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
+    for(const [species,stage] of Object.entries(serverStages)){
+      const old=String(meta.petStages[species]||"baby"), neu=String(stage||"baby");
+      if((stageRank[neu]??0)>(stageRank[old]??0))meta.petStages[species]=neu;
+    }
+    const serverUp=(payload.petStatUpgrades&&typeof payload.petStatUpgrades==="object")?payload.petStatUpgrades:{};
+    for(const [species,stats] of Object.entries(serverUp)){
+      if(!meta.petStatUpgrades[species])meta.petStatUpgrades[species]={};
+      for(const stat of ["health","defense","attack","weight","regen","speed"]) meta.petStatUpgrades[species][stat]=Math.max(Number(meta.petStatUpgrades[species][stat])||0,Number(stats?.[stat])||0);
+    }
+    if(!meta.starterPetType && payload.starterPetType)meta.starterPetType=String(payload.starterPetType);
+    if(!meta.starterPetName && payload.starterPetName)meta.starterPetName=String(payload.starterPetName);
+    if(payload.starterPetGender==="Female")meta.starterPetGender="Female";
     const cards=(payload.speciesCards && typeof payload.speciesCards==="object") ? payload.speciesCards : {};
     for(const [species,raw] of Object.entries(cards)){
       const n=Math.max(0,Math.floor(Number(raw)||0));
       meta.speciesCards[species]=Math.max(Number(meta.speciesCards[species])||0,n);
     }
-    const ent=payload.starterPetEntitlement;
-    if(ent && PET_TYPES?.[ent.type]){
+    for(const id of (Array.isArray(payload.craftedStarters)?payload.craftedStarters:[])) meta.ownedStarters[String(id)]=true;
+    for(const id of (Array.isArray(payload.learnedSkills)?payload.learnedSkills:[])) meta.ownedStarters[String(id)]=true;
+    const entitlements=[];
+    if(Array.isArray(payload.starterPetEntitlements)) entitlements.push(...payload.starterPetEntitlements);
+    if(payload.starterPetEntitlement && typeof payload.starterPetEntitlement==="object") entitlements.push(payload.starterPetEntitlement);
+    const ranks=stageRank;
+    const seenEnt=new Set();
+    for(const ent of entitlements){
+      if(!ent || !PET_TYPES?.[ent.type] || seenEnt.has(ent.type)) continue;
+      seenEnt.add(ent.type);
       meta.ownedStarters["start_"+ent.type]=true;
-      const ranks={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
       const newRank=ranks[String(ent.stage||"baby")] ?? 0;
       const oldRank=ranks[String(meta.petStages[ent.type]||"baby")] ?? 0;
-      if(newRank>oldRank) meta.petStages[ent.type]=ent.stage;
+      if(newRank>oldRank) meta.petStages[ent.type]=String(ent.stage||"baby");
       if(!meta.starterPetType) meta.starterPetType=ent.type;
       if(!game.startPet) game.startPet=ent.type;
     }
@@ -24071,11 +24573,12 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
       const nm=String(payload.username).trim().slice(0,20);
       if(nm){ meta.username=nm; player.username=nm; }
     }
-    if(Number.isFinite(Number(payload.cubits))){
-      meta.servs=Math.max(0,Math.floor(Number(payload.cubits)||0));
+    if(Number.isFinite(Number(payload.goldCubits ?? payload.cubits))){
+      window.__hostlSetGameGoldCubits?.(payload.goldCubits ?? payload.cubits);
     }
     player.title=String(payload.title||"");
     player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
+    player.ownerRank=Math.max(0,Math.floor(Number(payload.ownerRank)||0));
     saveMeta();
     try{ setupHome(); }catch(_){}
     try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
@@ -24101,15 +24604,39 @@ hideLoadingScreen();
 
 })();
 
-// ---------- account / cubits / expanded shop ----------
+// ---------- account / Gold Cubits / expanded shop ----------
 const ACCOUNT_STORAGE_KEY = "hostlAccountSessionV2";
+const ACCOUNT_RECOVERY_STORAGE_KEY = "hostlAccountRecoveryTokensV1";
+function loadAccountRecoveryTokens(){
+  try{const raw=localStorage.getItem(ACCOUNT_RECOVERY_STORAGE_KEY);const v=raw?JSON.parse(raw):[];return Array.isArray(v)?v.filter(x=>typeof x==="string"&&x.includes(".")).slice(0,8):[];}catch(_){return[];}
+}
+function rememberAccountRecoveryToken(token){
+  token=String(token||""); if(!token.includes("."))return;
+  try{const list=loadAccountRecoveryTokens().filter(x=>x!==token);list.unshift(token);localStorage.setItem(ACCOUNT_RECOVERY_STORAGE_KEY,JSON.stringify(list.slice(0,8)));}catch(_){}
+}
+function recoveryTokenUserId(token){
+  try{const body=String(token||"").split(".")[0];if(!body)return"";const b64=body.replace(/-/g,"+").replace(/_/g,"/");const pad="=".repeat((4-b64.length%4)%4);const payload=JSON.parse(atob(b64+pad));return String(payload?.account?.userId||"");}catch(_){return"";}
+}
+function forgetRecoveryForUser(userId){
+  userId=String(userId||"");if(!userId)return;
+  try{const keep=loadAccountRecoveryTokens().filter(t=>recoveryTokenUserId(t)!==userId);localStorage.setItem(ACCOUNT_RECOVERY_STORAGE_KEY,JSON.stringify(keep));}catch(_){}
+}
 const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", cubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, title:"", unlockedTitles:[], testerRank:0, starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let hostlServerDayKey = "";
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+
+// Single source of truth used by the in-game HUD. Null means guest mode, so the
+// gameplay layer may use its local guest balance.
+window.__hostlGetGoldCubits = function(){
+  if(!accountState.loggedIn) return null;
+  return Math.max(0,Math.floor(Number(accountState.goldCubits)||0));
+};
 
 function utcDayKey() {
+  if (hostlServerDayKey) return hostlServerDayKey;
   const d = new Date();
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}-${String(d.getUTCDate()).padStart(2,"0")}`;
 }
@@ -24118,11 +24645,17 @@ function applyAccountGameEntitlements(){
   if(!accountState.loggedIn) return;
   try {
     window.__hostlApplyAccountEntitlements?.({
-      username:accountState.username||"Player",
-      cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+      username:accountState.username||"",
+      goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
       speciesCards:(accountState.speciesCards && typeof accountState.speciesCards==="object") ? accountState.speciesCards : {},
+      ownedStarters:accountState.ownedStarters||{}, petStages:accountState.petStages||{}, petStatUpgrades:accountState.petStatUpgrades||{},
+      starterPetType:accountState.starterPetType||"", starterPetName:accountState.starterPetName||"", starterPetGender:accountState.starterPetGender||"Male",
+      craftedStarters:Array.isArray(accountState.craftedStarters)?accountState.craftedStarters:[],
+      learnedSkills:Array.isArray(accountState.learnedSkills)?accountState.learnedSkills:[],
       title:accountState.title||"",
       testerRank:accountState.testerRank||0,
+      ownerRank:accountState.ownerRank||0,
+      starterPetEntitlements:Array.isArray(accountState.starterPetEntitlements)?accountState.starterPetEntitlements:[],
       starterPetEntitlement:accountState.starterPetEntitlement||null
     });
   } catch (err) {
@@ -24131,16 +24664,28 @@ function applyAccountGameEntitlements(){
 }
 
 function setAccountFromServer(p={}) {
+  if(p?.recoveryToken) rememberAccountRecoveryToken(p.recoveryToken);
   window.__hostlAccountSessionActive = true;
   accountState = {
-    loggedIn:true, userId:p.userId||"", username:p.username||"Player", displayName:p.displayName||p.username||"Player", email:p.email||"", picture:p.picture||"",
-    cubits:Number(p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
+    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
-    title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)),
+    ownedStarters:(p.ownedStarters&&typeof p.ownedStarters==="object")?p.ownedStarters:{}, petStages:(p.petStages&&typeof p.petStages==="object")?p.petStages:{},
+    petStatUpgrades:(p.petStatUpgrades&&typeof p.petStatUpgrades==="object")?p.petStatUpgrades:{}, starterPetType:String(p.starterPetType||""), starterPetName:String(p.starterPetName||""), starterPetGender:p.starterPetGender==="Female"?"Female":"Male",
+    materials:(p.materials && typeof p.materials==="object") ? p.materials : {},
+    craftedStarters:Array.isArray(p.craftedStarters)?p.craftedStarters.map(String):[],
+    learnedSkills:Array.isArray(p.learnedSkills)?p.learnedSkills.map(String):[],
+    title:String(p.title||""), unlockedTitles:Array.isArray(p.unlockedTitles)?p.unlockedTitles.map(x=>String(x)).filter(Boolean):[], testerRank:Math.max(0,Math.floor(Number(p.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(p.ownerRank)||0)),
+    starterPetEntitlements:Array.isArray(p.starterPetEntitlements)?p.starterPetEntitlements.filter(x=>x&&typeof x==="object"):[],
     starterPetEntitlement:(p.starterPetEntitlement && typeof p.starterPetEntitlement==="object") ? p.starterPetEntitlement : null,
     lastDailyCubits:p.lastDailyCubits||"", lastDailyChest:p.lastDailyChest||"", createdAt:p.createdAt||"", friendCount:Math.max(0,Math.floor(Number(p.friendCount)||0))
   };
+  // Push the server balance into gameplay immediately, before any HUD/home redraw can
+  // render the guest fallback value.
+  try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
+  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
   try {
     if (!window.__hostlUsernameDirty) {
       meta.username=accountState.username||meta.username||"Cube";
@@ -24161,6 +24706,29 @@ function saveAccountSession() {
 function accountAuthHeaders() {
   return hostlSessionToken ? { "Authorization": `Bearer ${hostlSessionToken}` } : {};
 }
+
+window.__hostlOpenAccountForTheme = function(){ try{ openAccountModal(); }catch(_){ document.getElementById("accountBtn")?.click(); } };
+window.__hostlBuyTheme = async function(themeId, shownPrice){
+  if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
+  try{
+    const r=await fetch("/api/themes/buy",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ showGameMessage?.("Theme", d?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(d.price||shownPrice||0).toLocaleString()}.`:"That theme could not be purchased."); return; }
+    if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
+    showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
+  }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
+};
+window.__hostlUnlockAdTheme = async function(themeId){
+  if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
+  // Test hook: when the ad provider is connected, call this endpoint only after the rewarded ad completes.
+  try{
+    const r=await fetch("/api/themes/ad-unlock",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ showGameMessage?.("Theme", "That ad theme could not be unlocked."); return; }
+    if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
+    showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
+  }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
+};
 async function pushAccountProfileNow() {
   if (!accountState.loggedIn || !hostlSessionToken) return false;
   try {
@@ -24168,11 +24736,15 @@ async function pushAccountProfileNow() {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
       body:JSON.stringify({
-        username:accountState.username||"Player", displayName:accountState.displayName||accountState.username||"Player", title:accountState.title||"", cubits:Math.max(0,Math.floor(Number(accountState.cubits)||0)),
+        // Username and Display Name are saved only by their dedicated profile editors.
+        // Background Cubit/theme saves must never overwrite a name the player just chose.
+        title:accountState.title||"", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
-        speciesCards:(meta.speciesCards && typeof meta.speciesCards==="object") ? meta.speciesCards : (accountState.speciesCards||{})
+        speciesCards:(meta.speciesCards && typeof meta.speciesCards==="object") ? meta.speciesCards : (accountState.speciesCards||{}),
+        ownedStarters:(meta.ownedStarters&&typeof meta.ownedStarters==="object")?meta.ownedStarters:{}, petStages:(meta.petStages&&typeof meta.petStages==="object")?meta.petStages:{},
+        petStatUpgrades:(meta.petStatUpgrades&&typeof meta.petStatUpgrades==="object")?meta.petStatUpgrades:{}, starterPetType:meta.starterPetType||"", starterPetName:meta.starterPetName||"", starterPetGender:meta.starterPetGender||"Male"
       })
     });
     if (r.status===401) { logoutAccount(false); return false; }
@@ -24187,22 +24759,34 @@ function persistAccountProfile() {
   clearTimeout(accountSaveTimer);
   accountSaveTimer = setTimeout(pushAccountProfileNow, 250);
 }
-window.__hostlAccountCubitsChanged = function(value){
+window.__hostlAccountGoldCubitsChanged = function(value){
   if(!accountState.loggedIn) return;
   const next=Math.max(0,Math.floor(Number(value)||0));
-  if(next===Math.floor(Number(accountState.cubits)||0)) return;
-  accountState.cubits=next;
+  if(next===Math.floor(Number(accountState.goldCubits)||0)) return;
+  accountState.goldCubits=next;
+  try { window.__hostlSetGameGoldCubits?.(next); } catch(_) {}
   const hs=document.getElementById("homeServs"); if(hs) hs.textContent=next;
   const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
   const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
   const as=document.getElementById("settingsCubits"); if(as) as.textContent=next;
   persistAccountProfile();
 };
+window.__hostlAccountProgressChanged = function(progress={}){
+  if(!accountState.loggedIn) return;
+  if(progress.speciesCards&&typeof progress.speciesCards==="object") accountState.speciesCards={...progress.speciesCards};
+  if(progress.ownedStarters&&typeof progress.ownedStarters==="object") accountState.ownedStarters={...progress.ownedStarters};
+  if(progress.petStages&&typeof progress.petStages==="object") accountState.petStages={...progress.petStages};
+  if(progress.petStatUpgrades&&typeof progress.petStatUpgrades==="object") accountState.petStatUpgrades=JSON.parse(JSON.stringify(progress.petStatUpgrades));
+  accountState.starterPetType=String(progress.starterPetType||accountState.starterPetType||"");
+  accountState.starterPetName=String(progress.starterPetName||accountState.starterPetName||"");
+  accountState.starterPetGender=progress.starterPetGender==="Female"?"Female":"Male";
+  persistAccountProfile();
+};
 function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
     if(!accountState.achievements || typeof accountState.achievements!=="object") accountState.achievements={};
     window.__cubeAchievementAccount = {
-      loggedIn:true, userId:accountState.userId, username:accountState.username||"Player", achievements:accountState.achievements,
+      loggedIn:true, userId:accountState.userId, username:accountState.username||"Cube", achievements:accountState.achievements,
       persist(achievements){
         accountState.achievements = (achievements && typeof achievements==="object") ? achievements : {};
         persistAccountProfile();
@@ -24233,35 +24817,39 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
-    // Guest mode has its own clean starting balance and must never inherit account Cubits.
-    try { meta.servs=5; saveMeta(); } catch (_) {}
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
+    try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
+    // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
+    try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
     saveAccountSession();
     syncAccountUi();
   }
 }
 function claimDailyCubits() {
-  // Daily Cubits are granted by the HOSTL server when Google login succeeds.
+  // Daily Gold Cubits are granted by the HOSTL server when Google login succeeds.
   return false;
 }
 function syncAccountUi(msg="") {
+  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  try{ buildHomeThemeGrid(); }catch(_){}
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
-    btn.textContent = accountState.loggedIn ? `${accountState.username||"Player"}` : "Account";
+    btn.textContent = accountState.loggedIn ? (accountState.username || "Account") : "Account";
     btn.classList.toggle("logged", accountState.loggedIn);
   }
   const settingsFooter=document.getElementById("accountSettingsFooter");
   if(settingsFooter) settingsFooter.classList.toggle("show", !!accountState.loggedIn);
   const friendsCorner=document.getElementById("friendsCorner");
   if(friendsCorner) friendsCorner.classList.toggle("show", !!accountState.loggedIn);
-  const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"Player";
-  const sName=document.getElementById("settingsDisplayName"); if(sName && !window.__hostlDisplayNameDirty && document.activeElement!==sName) sName.value=accountState.displayName||accountState.username||"Player";
-  const homeUser=document.getElementById("username"); if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"Player";
+  const sUser=document.getElementById("settingsUsername"); if(sUser && document.activeElement!==sUser) sUser.value=accountState.username||"";
+  const sName=document.getElementById("settingsDisplayName"); if(sName && !window.__hostlDisplayNameDirty && document.activeElement!==sName) sName.value=accountState.displayName||"";
+  const homeUser=document.getElementById("username"); if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser && accountState.loggedIn) homeUser.value=accountState.username||"";
   populateTitleDropdown();
   const sId=document.getElementById("settingsPlayerId"); if(sId) sId.textContent=accountState.userId||"—";
   const sEmail=document.getElementById("settingsEmail"); if(sEmail) sEmail.textContent=accountState.email||"—";
-  const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.cubits||0);
+  const sCubits=document.getElementById("settingsCubits"); if(sCubits) sCubits.textContent=Math.floor(accountState.goldCubits||0);
   const sCreated=document.getElementById("settingsCreatedAt"); if(sCreated) {
     let label="—"; try{ if(accountState.createdAt) label=new Date(accountState.createdAt).toLocaleString(); }catch(_){} sCreated.textContent=label;
   }
@@ -24269,12 +24857,13 @@ function syncAccountUi(msg="") {
   const user = document.getElementById("accountUserView");
   if (guest) guest.style.display = accountState.loggedIn ? "none" : "";
   if (user) user.style.display = accountState.loggedIn ? "" : "none";
-  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Player";
-  const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.cubits||0);
-  const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.cubits||0);
+  const name = document.getElementById("accountName"); if (name) name.textContent = accountState.username || "Choose a username";
+  const c = document.getElementById("accountCubits"); if (c) c.textContent = Math.floor(accountState.goldCubits||0);
+  const sc = document.getElementById("shopCubits"); if (sc) sc.textContent = Math.floor(accountState.goldCubits||0);
   if(accountState.loggedIn){
-    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.cubits||0);
-    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.cubits||0);
+    try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
+    const hs=document.getElementById("homeServs"); if(hs) hs.textContent=Math.floor(accountState.goldCubits||0);
+    const ds2=document.getElementById("dockServs"); if(ds2) ds2.textContent=Math.floor(accountState.goldCubits||0);
   } else {
     // Logged-out home state is a fresh guest profile, not the last account balance.
     const hs=document.getElementById("homeServs"); if(hs) hs.textContent=5;
@@ -24282,12 +24871,12 @@ function syncAccountUi(msg="") {
   }
   const ds = document.getElementById("dailyCubitStatus");
   if (ds) ds.textContent = accountState.loggedIn
-    ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Cubits claimed for today." : "Daily Cubits available.")
+    ? (accountState.lastDailyCubits===utcDayKey() ? "Daily +10 Gold Cubits claimed for today." : "Daily Gold Cubits available.")
     : "";
   const am = document.getElementById("accountMsg"); if (am) am.textContent = msg;
-  renderThemeGrid();
   syncChestUi();
   syncPromoCodeUi();
+  renderMaterialsAndRecipes();
 }
 function openAccountModal() {
   document.getElementById("expandedShopModal")?.classList.remove("on");
@@ -24295,19 +24884,168 @@ function openAccountModal() {
   syncAccountUi();
 }
 function closeAccountModal() { document.getElementById("accountModal")?.classList.remove("on"); }
-function openExpandedShop(page="gear") {
+function removeThemesFromShopCompletely(){
+  const modal=document.getElementById("expandedShopModal");
+  if(!modal) return;
+  // Themes live ONLY in the separate Home Themes screen. Never allow a Shop theme tab/page.
+  modal.querySelectorAll('[data-shop-page="themes"],#shopPageThemes,.shop-page-themes').forEach(el=>el.remove());
+  modal.querySelectorAll('.shop-tabs button,.shop-tab').forEach(btn=>{
+    if(String(btn.textContent||"").trim().toLowerCase()==="themes") btn.remove();
+  });
+  modal.querySelectorAll('.theme-card,.theme-grid').forEach(el=>el.remove());
+}
+function openExpandedShop(page="shop") {
   document.getElementById("accountModal")?.classList.remove("on");
+  removeThemesFromShopCompletely();
+  document.body.classList.add("hostl-shop-open");
   document.getElementById("expandedShopModal")?.classList.add("on");
   selectShopPage(page);
   syncAccountUi();
+  loadRotatingShopStock(false);
 }
-function closeExpandedShop() { document.getElementById("expandedShopModal")?.classList.remove("on"); }
+function closeExpandedShop() {
+  document.getElementById("expandedShopModal")?.classList.remove("on");
+  document.body.classList.remove("hostl-shop-open");
+}
 function selectShopPage(page) {
-  document.querySelectorAll(".shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
-  document.querySelectorAll(".shop-page").forEach(p=>p.classList.remove("active"));
-  const ids = { gear:"shopPageGear", themes:"shopPageThemes", chests:"shopPageChests", codes:"shopPageCodes" };
-  document.getElementById(ids[page] || "shopPageGear")?.classList.add("active");
+  // Defensive: old cached/legacy code must never reopen Themes from inside Shop.
+  if(page === "themes") page = "shop";
+  removeThemesFromShopCompletely();
+  document.querySelectorAll("#expandedShopModal .shop-tab").forEach(b=>b.classList.toggle("active",b.dataset.shopPage===page));
+  document.querySelectorAll("#expandedShopModal .shop-page").forEach(p=>p.classList.remove("active"));
+  const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", chests:"shopPageChests", codes:"shopPageCodes" };
+  document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
   if (page === "codes") syncPromoCodeUi();
+  if (page === "shop") loadRotatingShopStock(false); else if (page === "build" || page === "learn") renderMaterialsAndRecipes();
+}
+
+
+const HOSTL_MATERIALS = {
+  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
+  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
+  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
+  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
+  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
+  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
+  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
+  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
+  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
+  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
+  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
+};
+const HOSTL_BUILD_RECIPES = {
+  speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
+  ironShell:{name:"Iron Shell",chance:.60,desc:"Permanent starter equipment: begin each run with a 250-HP non-healable shell.",ingredients:{ironPlate:8,resin:5,leather:3}},
+  hunterWrap:{name:"Hunter's Wrap",chance:.75,desc:"Permanent starter equipment: deal 10% more player damage.",ingredients:{leather:5,sharpFang:3,swiftFiber:3}},
+  gatherGloves:{name:"Gatherer's Gloves",chance:.82,desc:"Permanent starter equipment: gain 15% more gathered resources.",ingredients:{leather:4,swiftFiber:4,toolKit:1}},
+  saddle:{name:"Saddle",chance:.92,desc:"Permanent starter equipment: begin every run with a Saddle.",ingredients:{leather:5,swiftFiber:2,ironBuckle:1}}
+};
+const HOSTL_LEARN_RECIPES = {
+  animalWhisperer:{name:"Animal Whisperer",desc:"Permanent skill: +30% pet/species-card drop chance.",ingredients:{beastBook:1,animalNotes:5,predatorStudy:2,sharpFang:1}}
+};
+function materialCount(id){ return Math.max(0,Math.floor(Number(accountState.materials?.[id])||0)); }
+function materialIngredientHtml(ingredients){
+  return Object.entries(ingredients||{}).map(([id,n])=>{
+    const have=materialCount(id), info=HOSTL_MATERIALS[id];
+    return `<span class="ingredient-chip ${have<n?'missing':''}">${info?.name||id} <small>${info?.rarity||''}</small>: ${have}/${n}</span>`;
+  }).join("");
+}
+let rotatingShopState={loading:false,rotationId:null,nextRefreshAt:0,serverOffset:0,listings:[]};
+function formatShopRefresh(ms){
+  const n=Math.max(0,Math.floor(ms/1000)); const d=Math.floor(n/86400),hh=Math.floor((n%86400)/3600),mm=Math.floor((n%3600)/60);
+  return d>0?`${d}d ${hh}h ${mm}m`:`${hh}h ${mm}m`;
+}
+function updateShopRefreshUi(){
+  const el=document.getElementById("shopRefreshCountdown"); if(!el)return;
+  if(!rotatingShopState.nextRefreshAt){el.textContent="Loading rotation…";return;}
+  const serverNow=Date.now()+rotatingShopState.serverOffset;
+  const left=rotatingShopState.nextRefreshAt-serverNow;
+  el.textContent=left>0?`Refreshes in ${formatShopRefresh(left)}`:"Refreshing…";
+  if(left<=0 && !rotatingShopState.loading) loadRotatingShopStock(true);
+}
+async function loadRotatingShopStock(force=false){
+  if(rotatingShopState.loading)return;
+  if(!force && rotatingShopState.listings.length){renderMaterialsAndRecipes();return;}
+  rotatingShopState.loading=true; renderMaterialsAndRecipes();
+  try{
+    const r=await fetch("/api/shop/stock",{credentials:"same-origin",cache:"no-store"}); const data=await r.json().catch(()=>({}));
+    if(r.ok&&data?.ok){
+      rotatingShopState.rotationId=data.rotationId; rotatingShopState.nextRefreshAt=Number(data.nextRefreshAt)||0;
+      rotatingShopState.serverOffset=(Number(data.serverNow)||Date.now())-Date.now(); rotatingShopState.listings=Array.isArray(data.listings)?data.listings:[];
+      if(data.utcDay)hostlServerDayKey=String(data.utcDay);
+    }
+  }catch(_){}
+  rotatingShopState.loading=false; renderMaterialsAndRecipes(); updateShopRefreshUi(); syncChestUi();
+}
+async function refreshServerDay(){
+  try{const r=await fetch("/api/time",{cache:"no-store",credentials:"same-origin"});const d=await r.json();if(r.ok&&d?.utcDay){const changed=hostlServerDayKey&&hostlServerDayKey!==d.utcDay;hostlServerDayKey=d.utcDay;rotatingShopState.serverOffset=(Number(d.serverNow)||Date.now())-Date.now();if(changed){syncAccountUi();syncChestUi();loadRotatingShopStock(true);}}}catch(_){}
+}
+function renderMaterialsAndRecipes(){
+  const bar=document.getElementById("materialInventoryBar");
+  if(bar) bar.innerHTML = accountState.loggedIn
+    ? Object.entries(HOSTL_MATERIALS).filter(([id])=>materialCount(id)>0).map(([id,v])=>`<span class="shop-inventory-chip">${v.name} · ${v.rarity}: ${materialCount(id)}</span>`).join("") || `<span class="muted">No crafting materials yet.</span>`
+    : `<span class="muted">Sign in to own materials, build equipment, and learn skills.</span>`;
+  const owned=document.getElementById("materialOwnedList");
+  if(owned) owned.innerHTML=Object.entries(HOSTL_MATERIALS).map(([id,v])=>`<div class="material-owned-row"><span>${v.name}<br><small class="rarity-${v.rarity}">${v.rarity}</small></span><b>${materialCount(id)}</b></div>`).join("");
+  const shop=document.getElementById("materialShopGrid");
+  if(shop){
+    shop.innerHTML="";
+    if(rotatingShopState.loading && !rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Loading this rotation…</div>`;}
+    else if(!rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Shop stock could not be loaded yet. Try reopening the Shop.</div>`;}
+    else for(const listing of rotatingShopState.listings){
+      const item=HOSTL_MATERIALS[listing.materialId]||listing; const d=document.createElement("div"); d.className="material-card"+(listing.purchased?" sold":"");
+      const buttonText=listing.purchased?"Bought this rotation":`Buy · ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits`;
+      d.innerHTML=`<span class="material-rarity rarity-${item.rarity}">${item.rarity}</span><h4>${item.name}</h4><div class="muted">${item.desc||"Crafting material."}</div><div class="owned-count">Owned: ${materialCount(listing.materialId)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||listing.purchased)?'disabled':''}>${buttonText}</button>`;
+      d.querySelector("button")?.addEventListener("click",()=>buyShopListing(listing.slotId)); shop.appendChild(d);
+    }
+  }
+  updateShopRefreshUi();
+  const build=document.getElementById("buildRecipeGrid");
+  if(build){ build.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_BUILD_RECIPES)){
+    const owned=accountState.craftedStarters.includes(id); const d=document.createElement("div"); d.className="recipe-card";
+    d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Build success: ${Math.round(r.chance*100)}%</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Built':'Build'}</button>`;
+    d.querySelector("button")?.addEventListener("click",()=>attemptBuild(id)); build.appendChild(d);
+  }}
+  const learn=document.getElementById("learnRecipeGrid");
+  if(learn){ learn.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_LEARN_RECIPES)){
+    const owned=accountState.learnedSkills.includes(id); const d=document.createElement("div"); d.className="recipe-card";
+    d.innerHTML=`<h4>${r.name}</h4><div class="muted">${r.desc}</div><div class="recipe-chance">Learning succeeds once all study materials are present.</div><div class="ingredient-list">${materialIngredientHtml(r.ingredients)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||owned)?'disabled':''}>${owned?'Learned':'Learn'}</button>`;
+    d.querySelector("button")?.addEventListener("click",()=>learnSkill(id)); learn.appendChild(d);
+  }}
+}
+async function accountAction(path,body){
+  if(!accountState.loggedIn){ openAccountModal(); return null; }
+  try{
+    const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},credentials:"same-origin",body:JSON.stringify(body||{})});
+    const data=await r.json().catch(()=>({})); if(r.status===401){ logoutAccount(false); return null; }
+    if(data?.account) setAccountFromServer(data.account); syncAccountUi(); renderMaterialsAndRecipes(); return {ok:r.ok,data};
+  }catch(_){ return {ok:false,data:{error:"network"}}; }
+}
+async function buyShopListing(slotId){
+  const listing=rotatingShopState.listings.find(x=>x.slotId===slotId); if(!listing)return;
+  const item=HOSTL_MATERIALS[listing.materialId]||listing;
+  const result=await accountAction("/api/shop/buy-stock",{slotId}); if(!result)return;
+  if(!result.ok){
+    if(result.data?.error==="shop_refreshed"){showGameMessage("Shop Refreshed","The two-day shop rotation changed. Loading the new stock now.");await loadRotatingShopStock(true);return;}
+    showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits.`:result.data?.error==="already_purchased"?"You already bought this exact shop slot during this rotation.":"Could not buy that material."); return;
+  }
+  const local=rotatingShopState.listings.find(x=>x.slotId===slotId); if(local)local.purchased=true;
+  showGameMessage("Material Purchased",`+1 ${item.name}`); renderMaterialsAndRecipes();
+}
+async function attemptBuild(id){
+  const r=HOSTL_BUILD_RECIPES[id]; if(!r)return;
+  const ok=await showGameConfirm("Build Attempt",`${r.name} has a ${Math.round(r.chance*100)}% success chance. If it fails, all ingredients are lost. Attempt the build?`,"Build");
+  if(!ok)return;
+  const result=await accountAction("/api/build-starter",{id}); if(!result)return;
+  if(!result.ok){ showGameMessage("Cannot Build",result.data?.error==="missing_materials"?"You do not have every required material.":"That build could not be attempted."); return; }
+  if(result.data?.success) showGameMessage("Build Complete",`${r.name} was built successfully and is now a permanent starter unlock.`);
+  else showGameMessage("Build Failed",`${r.name} failed during construction. The materials used in the attempt were lost.`);
+}
+async function learnSkill(id){
+  const r=HOSTL_LEARN_RECIPES[id]; if(!r)return;
+  const result=await accountAction("/api/learn-skill",{id}); if(!result)return;
+  if(!result.ok){ showGameMessage("Cannot Learn",result.data?.error==="missing_materials"?"You do not have every required study material.":"That skill could not be learned."); return; }
+  showGameMessage("Skill Learned",`${r.name} is now permanently learned for this HOSTL account.`);
 }
 
 function syncPromoCodeUi() {
@@ -24337,8 +25075,9 @@ async function redeemPromoCode() {
     const data=await r.json().catch(()=>({}));
     if(r.status===401){ logoutAccount(false); out.textContent="Your sign-in expired. Sign in again."; out.classList.add("error"); return; }
     if(!r.ok){
-      const messages={invalid_code:"That code is not valid.",already_redeemed:"You already redeemed that code.",code_already_claimed:"That special code has already been claimed.",missing_code:"Type a code first."};
-      out.textContent=messages[data?.error]||"That code could not be redeemed."; out.classList.add("error"); return;
+      if(data?.account){ setAccountFromServer(data.account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); try{setupHome();buildPetShop();buildCardInventory();}catch(_){} }
+      const messages={invalid_code:"That code is not valid.",already_redeemed:data?.repaired?"That code was already redeemed. Its missing special pet rewards were repaired.":"You already redeemed that code.",code_already_claimed:"That special code has already been claimed.",missing_code:"Type a code first."};
+      out.textContent=messages[data?.error]||"That code could not be redeemed."; out.classList.add(data?.repaired?"success":"error"); return;
     }
     if(data?.account) setAccountFromServer(data.account);
     saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); syncPromoCodeUi();
@@ -24348,39 +25087,7 @@ async function redeemPromoCode() {
   }catch(_){ out.textContent="Could not reach the HOSTL server. Try again."; out.classList.add("error"); }
 }
 
-const PLANNED_THEMES = [
-  "Classic","Forest","Ocean","Sunset","Midnight","Desert","Snow","Rose","Neon","Purple",
-  "Galaxy","Cherry Blossom","Golden","Emerald","Crimson","Arctic","Volcanic","Candy","Shadow","Royal",
-  "Lightning","Power","Viperwave","Hologram","Hyperwave","Rabbit Meadow","Deer Grove","Owl Night","Bearded Dunes","Saber Fang"
-];
-const GUEST_THEMES = new Set(PLANNED_THEMES.slice(0,GUEST_THEME_LIMIT));
-const ACCOUNT_THEMES = new Set(["Emerald","Crimson","Arctic","Volcanic","Lightning","Rabbit Meadow","Deer Grove"]);
-const AD_THEMES = new Set(["Galaxy","Cherry Blossom","Golden","Candy","Shadow","Royal","Power","Viperwave","Hologram","Hyperwave","Owl Night","Bearded Dunes","Saber Fang"]);
-
-function renderThemeGrid() {
-  const grid = document.getElementById("themeGrid");
-  if (!grid) return;
-  grid.innerHTML = "";
-  for (const t of PLANNED_THEMES) {
-    const guestFree = GUEST_THEMES.has(t);
-    const acctFree = ACCOUNT_THEMES.has(t);
-    const adUnlock = AD_THEMES.has(t);
-    const unlocked = guestFree || (accountState.loggedIn && (acctFree || accountState.unlockedThemes.includes(t)));
-
-    const card = document.createElement("div");
-    card.className = "theme-card" + (unlocked ? "" : " locked");
-    const badge = guestFree ? "Guest" : acctFree ? "Account" : adUnlock ? "Rewarded Ad" : "Locked";
-    card.innerHTML = `<strong>${t}</strong><div class="pill" style="margin-top:6px">${badge}</div>`;
-    if (!unlocked) {
-      const note = document.createElement("div");
-      note.className = "locked-note";
-      note.textContent = !accountState.loggedIn ? "Create or log into an account to unlock." :
-        (adUnlock ? "Ad unlock will be added later. One ad will unlock this forever." : "Locked for a future unlock method.");
-      card.appendChild(note);
-    }
-    grid.appendChild(card);
-  }
-}
+// Theme unlocks are handled exclusively by the Home Themes screen above.
 function syncChestUi() {
   const btn = document.getElementById("dailyChestBtn");
   const status = document.getElementById("dailyChestStatus");
@@ -24392,11 +25099,11 @@ function syncChestUi() {
     status.textContent = "Log in or create an account to use chests.";
   } else {
     const freeReady = accountState.lastDailyChest !== utcDayKey();
-    btn.disabled = false;
-    btn.textContent = freeReady ? "Open Daily Chest — FREE" : "Open Again — 50 Cubits";
+    btn.disabled = !freeReady;
+    btn.textContent = freeReady ? "Watch Ad to Open Wooden Chest" : "Wooden Chest Claimed Today";
     status.textContent = freeReady
-      ? "Your free chest is ready."
-      : "Today's free chest is already opened. Extra Daily Chest opens cost 50 Cubits.";
+      ? "Your daily Wooden Chest is ready."
+      : "Come back tomorrow for another Wooden Chest.";
   }
 
   document.querySelectorAll(".cubitChestBtn").forEach(b=>{
@@ -24406,11 +25113,8 @@ function syncChestUi() {
 }
 
 function availableChestThemes() {
-  return PLANNED_THEMES.filter(t =>
-    !GUEST_THEMES.has(t) &&
-    !ACCOUNT_THEMES.has(t) &&
-    !accountState.unlockedThemes.includes(t)
-  );
+  const ids=["fireElement","waterElement","lightningElement","powerElement","windElement","plantElement","stoneElement","earthElement","soundElement","arcticPulse","chromeWave","nightDrive","toxicReactor","solarPunk","viperwave","hologram","hyperwave","cyberCircuit","hacker","blackNeon","blackNight","thunderStorm","glitch","slime","auroraVale","prismTech","oceanAbyss","auroraBorealis","computerVirus","dragonForge","celestialCrown","titanStorm","goldenEclipse","saberFang","voidObsidian","bloodMoon","emberKingdom","crystalCavern","ancientRuins","explosion","castorianopsia"];
+  return ids.filter(t=>!accountState.unlockedThemes.includes(t));
 }
 function chestRandomInt(min,max) {
   return Math.floor(min + Math.random() * (max - min + 1));
@@ -24433,77 +25137,29 @@ function showChestResult(name, parts) {
     {duration:300,easing:"ease-out"}
   );
 }
-function openAccountChest(name,cost,kind="small",isFreeDaily=false) {
-  if (!accountState.loggedIn) {
-    openAccountModal();
-    syncAccountUi("Log in or create an account before opening chests.");
-    return;
+async function openAccountChest(name,cost,kind="forest",isFreeDaily=false) {
+  if (!accountState.loggedIn) { openAccountModal(); syncAccountUi("Log in or create an account before opening chests."); return; }
+  const result=await accountAction("/api/open-chest",{kind:isFreeDaily?"daily":kind});
+  if(!result)return;
+  if(!result.ok){
+    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:"That chest could not be opened.";
+    showChestResult(name,[msg]); syncChestUi(); return;
   }
-  cost = Math.max(0,Math.floor(Number(cost)||0));
-  if (accountState.cubits < cost) {
-    showChestResult(name,[`Not enough Cubits. You need ${cost}.`]);
-    return;
-  }
-
-  accountState.cubits -= cost;
-  const rewards = [];
-  let bonusMin=0, bonusMax=0, themeChance=0, guaranteedThemes=0;
-
-  if (kind==="daily") {
-    bonusMin=8; bonusMax=18; themeChance=.20;
-  } else if (kind==="small") {
-    bonusMin=10; bonusMax=28; themeChance=.28;
-  } else if (kind==="explorer") {
-    bonusMin=35; bonusMax=80; themeChance=.55;
-  } else if (kind==="rare") {
-    bonusMin=90; bonusMax=180; guaranteedThemes=1;
-  } else if (kind==="legendary") {
-    bonusMin=220; bonusMax=420; guaranteedThemes=1; themeChance=.75;
-  }
-
-  const bonus = chestRandomInt(bonusMin,bonusMax);
-  accountState.cubits += bonus;
-  rewards.push(`+${bonus} Cubits`);
-
-  let unlockedCount=0;
-  for (let i=0;i<guaranteedThemes;i++) {
-    const t=unlockRandomChestTheme();
-    if (t) { rewards.push(`${t} theme unlocked permanently`); unlockedCount++; }
-  }
-  if (Math.random()<themeChance) {
-    const t=unlockRandomChestTheme();
-    if (t) { rewards.push(`${t} theme unlocked permanently`); unlockedCount++; }
-  }
-  if (!unlockedCount && !availableChestThemes().length) {
-    const extra = kind==="legendary" ? 120 : kind==="rare" ? 70 : kind==="explorer" ? 30 : 12;
-    accountState.cubits += extra;
-    rewards.push(`+${extra} Cubits (all chest themes already unlocked)`);
-  }
-
-  if (isFreeDaily) accountState.lastDailyChest = utcDayKey();
-  persistAccountProfile();
-  syncAccountUi();
-  showChestResult(name,rewards);
+  const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
+  showChestResult(name,rewards); syncChestUi(); renderMaterialsAndRecipes();
 }
 
 function openDailyChestNow() {
-  if (!accountState.loggedIn) {
-    openAccountModal();
-    return;
-  }
-  const freeReady = accountState.lastDailyChest !== utcDayKey();
-  openAccountChest(
-    freeReady ? "Daily Chest" : "Daily Chest — Extra Open",
-    freeReady ? 0 : 50,
-    "daily",
-    freeReady
-  );
+  if (!accountState.loggedIn) { openAccountModal(); return; }
+  if (accountState.lastDailyChest === utcDayKey()) { showChestResult("Wooden Chest", ["Already claimed today. Come back tomorrow."]); syncChestUi(); return; }
+  // Test-build reward hook. When ads are connected, call this only after ad completion.
+  openAccountChest("Wooden Chest",0,"daily",true);
 }
 
 function buyCubitChest(button) {
   const cost = Number(button?.dataset?.cost)||0;
-  const name = button?.dataset?.name || "Chest";
-  const kind = cost>=1000 ? "legendary" : cost>=500 ? "rare" : cost>=200 ? "explorer" : "small";
+  const name = button?.dataset?.name || "Forest Chest";
+  const kind = button?.dataset?.kind || "forest";
   openAccountChest(name,cost,kind,false);
 }
 
@@ -24571,7 +25227,7 @@ async function handleGoogleCredential(response) {
   if (!response?.credential) return syncAccountUi("Google did not return a sign-in credential.");
   syncAccountUi("Signing in with Google…");
   try {
-    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:response.credential}) });
+    const r=await fetch("/auth/google",{ method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({credential:response.credential,recoveryTokens:loadAccountRecoveryTokens()}) });
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.token || !data?.account) throw new Error(data?.error||"Google login failed");
     hostlSessionToken=data.token;
@@ -24579,8 +25235,9 @@ async function handleGoogleCredential(response) {
     saveAccountSession();
     syncAchievementAccountBridge();
     const bits=[];
-    if(data.created) bits.push("HOSTL account created with 500 Cubits");
-    if(data.dailyGranted) bits.push("+10 daily Cubits");
+    if(data.recovered) bits.push("HOSTL account recovered from your secure browser backup");
+    else if(data.created) bits.push("HOSTL account created with 500 Gold Cubits");
+    if(data.dailyGranted) bits.push("+10 daily Gold Cubits");
     syncAccountUi(bits.length ? bits.join(" · ") : "Signed in with Google.");
     startFriendsLoops();
   } catch (err) {
@@ -24596,11 +25253,11 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",cubits:0,unlockedThemes:[],achievements:{},speciesCards:{},title:"",unlockedTitles:[],testerRank:0,starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
-  try { meta.servs=5; saveMeta(); } catch (_) {}
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
-  syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Cubits." : "");
+  syncAccountUi(showMessage ? "Logged out. Guest mode starts with 5 Gold Cubits." : "");
 }
 function populateTitleDropdown(){
   const sel=document.getElementById("settingsTitleSelect");
@@ -24613,6 +25270,38 @@ function populateTitleDropdown(){
   for(const t of titles){ const opt=document.createElement("option"); opt.value=t; opt.textContent=t; sel.appendChild(opt); }
   sel.value=current;
 }
+async function saveDisplayNameNow(){
+  if(!accountState.loggedIn || !hostlSessionToken) return false;
+  const input=document.getElementById("settingsDisplayName");
+  const msg=document.getElementById("accountSettingsSaveMsg");
+  const rawName=String(input?.value||"").trim().replace(/\s+/g," ");
+  if(rawName.length<2 || rawName.length>20){
+    if(msg) msg.textContent="Display name must be 2–20 characters.";
+    return false;
+  }
+  // Cancel any older background save before saving the social name.
+  clearTimeout(accountSaveTimer);
+  try{
+    const r=await fetch("/api/account",{
+      method:"PUT",
+      headers:{"Content-Type":"application/json",...accountAuthHeaders()},
+      body:JSON.stringify({displayName:rawName})
+    });
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
+    setAccountFromServer(data.account);
+    window.__hostlDisplayNameDirty=false;
+    if(input) input.value=accountState.displayName||rawName;
+    if(msg) msg.textContent="Display name saved.";
+    renderFriendsUi?.();
+    return true;
+  }catch(_){
+    window.__hostlDisplayNameDirty=true;
+    if(msg) msg.textContent="Could not save display name yet. Your typed name was kept.";
+    return false;
+  }
+}
+
 async function saveAccountSettings(){
   if(!accountState.loggedIn || !hostlSessionToken) return;
   const usernameInput=document.getElementById("settingsUsername");
@@ -24628,6 +25317,7 @@ async function saveAccountSettings(){
   if(btn){btn.disabled=true;btn.textContent="Saving…";}
   if(msg) msg.textContent="Saving account settings…";
   try{
+    clearTimeout(accountSaveTimer);
     const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({username:rawUsername,displayName:rawName,title:chosenTitle})});
     const data=await r.json().catch(()=>({}));
     if(!r.ok || !data?.account) throw new Error(data?.error||"save_failed");
@@ -24684,6 +25374,7 @@ async function deleteHostlAccount() {
   try {
     const r=await fetch("/api/account",{method:"DELETE",headers:accountAuthHeaders()});
     if(!r.ok) throw new Error();
+    forgetRecoveryForUser(accountState.userId);
     closeAccountSettings();
     logoutAccount(false); closeAccountModal();
     showGameMessage("Account Deleted", "Your HOSTL account has been deleted. Your Google account was not deleted.");
@@ -24712,10 +25403,10 @@ function renderFriendsUi(){
   const req=document.getElementById("friendRequestsList"), list=document.getElementById("friendsList"); if(!req||!list)return;
   req.innerHTML=""; const incoming=friendsData.incoming||[], outgoing=friendsData.outgoing||[];
   if(!incoming.length&&!outgoing.length)req.innerHTML='<div class="friends-note">No pending requests.</div>';
-  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
-  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.displayName||f.username)}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
+  for(const f of incoming){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span><b>${escapeFriendText(f.displayName||"No display name set")}</b> <small>#${escapeFriendText(f.userId)}</small></span><span><button data-accept="${f.userId}" class="primary">Accept</button> <button data-decline="${f.userId}">Decline</button></span>`;req.appendChild(d);}
+  for(const f of outgoing){const d=document.createElement("div");d.className="friend-request";d.innerHTML=`<span>Sent to <b>${escapeFriendText(f.displayName||"No display name set")}</b> <small>#${escapeFriendText(f.userId)}</small></span><span class="friends-note">Pending</span>`;req.appendChild(d);}
   list.innerHTML=""; const fs=friendsData.friends||[]; if(!fs.length)list.innerHTML='<div class="friends-note">No friends yet.</div>';
-  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.displayName||f.username)} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
+  for(const f of fs){const d=document.createElement("div");d.className="friend-item"; const st=f.playing?"playing":f.online?"online":""; d.innerHTML=`<div class="friend-name">${escapeFriendText(f.displayName||"No display name set")} ${f.title?`<span class="pill">${escapeFriendText(f.title)}</span>`:""} <small>#${escapeFriendText(f.userId)}</small></div><div class="friend-status ${st}">${escapeFriendText(friendStatusText(f))}</div><button data-openfriend="${f.userId}">Open</button>`;list.appendChild(d);}
   req.querySelectorAll("[data-accept]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.accept,true)); req.querySelectorAll("[data-decline]").forEach(b=>b.onclick=()=>respondFriend(b.dataset.decline,false)); list.querySelectorAll("[data-openfriend]").forEach(b=>b.onclick=()=>selectFriend(b.dataset.openfriend));
   if(selectedFriendId){const f=fs.find(x=>String(x.userId)===String(selectedFriendId)); if(f)updateSelectedFriend(f); else {selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";}}
 }
@@ -24723,14 +25414,14 @@ function escapeFriendText(v){return String(v??"").replace(/[&<>\"']/g,c=>({"&":"
 async function sendFriendRequest(){const input=document.getElementById("friendIdInput"),msg=document.getElementById("friendActionMsg");const playerId=String(input?.value||"").trim();if(!/^\d{1,5}$/.test(playerId)){if(msg)msg.textContent="Enter a valid Player ID.";return;}try{const r=await friendApi("/api/friends/request",{method:"POST",body:JSON.stringify({playerId})});const d=await r.json().catch(()=>({}));if(msg)msg.textContent=r.ok?(d.accepted?"Friend added!":"Friend request sent."):(d.error==="player_not_found"?"That Player ID was not found.":d.error==="already_friends"?"You are already friends.":d.error==="cannot_friend_self"?"You cannot add yourself.":"Could not send request.");if(r.ok){if(input)input.value="";refreshFriends();}}catch(_){if(msg)msg.textContent="Could not reach the server.";}}
 async function respondFriend(playerId,accept){try{await friendApi("/api/friends/respond",{method:"POST",body:JSON.stringify({playerId,accept})});refreshFriends();}catch(_){}}
 function selectFriend(id){selectedFriendId=String(id);const f=(friendsData.friends||[]).find(x=>String(x.userId)===selectedFriendId);if(!f)return;document.getElementById("friendEmptyView").style.display="none";document.getElementById("friendDetailView")?.classList.add("on");updateSelectedFriend(f);setFriendSubview("chat");clearInterval(friendChatTimer);friendChatTimer=setInterval(()=>{if(document.getElementById("friendsModal")?.classList.contains("on"))refreshFriendChat(false);},3000);}
-function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.displayName||f.username}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
+function updateSelectedFriend(f){const n=document.getElementById("friendDetailName"),st=document.getElementById("friendDetailStatus");if(n)n.textContent=`${f.displayName||"No display name set"}${f.title?` · ${f.title}`:""} · #${f.userId}`;if(st){st.textContent=friendStatusText(f);st.className=`friend-status ${f.playing?"playing":f.online?"online":""}`;}}
 async function removeSelectedFriend(){if(!selectedFriendId)return;const ok=await showGameConfirm("Remove Friend","Remove this player from your friends list?");if(!ok)return;try{await friendApi(`/api/friends/${encodeURIComponent(selectedFriendId)}`,{method:"DELETE"});selectedFriendId="";document.getElementById("friendDetailView")?.classList.remove("on");document.getElementById("friendEmptyView").style.display="";refreshFriends();}catch(_){}}
 async function refreshFriendChat(scroll=true){if(!selectedFriendId)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`);if(!r.ok)return;const d=await r.json();const log=document.getElementById("friendChatLog");if(!log)return;log.innerHTML=(d.messages||[]).map(m=>`<div class="friend-chat-msg ${String(m.from)===String(accountState.userId)?"mine":""}"><div class="friend-chat-meta">${String(m.from)===String(accountState.userId)?"You":"Friend"} · ${new Date(m.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})}</div>${escapeFriendText(m.message)}</div>`).join("")||'<div class="friends-note">No messages yet.</div>';if(scroll)log.scrollTop=log.scrollHeight;}catch(_){}}
 async function sendFriendChat(){const i=document.getElementById("friendChatInput");const message=String(i?.value||"").trim();if(!selectedFriendId||!message)return;try{const r=await friendApi(`/api/friends/chat/${encodeURIComponent(selectedFriendId)}`,{method:"POST",body:JSON.stringify({message})});if(r.ok){i.value="";refreshFriendChat();}}catch(_){}}
-async function sendFriendGift(){if(!selectedFriendId)return;const cubits=Math.max(0,Math.floor(Number(document.getElementById("giftCubits")?.value)||0)),species=String(document.getElementById("giftSpecies")?.value||"").trim().toLowerCase(),cards=Math.max(0,Math.floor(Number(document.getElementById("giftCards")?.value)||0));if(!cubits&&!cards){showGameMessage("Gift","Choose Cubits or cards to gift.");return;}const ok=await showGameConfirm("Send Gift",`Send ${cubits?`${cubits.toLocaleString()} Cubits`:""}${cubits&&cards?" and ":""}${cards?`${cards} ${species||"?"} cards`:""}? This cannot be undone.`);if(!ok)return;try{const r=await friendApi("/api/friends/gift",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,cubits,species,cards})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Gift Failed",d.error==="not_enough"?"You do not have enough Cubits or cards.":"The gift could not be sent.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Gift Sent","Your gift was sent successfully.");}catch(_){showGameMessage("Gift Failed","Could not reach the server.");}}
-function readTradePart(prefix){return{cubits:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cubits")?.value)||0)),species:String(document.getElementById(prefix+"Species")?.value||"").trim().toLowerCase(),cards:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cards")?.value)||0))};}
+async function sendFriendGift(){if(!selectedFriendId)return;const goldCubits=Math.max(0,Math.floor(Number(document.getElementById("giftCubits")?.value)||0)),species=String(document.getElementById("giftSpecies")?.value||"").trim().toLowerCase(),cards=Math.max(0,Math.floor(Number(document.getElementById("giftCards")?.value)||0));if(!goldCubits&&!cards){showGameMessage("Gift","Choose Gold Cubits or cards to gift.");return;}const ok=await showGameConfirm("Send Gift",`Send ${goldCubits?`${goldCubits.toLocaleString()} Gold Cubits`:""}${goldCubits&&cards?" and ":""}${cards?`${cards} ${species||"?"} cards`:""}? This cannot be undone.`);if(!ok)return;try{const r=await friendApi("/api/friends/gift",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,goldCubits,species,cards})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Gift Failed",d.error==="not_enough"?"You do not have enough Gold Cubits or cards.":"The gift could not be sent.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Gift Sent","Your gift was sent successfully.");}catch(_){showGameMessage("Gift Failed","Could not reach the server.");}}
+function readTradePart(prefix){return{goldCubits:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cubits")?.value)||0)),species:String(document.getElementById(prefix+"Species")?.value||"").trim().toLowerCase(),cards:Math.max(0,Math.floor(Number(document.getElementById(prefix+"Cards")?.value)||0))};}
 async function sendTradeOffer(){if(!selectedFriendId)return;const give=readTradePart("tradeGive"),want=readTradePart("tradeWant");try{const r=await friendApi("/api/friends/trade",{method:"POST",body:JSON.stringify({playerId:selectedFriendId,give,want})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Trade",d.error==="not_enough"?"You do not currently have what you offered.":"Could not create that trade.");return;}showGameMessage("Trade Offer Sent","Your friend can accept or decline the offer.");refreshTrades();}catch(_){}}
-function tradePartText(p){const bits=[];if(Number(p?.cubits)>0)bits.push(`${Number(p.cubits).toLocaleString()} Cubits`);if(Number(p?.cards)>0)bits.push(`${p.cards} ${p.species} cards`);return bits.join(" + ")||"nothing";}
+function tradePartText(p){const bits=[];if(Number(p?.goldCubits)>0)bits.push(`${Number(p.goldCubits).toLocaleString()} Gold Cubits`);if(Number(p?.cards)>0)bits.push(`${p.cards} ${p.species} cards`);return bits.join(" + ")||"nothing";}
 async function refreshTrades(){if(!selectedFriendId)return;try{const r=await friendApi("/api/friends/trades");if(!r.ok)return;const d=await r.json();const box=document.getElementById("friendTradesList");if(!box)return;const offers=(d.offers||[]).filter(o=>String(o.from)===selectedFriendId||String(o.to)===selectedFriendId);box.innerHTML=offers.map(o=>{const incoming=String(o.to)===String(accountState.userId);return `<div class="trade-offer ${incoming?"incoming":""}"><b>${incoming?"Incoming offer":"Offer sent"}</b><div class="friends-note">${incoming?"They give":"You give"}: ${escapeFriendText(tradePartText(o.give))}<br>${incoming?"They want":"You want"}: ${escapeFriendText(tradePartText(o.want))}</div>${incoming?`<div class="friend-actions"><button class="primary" data-trade-accept="${o.id}">Accept</button><button data-trade-decline="${o.id}">Decline</button></div>`:""}</div>`;}).join("")||'<div class="friends-note">No pending trades with this friend.</div>';box.querySelectorAll("[data-trade-accept]").forEach(b=>b.onclick=()=>respondTrade(b.dataset.tradeAccept,true));box.querySelectorAll("[data-trade-decline]").forEach(b=>b.onclick=()=>respondTrade(b.dataset.tradeDecline,false));}catch(_){}}
 async function respondTrade(id,accept){try{const r=await friendApi(`/api/friends/trade/${encodeURIComponent(id)}/respond`,{method:"POST",body:JSON.stringify({accept})});const d=await r.json().catch(()=>({}));if(!r.ok){showGameMessage("Trade",d.error==="trade_inventory_changed"?"The trade can no longer be completed because one player no longer has the offered items.":"Trade could not be completed.");return;}if(d.account){setAccountFromServer(d.account);syncAccountUi();}showGameMessage("Trade",accept?"Trade completed.":"Trade declined.");refreshTrades();}catch(_){}}
 
@@ -24766,8 +25457,9 @@ function bindAccountAndShopUi() {
   if(displayNameInput && !displayNameInput.dataset.hostlDisplayEditBound){
     displayNameInput.dataset.hostlDisplayEditBound="1";
     displayNameInput.addEventListener("input",()=>{ window.__hostlDisplayNameDirty=true; });
+    displayNameInput.addEventListener("change",()=>{ saveDisplayNameNow(); });
     displayNameInput.addEventListener("keydown",e=>{
-      if(e.key==="Enter"){ e.preventDefault(); saveAccountSettings(); displayNameInput.blur(); }
+      if(e.key==="Enter"){ e.preventDefault(); saveDisplayNameNow(); displayNameInput.blur(); }
     });
   }
   once(document.getElementById("openDeleteAccountBtn"), "click", beginDeleteHostlAccount);
@@ -24775,7 +25467,7 @@ function bindAccountAndShopUi() {
   once(document.getElementById("deleteConfirmInput"), "input", updateDeleteConfirmState);
   once(document.getElementById("confirmDeleteAccountBtn"), "click", deleteHostlAccount);
   once(document.getElementById("openShopFromAccount"), "click",
-    ()=>{ closeAccountModal(); openExpandedShop("chests"); });
+    ()=>{ closeAccountModal(); openExpandedShop("shop"); });
   once(document.getElementById("expandedShopClose"), "click", closeExpandedShop);
 
   document.querySelectorAll(".shop-tab").forEach(b =>
@@ -24805,23 +25497,6 @@ function bindAccountAndShopUi() {
     if (e.target === e.currentTarget) closeExpandedShop();
   });
 
-  // Add a Chests button beside/near the existing shop trigger where possible.
-  const legacy = Array.from(document.querySelectorAll("button"))
-    .find(b => /^shop$/i.test((b.textContent||"").trim()));
-  if (legacy && !document.getElementById("chestsMenuBtn")) {
-    const btn = document.createElement("button");
-    btn.id = "chestsMenuBtn";
-    btn.className = legacy.className || "account-btn";
-    btn.type = "button";
-    btn.textContent = "Chests";
-    btn.addEventListener("click", ()=>openExpandedShop("chests"));
-    legacy.insertAdjacentElement("afterend", btn);
-    legacy.addEventListener("contextmenu", e=>e.preventDefault());
-  }
-  if (legacy && !legacy.dataset.expandedShopDblclick) {
-    legacy.dataset.expandedShopDblclick = "1";
-    legacy.addEventListener("dblclick", ()=>openExpandedShop("gear"));
-  }
 
   syncAccountUi();
 }
@@ -24878,7 +25553,7 @@ syncAchievementAccountBridge();
 
     <div id="accountGuestView">
       <p class="muted">You can play as a guest, but guest progress is temporary and does not save across devices.</p>
-      <div class="reward-badge">New Google-linked HOSTL account: +500 Cubits</div>
+      <div class="reward-badge">New Google-linked HOSTL account: +500 Gold Cubits</div>
       <div class="divider"></div>
       <h3>Continue with Google</h3>
       <div id="googleSignInButton"></div>
@@ -24912,8 +25587,8 @@ syncAchievementAccountBridge();
     </div>
     <p class="muted">Your Google account signs you in. HOSTL keeps its own game account and saved progress.</p>
     <div class="account-detail-grid">
-      <div class="label">Username</div><div class="value"><input id="settingsUsername" class="settings-control" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Username"><div class="settings-hint">2–14 characters. This is your in-game name and the name other players see while playing.</div></div>
-      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. This is your social name shown to friends.</div></div>
+      <div class="label">Username</div><div class="value"><input id="settingsUsername" class="settings-control" type="text" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Username"><div class="settings-hint">2–14 characters. You choose this. It is not taken from Google. This is your in-game name and the name other players see while playing.</div></div>
+      <div class="label">Display name</div><div class="value"><input id="settingsDisplayName" class="settings-control" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Display name"><div class="settings-hint">2–20 characters. You choose this separately. It is not taken from Google. This is your social name shown to friends.</div></div>
       <div class="label">Choose title</div><div class="value"><select id="settingsTitleSelect" class="settings-control"><option value="">No title</option></select><div class="settings-hint">Titles come from achievements, codes, and special rewards.</div></div>
       <div class="label">HOSTL player ID</div><div class="value" id="settingsPlayerId">—</div>
       <div class="label">Google-linked email</div><div class="value" id="settingsEmail">—</div>
@@ -24926,7 +25601,7 @@ syncAchievementAccountBridge();
     </div>
     <div class="danger-zone">
       <h3>Delete account?</h3>
-      <p class="muted">Deleting your HOSTL account permanently erases its saved progress, Cubits, unlocked themes, achievements, and other account data. This does <strong>not</strong> delete your Google account.</p>
+      <p class="muted">Deleting your HOSTL account permanently erases its saved progress, Gold Cubits, unlocked themes, achievements, and other account data. This does <strong>not</strong> delete your Google account.</p>
       <button id="openDeleteAccountBtn" class="account-btn danger-btn" type="button">Delete Account?</button>
       <div id="deleteConfirmBox" class="delete-confirm-box">
         <strong>Are you sure?</strong>
@@ -24943,66 +25618,80 @@ syncAchievementAccountBridge();
 </div>
 
 <div id="expandedShopModal" class="shop-modal" aria-hidden="true">
-  <div class="modal-card">
+  <div class="modal-card expanded-shop-card">
     <div class="modal-row" style="justify-content:space-between">
       <h2>Shop</h2>
-      <div class="reward-badge"><span id="shopCubits">0</span> Cubits</div>
+      <div class="reward-badge"><span id="shopCubits">0</span> Gold Cubits</div>
       <button id="expandedShopClose" class="account-btn" type="button">Close</button>
     </div>
 
     <div class="shop-tabs">
-      <button class="shop-tab active" data-shop-page="gear">Gear</button>
-      <button class="shop-tab" data-shop-page="themes">Themes</button>
+      <button class="shop-tab active" data-shop-page="shop">Shop</button>
+      <button class="shop-tab" data-shop-page="build">Build</button>
+      <button class="shop-tab" data-shop-page="learn">Learn</button>
       <button class="shop-tab" data-shop-page="chests">Chests</button>
       <button class="shop-tab" data-shop-page="codes">Codes</button>
     </div>
 
-    <section id="shopPageGear" class="shop-page active">
-      <h3>Gear</h3>
-      <p class="muted">Your current run-shop gear stays here. Cubits are for permanent account purchases later.</p>
-      <button id="openLegacyShopBtn" class="account-btn" type="button">Open Current Gear Shop</button>
+    <section id="shopPageShop" class="shop-page active">
+      <div class="materials-shop-layout">
+        <div class="materials-left-column">
+          <div class="rotating-stock-panel">
+            <div class="rotating-stock-head">
+              <div><h3 style="margin:0 0 4px">Materials Shop</h3><p class="muted" style="margin:0">Buy ingredients here, then use <b>Build</b> or <b>Learn</b>. Stock changes every two days, and duplicate items can appear.</p></div>
+              <div id="shopRefreshCountdown" class="shop-refresh-pill">Loading rotation…</div>
+            </div>
+            <div id="materialShopGrid" class="material-grid rotating-material-grid"></div>
+          </div>
+          <aside class="material-owned-panel">
+            <h4>Your Materials</h4>
+            <div id="materialInventoryBar" class="shop-inventory-bar"></div>
+            <div id="materialOwnedList" class="material-owned-list"></div>
+            <p class="locked-note">The server controls the two-day rotation and daily resets, so changing your device clock cannot force an early refresh.</p>
+          </aside>
+        </div>
+        <aside class="shopkeeper-panel" aria-label="Shopkeeper area">
+          <div class="shopkeeper-placeholder">
+            <div class="shopkeeper-icon">🧑‍🌾</div>
+            <strong>Shopkeeper Area</strong>
+            <span>Reserved for your HOSTL shopkeeper character. The material stock stays on the left.</span>
+          </div>
+        </aside>
+      </div>
     </section>
 
-    <section id="shopPageThemes" class="shop-page">
-      <h3>Themes</h3>
-      <p class="muted">Guests can use 10 free themes. Logged-in accounts can unlock more permanently.</p>
-      <div id="themeGrid" class="theme-grid"></div>
+    <section id="shopPageBuild" class="shop-page">
+      <h3>Build</h3>
+      <p class="muted">Building is free once you own the required parts. Harder builds can fail. A failed build consumes every ingredient used in the attempt.</p>
+      <div id="buildRecipeGrid" class="recipe-grid"></div>
+    </section>
+
+    <section id="shopPageLearn" class="shop-page">
+      <h3>Learn</h3>
+      <p class="muted">Skills are learned from books plus other study materials. Learning costs no Gold Cubits once you have everything required.</p>
+      <div id="learnRecipeGrid" class="recipe-grid"></div>
     </section>
 
     <section id="shopPageChests" class="shop-page">
       <h3>Chests</h3>
       <div class="chest-card featured">
-        <div class="chest-title"><span>Daily Chest</span><span class="pill">FREE</span></div>
-        <p>One per day for logged-in players.</p>
-        <button id="dailyChestBtn" class="account-btn" type="button">Open Daily Chest</button>
+        <div class="chest-title"><span>Wooden Chest</span><span class="pill">DAILY AD</span></div>
+        <p class="muted">One free Wooden Chest per day for signed-in players. It can contain Gold Cubits, species cards, materials, and occasionally a permanent theme. This is the chest tied to the daily rewarded ad.</p>
+        <button id="dailyChestBtn" class="account-btn" type="button">Watch Ad to Open</button>
         <div id="dailyChestStatus" class="locked-note"></div>
       </div>
 
       <div class="chest-card">
-        <div class="chest-title"><span>Small Chest</span><span class="pill">75 Cubits</span></div>
-        <p class="muted">Basic permanent account rewards.</p>
-        <button class="account-btn cubitChestBtn" data-cost="75" data-name="Small Chest" type="button">Buy for 75</button>
+        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Gold Cubits</span></div>
+        <p class="muted">A Gold Cubit chest with Gold Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
+        <button class="account-btn cubitChestBtn" data-cost="1200" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,200</button>
       </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Explorer Chest</span><span class="pill">200 Cubits</span></div>
-        <p class="muted">Better reward chances.</p>
-        <button class="account-btn cubitChestBtn" data-cost="200" data-name="Explorer Chest" type="button">Buy for 200</button>
-      </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Rare Chest</span><span class="pill">500 Cubits</span></div>
-        <p class="muted">Higher-value rewards.</p>
-        <button class="account-btn cubitChestBtn" data-cost="500" data-name="Rare Chest" type="button">Buy for 500</button>
-      </div>
-      <div class="chest-card">
-        <div class="chest-title"><span>Legendary Chest</span><span class="pill">1000 Cubits</span></div>
-        <p class="muted">Top-end chest. Rewards will be filled in later.</p>
-        <button class="account-btn cubitChestBtn" data-cost="1000" data-name="Legendary Chest" type="button">Buy for 1000</button>
-      </div>
+
       <div id="chestResult" class="chest-card" style="display:none">
         <div class="chest-title"><span>Chest Opened!</span><span class="pill">Reward</span></div>
         <div id="chestResultText" style="margin-top:8px"></div>
       </div>
-      <p class="locked-note">No ads are used yet. The Daily Chest is free once per UTC day, then costs 50 Cubits for extra opens.</p>
+      <p class="locked-note">The rewarded-ad provider is not connected yet, so the daily Wooden Chest uses the daily reward hook in this test build. Once ads are connected, the reward will only be granted after the ad completes.</p>
     </section>
 
     <section id="shopPageCodes" class="shop-page">
@@ -25020,6 +25709,55 @@ syncAchievementAccountBridge();
     </section>
   </div>
 </div>
+
+<script>
+// Keep day/rotation UI current even if HOSTL stays open across UTC midnight.
+setInterval(()=>{ try{ updateShopRefreshUi(); }catch(_){} }, 1000);
+setInterval(()=>{ try{ refreshServerDay(); }catch(_){} }, 60000);
+setTimeout(()=>{ try{ refreshServerDay(); }catch(_){} }, 1500);
+// If any legacy/cached Shop code tries to inject a Themes tab later, remove it immediately.
+setTimeout(()=>{
+  const shop=document.getElementById("expandedShopModal");
+  if(!shop || shop.__hostlNoThemesObserver) return;
+  shop.__hostlNoThemesObserver=true;
+  removeThemesFromShopCompletely();
+  new MutationObserver(()=>removeThemesFromShopCompletely()).observe(shop,{childList:true,subtree:true});
+},0);
+</script>
+
+<script>
+// Keep the home screen visible behind menus while disabling only the HOME
+// controls. Do not inert #home itself because Friends lives inside #home and
+// would become impossible to click.
+(function setupTransparentHomeModalLock(){
+  const ids=[
+    'expandedShopModal','friendsModal','accountModal','accountSettingsModal',
+    'homeThemeOverlay','playerDesignOverlay','chooseStarterPetOverlay',
+    'cardInventoryOverlay','petShopOverlay','achievementOverlay','legalSupportOverlay'
+  ];
+  const home=document.getElementById('home');
+  if(!home) return;
+  const nodes=ids.map(id=>document.getElementById(id)).filter(Boolean);
+  const homeBackgroundRoots=[
+    home.querySelector(':scope > .home-shell'),
+    document.getElementById('friendsCorner'),
+    document.getElementById('accountSettingsFooter'),
+    home.querySelector(':scope > .legal-support-footer')
+  ].filter(Boolean);
+  const isOpen=(node)=>node.classList.contains('on') || node.classList.contains('show');
+  const sync=()=>{
+    const locked=nodes.some(isOpen);
+    home.classList.toggle('hostl-home-modal-locked',locked);
+    // Inert only the actual background controls, never the modal layer.
+    homeBackgroundRoots.forEach(root=>{
+      if(locked) root.setAttribute('inert','');
+      else root.removeAttribute('inert');
+    });
+  };
+  nodes.forEach(node=>new MutationObserver(sync).observe(node,{attributes:true,attributeFilter:['class','style']}));
+  sync();
+})();
+</script>
 
 </body>
 </html>

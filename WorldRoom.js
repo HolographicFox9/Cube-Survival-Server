@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "596";
+const CUBE_SHARED_RULES_VERSION = "597";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -719,7 +719,8 @@ function segmentCircleT(x0,y0,x1,y1,cx,cy,r){
 }
 function animalProjectileSegmentT(a,x0,y0,x1,y1,radius=0){
   let best=null;
-  for(const h of animalHitCircles(a)){
+  // Every animal damage test uses torso/body circles AND the explicit head.
+  for(const h of animalTargetDamageCircles({kind:"animal"},a)){
     const t=segmentCircleT(x0,y0,x1,y1,h.x,h.y,radius+h.r);
     if(t!=null&&(best==null||t<best))best=t;
   }
@@ -942,13 +943,13 @@ function animalPhysicalCircles(a){
 }
 
 function animalMeleeTouch(a,px,py,range,angle,maxFacing=1.05){
-  for(const h of animalHitCircles(a)){
+  for(const h of animalTargetDamageCircles({kind:"animal"},a)){
     if(dist(px,py,h.x,h.y)<range+h.r&&facing(px,py,angle,h.x,h.y,maxFacing))return true;
   }
   return false;
 }
 function animalProjectileTouch(a,x,y,radius=0){
-  for(const h of animalHitCircles(a))if(dist(x,y,h.x,h.y)<radius+h.r)return true;
+  for(const h of animalTargetDamageCircles({kind:"animal"},a))if(dist(x,y,h.x,h.y)<radius+h.r)return true;
   return false;
 }
 function animalFaceGeometry(a){
