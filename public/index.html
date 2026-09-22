@@ -1666,12 +1666,20 @@
     text-align:left;
     font-family:inherit;
     box-shadow:0 10px 22px rgba(0,0,0,.18);
-    transition:transform .12s,border-color .12s,filter .12s;
+    transform:translateZ(0) scale(1);
+    transform-origin:center center;
+    will-change:transform;
+    z-index:0;
+    transition:transform .12s ease,border-color .12s,filter .12s;
   }
 
+  /* Keep hover geometry stable. Moving the whole card upward can move its
+     hitbox out from under a pointer near the bottom edge, causing hover to
+     rapidly toggle on/off. Grow in place instead. */
   .theme-choice:hover{
-    transform:translateY(-2px);
+    transform:translateZ(0) scale(1.018);
     filter:brightness(1.07);
+    z-index:3;
   }
 
   .theme-choice.selected{
@@ -1751,7 +1759,7 @@
   .theme-choice .theme-lock-state{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;justify-content:space-between;z-index:4;}
   .theme-choice .theme-unlock-badge{font-size:9px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);}
   .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 10px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:30px;}
-  .theme-choice .theme-action:hover{transform:translateY(-1px);filter:brightness(1.08);}
+  .theme-choice .theme-action:hover{transform:none;filter:brightness(1.08);}
   .theme-choice.locked .theme-choice-bg{filter:saturate(.75) brightness(.72);}
   .theme-choice.locked .theme-choice-content{padding-bottom:46px;}
   .theme-choice.unlocked-account .theme-unlock-badge{background:rgba(54,108,171,.82);}
@@ -4769,6 +4777,15 @@
     -webkit-backdrop-filter:none !important;
   }
 
+  /* ---------- 634 stable theme-card hover ---------- */
+  /* The home screen may still receive account/theme refreshes while a run is active.
+     This class makes those refreshes incapable of putting Home back over gameplay. */
+  body.hostl-game-active #home{
+    display:none !important;
+    visibility:hidden !important;
+    pointer-events:none !important;
+  }
+
 </style>
 </head>
 <body>
@@ -5542,7 +5559,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "596";
+const CUBE_SHARED_RULES_VERSION = "597";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7280,9 +7297,20 @@ function themePreviewBackground(theme) {
   return `radial-gradient(circle at 85% 18%, ${theme.accent}55, transparent 34%), linear-gradient(145deg, ${theme.bg}, ${theme.panel} 56%, ${theme.panel2})`;
 }
 
-function buildHomeThemeGrid() {
+let homeThemeGridSignature = "";
+function buildHomeThemeGrid(force=false) {
   const grid = document.getElementById("homeThemeGrid");
   if (!grid) return;
+
+  // Account/friends polling calls syncAccountUi often. Rebuilding this entire
+  // grid replaces the DOM element currently under the mouse, which resets
+  // :hover and made cards pulse between normal/hover sizes. Only rebuild when
+  // theme access or the selected theme actually changed.
+  const sigAccount = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[]};
+  const sigUnlocked = Array.isArray(sigAccount.unlockedThemes) ? [...sigAccount.unlockedThemes].map(String).sort().join(",") : "";
+  const nextSignature = `${currentHomeTheme}|${sigAccount.loggedIn?1:0}|${sigUnlocked}`;
+  if (!force && homeThemeGridSignature === nextSignature && grid.childElementCount > 0) return;
+  homeThemeGridSignature = nextSignature;
   grid.innerHTML = "";
 
   const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
@@ -8070,7 +8098,9 @@ function segmentCircleT(x0,y0,x1,y1,cx,cy,r) {
 }
 function animalProjectileSegmentT(a,x0,y0,x1,y1,radius=0) {
   let best=null;
-  for (const h of animalBodyHitboxes(a)) {
+  // Damage geometry is always torso/body + explicit head. No animal attack or
+  // projectile is allowed to require only the torso hitbox.
+  for (const h of animalTargetDamageHitboxes(a)) {
     const t=segmentCircleT(x0,y0,x1,y1,h.x,h.y,radius+h.r);
     if (t!=null && (best==null || t<best)) best=t;
   }
@@ -11291,7 +11321,7 @@ function drawCuteSegmentedReferenceAnimal(a, type, stageKey, meta, img, box) {
     py: centerY
   };
 
-  const nowMs = performance.now();
+  const nowMs = Number.isFinite(renderFrameNowMs) ? renderFrameNowMs : performance.now();
   const lastVisualAt = Number(a._cuteVisualAt) || nowMs;
   const visualDt = Math.max(0, Math.min(0.05, (nowMs - lastVisualAt) / 1000));
   a._cuteVisualAt = nowMs;
@@ -14404,14 +14434,14 @@ function animalBodyHitbox(a) {
   return { x, y, r: Math.max(maxX-minX,maxY-minY)/2 };
 }
 function animalTouchingCircle(a, x, y, radius=0) {
-  for (const h of animalBodyHitboxes(a)) {
+  for (const h of animalTargetDamageHitboxes(a)) {
     if (dist(x,y,h.x,h.y) < radius + h.r) return h;
   }
   return null;
 }
 function deepestAnimalCircleOverlap(a, x, y, radius=0) {
   let best=null, bestOverlap=0;
-  for (const h of animalBodyHitboxes(a)) {
+  for (const h of animalTargetDamageHitboxes(a)) {
     const d=dist(x,y,h.x,h.y);
     const overlap=radius+h.r-d;
     if (overlap>bestOverlap) { bestOverlap=overlap; best={h,d,overlap}; }
@@ -15572,7 +15602,7 @@ function meleeAttack() {
     let aimedAnimalId = "";
     for (const a of animals) {
       if (a.dead || !a.netId) continue;
-      const ah = animalBodyHitboxes(a).find(h =>
+      const ah = animalTargetDamageHitboxes(a).find(h =>
         dist(player.x, player.y, h.x, h.y) < t.range + h.r + 8 && isFacing(h.x, h.y, 1.15)
       );
       if (ah) { aimedAnimalId = a.netId; break; }
@@ -15594,7 +15624,7 @@ function meleeAttack() {
   for (const a of animals) {
     if (a.dead || (a.owned && !a.releasedWild)) continue;
     const info = PET_TYPES[a.type];
-    const ah = animalBodyHitboxes(a).find(h => dist(player.x, player.y, h.x, h.y) < t.range + h.r && isFacing(h.x, h.y));
+    const ah = animalTargetDamageHitboxes(a).find(h => dist(player.x, player.y, h.x, h.y) < t.range + h.r && isFacing(h.x, h.y));
     if (ah) {
       let dmg = t.dmg * runDamageMul();
       const crit = Math.random() < 0.12;
@@ -19086,7 +19116,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 560;
+const RESET_CORE_BUILD = 562;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -21789,6 +21819,27 @@ function drawAnimalFallbackVisible(a) {
 }
 
 function drawAnimal(a) {
+  // Offline wildlife/pet AI intentionally runs below render FPS for performance.
+  // Smooth only the visual pose between simulation steps; combat/collision keeps
+  // using the authoritative x/y/angle. The ridden mount is excluded so it stays
+  // exactly underneath the local rider. Multiplayer already has interpolation.
+  const smoothOffline = !!(game.started && !net.room && a && !a.dead && player.riding !== a);
+  let ox, oy, oa;
+  if (smoothOffline && Number.isFinite(a.x) && Number.isFinite(a.y)) {
+    const dt = Math.max(1/240, Math.min(0.05, Number(resetNetworkVisualDt) || 1/60));
+    if (!Number.isFinite(a._drawX) || !Number.isFinite(a._drawY) || Math.hypot(a.x-a._drawX,a.y-a._drawY)>180) {
+      a._drawX=a.x; a._drawY=a.y; a._drawAngle=Number(a.angle)||0;
+    } else {
+      const follow=1-Math.exp(-22*dt);
+      a._drawX += (a.x-a._drawX)*follow;
+      a._drawY += (a.y-a._drawY)*follow;
+      let da=(Number(a.angle)||0)-(Number(a._drawAngle)||0);
+      da=Math.atan2(Math.sin(da),Math.cos(da));
+      a._drawAngle=(Number(a._drawAngle)||0)+da*(1-Math.exp(-18*dt));
+    }
+    ox=a.x; oy=a.y; oa=a.angle;
+    a.x=a._drawX; a.y=a._drawY; a.angle=a._drawAngle;
+  }
   try {
     drawAnimalUnsafe(a);
     return true;
@@ -21797,6 +21848,8 @@ function drawAnimal(a) {
     resetWorldCanvasStateAfterEntityFault();
     try { drawAnimalFallbackVisible(a); } catch (_) {}
     return false;
+  } finally {
+    if (smoothOffline) { a.x=ox; a.y=oy; a.angle=oa; }
   }
 }
 
@@ -23460,6 +23513,7 @@ window.getCubeFreezeDiagnostics = () => ({...freezeDiagnostics, reliefActive: pe
 let resetSimAccumulator = 0;
 let resetWorldAccumulator = 0;
 let resetNetworkVisualDt = 1 / 60;
+let renderFrameNowMs = performance.now();
 
 function runResetSimulationStep(step) {
   if (!game.started) return;
@@ -23504,6 +23558,9 @@ function runResetSimulationStep(step) {
 
 function frame(now) {
   requestAnimationFrame(frame);
+  // Cache one clock read for the whole render. Animal drawing/interpolation can
+  // touch hundreds of entities, so repeated performance.now() calls add up.
+  renderFrameNowMs = now;
 
   const rawGapMs = Math.max(0, now - previousRawFrameAt);
   previousRawFrameAt = now;
@@ -23936,12 +23993,16 @@ function drawHomePreview() {
 function setupHome() {
   const home = el("home");
   applyHomeTheme(currentHomeTheme, false);
+  // setupHome is also called by account/card/theme refreshes. Those refreshes
+  // must never put Home back on top of an active run or death screen.
+  const homeMayShow = !game.started;
   if (home) {
-    home.style.display = "flex";
-    home.style.pointerEvents = "auto";
+    home.style.display = homeMayShow ? "flex" : "none";
+    home.style.visibility = homeMayShow ? "visible" : "hidden";
+    home.style.pointerEvents = homeMayShow ? "auto" : "none";
   }
   syncHomeWorldThemeState();
-  setHomeControlsEnabled(true);
+  setHomeControlsEnabled(homeMayShow);
   // Never stomp a username the player is currently typing. Account/friends
   // refreshes can call setupHome/sync UI while this field is being edited.
   if (!window.__hostlUsernameDirty) el("username").value = meta.username || "Cube";
@@ -24382,8 +24443,10 @@ el("playBtn").addEventListener("click", async () => {
   document.body.classList.toggle("mobile-performance", mobileMode);
   if (!mobileMode) resetMobilePointers();
   setHomeControlsEnabled(false);
+  document.body.classList.add("hostl-game-active");
   const home = document.getElementById("home");
   home.style.display = "none";
+  home.style.visibility = "hidden";
   home.style.pointerEvents = "none";
   syncHomeWorldThemeState();
   document.getElementById("hud").style.display = "block";
@@ -24458,8 +24521,10 @@ el("homeBtn").addEventListener("click", () => {
   setChatOpen(false, false);
 
   document.getElementById("hud").style.display = "none";
+  document.body.classList.remove("hostl-game-active");
   const home = document.getElementById("home");
   home.style.display = "flex";
+  home.style.visibility = "visible";
   home.style.pointerEvents = "auto";
   syncHomeWorldThemeState();
   setHomeControlsEnabled(true);
