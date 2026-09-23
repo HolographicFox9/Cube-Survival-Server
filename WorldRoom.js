@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "600";
+const CUBE_SHARED_RULES_VERSION = "601";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1884,23 +1884,46 @@ export class WorldRoom extends Room {
   }
   accountStarterStage(ownerId,type,requested="baby"){
     const order=["baby","adult","boss","superboss"],a=this.verifiedAccountFor(ownerId);
+    type=String(type||"")==="viper"?"snake":String(type||"");
     if(!a)return order.includes(requested)?requested:"baby";
     let stage=order.includes(a.petStages?.[type])?a.petStages[type]:"baby";
     for(const ent of Array.isArray(a.starterPetEntitlements)?a.starterPetEntitlements:[]){
-      if(ent?.type!==type)continue;const st=ent.stage==="bigmomma"?"superboss":ent.stage;if(order.includes(st)&&order.indexOf(st)>order.indexOf(stage))stage=st;
+      const entType=String(ent?.type||"")==="viper"?"snake":String(ent?.type||"");
+      if(entType!==type)continue;const st=ent.stage==="bigmomma"?"superboss":ent.stage;if(order.includes(st)&&order.indexOf(st)>order.indexOf(stage))stage=st;
     }
     return stage;
   }
 
+  applyStarterStageToExistingPet(p,ownerId,targetStage){
+    if(!p)return false;
+    const order=["baby","adult","boss","superboss"],current=order.includes(p.stage)?p.stage:"baby";
+    if(!order.includes(targetStage)||order.indexOf(current)>=order.indexOf(targetStage))return false;
+    p.stage=targetStage;p.r=animalRadius(p.type,targetStage);this.applyPetUpgradeFields(p,ownerId,p.type);
+    p.maxHp=Math.max(12,Math.round(typeHp(p.type,targetStage)*petUpgradeMultiplier(p,"health")));
+    p.hp=p.maxHp;p.speed=animalSpeed(p.type,targetStage,true,petUpgradeMultiplier(p,"weight"))*petUpgradeMultiplier(p,"speed");
+    p.level=1;p.exp=0;
+    return true;
+  }
+
   ensureStarterPetFor(client,type,stage,opts={}){
-    if(!client||!PET_TYPES[type])return null;
+    if(!client)return null;
+    type=String(type||"")==="viper"?"snake":String(type||"");
+    if(!PET_TYPES[type])return null;
     if(!this.accountCanStartPet(client.sessionId,type)){client.send("starterPetDenied",{type,reason:"not_owned"});return null;}
     const validStage=this.accountStarterStage(client.sessionId,type,stage);
     const defaultName=PET_TYPES[type].name||type;
     const petName=(String(opts.petName||"").trim().replace(/\s+/g," ").slice(0,14)||defaultName.slice(0,14));
     const gender=String(opts.gender||"")==="Female"?"Female":"Male";
+
+    // Starter repair must enforce the configured stage, not merely notice that
+    // some owned pet exists. This fixes lower-stage pets surviving a join/sync
+    // race after the account has already unlocked Boss or Super Boss starts.
     for(const [id,p] of this.state.pets){
-      if(p&&p.ownerId===client.sessionId&&!p.dead){client.send("starterPetEnsured",{id,type:p.type,existing:true});return id;}
+      if(!p||p.ownerId!==client.sessionId||p.dead||p.type!==type)continue;
+      const upgraded=this.applyStarterStageToExistingPet(p,client.sessionId,validStage);
+      if(petName)p.petName=petName;if(opts.gender)p.gender=gender;
+      client.send("starterPetEnsured",{id,type:p.type,stage:p.stage,petName:p.petName,gender:p.gender,existing:true,stageCorrected:upgraded});
+      return id;
     }
     const owner=this.state.players.get(client.sessionId);if(!owner)return null;
     const rr=animalRadius(type,validStage),pos=this.safePetSpawnNear(owner.x,owner.y,rr);
@@ -3687,7 +3710,9 @@ export class WorldRoom extends Room {
     this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.state.players.set(client.sessionId,p);this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});
     const clientRules=String(options.rulesVersion||"");
     if(clientRules&&clientRules!==CUBE_SHARED_RULES_VERSION)client.send("rulesMismatch",{serverRulesVersion:CUBE_SHARED_RULES_VERSION,clientRulesVersion:clientRules});
-    const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});this.sendSkillState(client.sessionId);
+    let start=String(options.startPet||"");if(start==="viper")start="snake";
+    const requestedStage=String(options.startPetStage||"baby"),startStage=this.accountStarterStage(client.sessionId,start,["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby");
+    if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});this.sendSkillState(client.sessionId);
   }
 
   onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerAccountEntitlements?.delete(client.sessionId);this.playerSurvivalSeconds?.delete(client.sessionId);this.playerSurvivalAwards?.delete(client.sessionId);this.playerNightSeen?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.playerSkillProgress.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}

@@ -1,6 +1,6 @@
 HOSTL REWARDED AD SETUP
 
-Game 641 no longer grants rewarded themes or the daily Wooden Chest from a plain browser request.
+Game 642 no longer grants rewarded themes or the daily Wooden Chest from a plain browser request.
 A reward requires a short-lived, replay-protected proof signed by a trusted backend after the ad
 provider confirms completion.
 

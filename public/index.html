@@ -5620,7 +5620,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "600";
+const CUBE_SHARED_RULES_VERSION = "601";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7847,7 +7847,16 @@ function normalizePetCardStage(stage) {
 }
 function starterStageFor(type) {
   if (!type || !meta || !meta.petStages) return "baby";
-  return normalizePetCardStage(meta.petStages[type]);
+  const key = type === "viper" ? "snake" : type;
+  const order = {baby:0,adult:1,boss:2,superboss:3};
+  let stage = normalizePetCardStage(meta.petStages[key]);
+  // Legacy HOSTL builds sometimes stored Viper progression under its display
+  // name instead of the internal `snake` key. Honor the highest saved stage.
+  if (key === "snake" && meta.petStages.viper) {
+    const legacy = normalizePetCardStage(meta.petStages.viper);
+    if ((order[legacy]||0) > (order[stage]||0)) stage = legacy;
+  }
+  return stage;
 }
 function nextPetCardStage(stage) {
   const i = PET_CARD_STAGE_ORDER.indexOf(normalizePetCardStage(stage));
@@ -10015,12 +10024,14 @@ function ensureNetworkStarterPet() {
   // First resync what the server already has. If the initial join patch arrived
   // late, this is enough. Otherwise ask the server for an idempotent repair.
   syncNetworkFullWorld(true);
-  const hasStarter = player.pets.some(p => p && !p.dead && p.ownerId === net.sessionId && p.type === game.startPet);
-  if (hasStarter) return;
+  const desiredStage = starterStageFor(game.startPet);
+  const stageRank = {baby:0,adult:1,boss:2,superboss:3};
+  const existingStarter = player.pets.find(p => p && !p.dead && p.ownerId === net.sessionId && p.type === game.startPet);
+  if (existingStarter && (stageRank[existingStarter.stage]||0) >= (stageRank[desiredStage]||0)) return;
   try {
     net.room.send("ensureStarterPet", {
       type: game.startPet,
-      stage: starterStageFor(game.startPet),
+      stage: desiredStage,
       petName: starterPetNameValue(),
       gender: starterPetGenderValue()
     });
@@ -10077,6 +10088,14 @@ async function connectMultiplayer() {
     net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
     net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
     net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.lastPhaseIdx = -1;
+    room.onMessage("starterPetEnsured", (data={}) => {
+      const id=String(data?.id||""),stage=normalizePetCardStage(String(data?.stage||"baby"));
+      const pet=net.petVisuals.get(id)||player.pets.find(p=>p&&String(p.netId||"")===id);
+      if(pet && data?.type===game.startPet){
+        pet.stage=stage;pet.r=animalRadius(pet.type,stage);pet.maxHp=upgradedPetMaxHp(pet.type,stage);pet.hp=Math.min(pet.maxHp,Math.max(1,Number(pet.hp)||pet.maxHp));pet.speed=upgradedPetSpeed(pet.type,stage);
+      }
+      if(data?.stageCorrected)banner(`${PET_TYPES[data.type]?.name||"Starter pet"} corrected to ${stageDisplayName(stage)}.`);
+    });
     room.onMessage("accountMaterialReward", (data={}) => {
       if(data?.account)setAccountFromServer(data.account);
       const qty=Math.max(1,Math.floor(Number(data?.qty)||1));
@@ -24880,6 +24899,10 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
 
     const serverStages=(payload.petStages&&typeof payload.petStages==="object")?payload.petStages:{};
     for(const type of Object.keys(PET_TYPES||{})) meta.petStages[type]=normalizePetCardStage(String(serverStages[type]||"baby"));
+    if(serverStages.viper){
+      const ranks={baby:0,adult:1,boss:2,superboss:3},legacy=normalizePetCardStage(String(serverStages.viper));
+      if((ranks[legacy]||0)>(ranks[meta.petStages.snake]||0))meta.petStages.snake=legacy;
+    }
 
     const serverUp=(payload.petStatUpgrades&&typeof payload.petStatUpgrades==="object")?payload.petStatUpgrades:{};
     for(const type of Object.keys(PET_TYPES||{})){

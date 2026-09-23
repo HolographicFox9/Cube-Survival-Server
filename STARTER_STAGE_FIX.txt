@@ -1,0 +1,20 @@
+HOSTL STARTER PET STAGE FIX — SERVER 570 / GAME 642 / RULES 601
+
+Starter pets now obey the permanent stage configured by pet-card progression.
+
+Rules enforced:
+- Baby unlock -> starter spawns Baby.
+- Adult unlock -> starter spawns at least Adult.
+- Boss unlock -> starter spawns at least Boss.
+- Super Boss unlock -> starter spawns at least Super Boss.
+- Owned pets still cannot start as Big Momma; old Big Momma starter data is normalized to Super Boss.
+- If a starter already grew beyond its configured starting stage during the run, repair logic never demotes it.
+
+Viper compatibility:
+- Viper uses the internal species key `snake`.
+- Legacy progression saved under `viper` is migrated/merged into `snake` using the higher stage and higher stat levels.
+
+Multiplayer:
+- Logged-in starter stage comes from the verified server account, not from client claims.
+- Starter repair checks both species AND stage.
+- A lower-stage existing starter is promoted to the verified configured stage instead of blocking the repair.

@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 569 / GAME 641 / RULES 600
+HOSTL — FULL RENDER PROJECT — SERVER 570 / GAME 642 / RULES 601
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 641 browser client
-- WorldRoom.js          Server 569 Colyseus multiplayer room
+- public/index.html      Game 642 browser client
+- WorldRoom.js          Server 570 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -12,7 +12,7 @@ BUILD CONTENTS
 - PERSISTENT_ACCOUNT_STORAGE.txt
 - REWARDED_AD_SETUP.txt
 
-SERVER 569 / GAME 641 SKILL + ART STYLE PASS
+SERVER 570 / GAME 642 STARTER STAGE FIX
 - Player Skill XP is now always visible directly above the hotbar instead of living in the crafting menu.
 - The Skill bar fills left-to-right with a lighter fill and reacts immediately whenever validated XP is earned.
 - Skill can grow from combat hits and kills, resource/chest hits, taming, successful breeding, chest completion,
@@ -68,10 +68,17 @@ RENDER DEPLOYMENT
 
 BUILD CHECK
 /healthz should report:
-- serverBuild: 569
-- gameBuild: 641
+- serverBuild: 570
+- gameBuild: 642
 - rulesVersion: 600
 - rewardedAdsConfigured: true/false
 - accountStoragePersistent: true/false
 
 /status reports the live connected-player count used by the home screen.
+
+
+STARTER PET STAGE FIX (570/642)
+- The configured permanent starter stage is now authoritative on offline spawn, multiplayer join, and starter repair.
+- Existing lower-stage starter pets are promoted to the configured stage instead of blocking repair.
+- Legacy Viper progression stored under `viper` is migrated to the internal `snake` key.
+- Authenticated multiplayer uses the verified account starter selection and effective stage.

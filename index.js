@@ -116,6 +116,11 @@ function ensureTitleState(a) {
 }
 
 const STARTER_PET_STAGE_RANK = { baby:0, adult:1, boss:2, superboss:3, bigmomma:4 };
+const ACCOUNT_PET_TYPE_ALIASES = Object.freeze({ viper:"snake" });
+function canonicalAccountPetType(type){
+  const raw=safeText(type,24).toLowerCase();
+  return ACCOUNT_PET_TYPE_ALIASES[raw] || raw;
+}
 function ensureStarterPetEntitlements(a) {
   if (!a || typeof a !== "object") return [];
   const raw = Array.isArray(a.starterPetEntitlements) ? [...a.starterPetEntitlements] : [];
@@ -123,7 +128,7 @@ function ensureStarterPetEntitlements(a) {
   const byType = new Map();
   for (const ent of raw) {
     if (!ent || typeof ent !== "object") continue;
-    const type = safeText(ent.type,24).toLowerCase();
+    const type = canonicalAccountPetType(ent.type);
     const stage = safeText(ent.stage,24).toLowerCase();
     if (!type) continue;
     const cleanStage = Object.prototype.hasOwnProperty.call(STARTER_PET_STAGE_RANK,stage) ? stage : "baby";
@@ -136,7 +141,7 @@ function ensureStarterPetEntitlements(a) {
   return a.starterPetEntitlements;
 }
 function grantStarterPetEntitlement(a,type,stage="baby") {
-  const t=safeText(type,24).toLowerCase();
+  const t=canonicalAccountPetType(type);
   const st=safeText(stage,24).toLowerCase();
   if(!t)return;
   const cleanStage=Object.prototype.hasOwnProperty.call(STARTER_PET_STAGE_RANK,st)?st:"baby";
@@ -272,12 +277,12 @@ const STARTER_SHOP_ITEMS={
   hunterWrap:8000,gatherGloves:6000,animalWhisperer:9500,saddle:1800
 };
 function accountOwnsPetStarter(a,type){
-  type=safeText(type,24).toLowerCase(); if(!ACCOUNT_PET_TYPES.has(type))return false;
+  type=canonicalAccountPetType(type); if(!ACCOUNT_PET_TYPES.has(type))return false;
   ensurePetProgressState(a); ensureStarterPetEntitlements(a);
   return ACCOUNT_FREE_STARTER_PETS.has(type) || !!a.ownedStarters?.[`start_${type}`] || a.starterPetEntitlements.some(x=>x?.type===type);
 }
 function accountStarterStage(a,type){
-  type=safeText(type,24).toLowerCase(); ensurePetProgressState(a); ensureStarterPetEntitlements(a);
+  type=canonicalAccountPetType(type); ensurePetProgressState(a); ensureStarterPetEntitlements(a);
   let stage=ACCOUNT_PET_STAGE_ORDER.includes(a.petStages?.[type])?a.petStages[type]:"baby";
   for(const ent of a.starterPetEntitlements||[]){
     if(ent?.type!==type)continue; const st=ACCOUNT_PET_STAGE_ORDER.includes(ent.stage)?ent.stage:(ent.stage==="bigmomma"?"superboss":"baby");
@@ -286,7 +291,7 @@ function accountStarterStage(a,type){
   return stage;
 }
 function cleanAccountStarterSelection(a,type,name,gender){
-  ensurePetProgressState(a); type=safeText(type,24).toLowerCase();
+  ensurePetProgressState(a); type=canonicalAccountPetType(type);
   if(type && !accountOwnsPetStarter(a,type)) return false;
   a.starterPetType=type;
   a.starterPetName=type?safeText(name,20):"";
@@ -330,22 +335,58 @@ function ensureEconomyState(a){
 }
 function ensurePetProgressState(a){
   if(!a || typeof a!=="object") return a;
-  if(!a.speciesCards || typeof a.speciesCards!=="object" || Array.isArray(a.speciesCards)) a.speciesCards={};
-  for(const [k,v] of Object.entries(a.speciesCards)) a.speciesCards[safeText(k,24).toLowerCase()]=Math.max(0,Math.min(1000000,Math.floor(Number(v)||0)));
-  if(!a.ownedStarters || typeof a.ownedStarters!=="object" || Array.isArray(a.ownedStarters)) a.ownedStarters={};
-  for(const k of Object.keys(a.ownedStarters)) a.ownedStarters[k]=!!a.ownedStarters[k];
-  if(!a.petStages || typeof a.petStages!=="object" || Array.isArray(a.petStages)) a.petStages={};
   const validStages=new Set(["baby","adult","boss","superboss"]);
-  for(const [k,v] of Object.entries(a.petStages)){ const st=safeText(v,20).toLowerCase(); a.petStages[k]=st==="bigmomma"?"superboss":(validStages.has(st)?st:"baby"); }
-  if(!a.petStatUpgrades || typeof a.petStatUpgrades!=="object" || Array.isArray(a.petStatUpgrades)) a.petStatUpgrades={};
-  for(const [species,stats0] of Object.entries(a.petStatUpgrades)){
-    const stats=(stats0&&typeof stats0==="object"&&!Array.isArray(stats0))?stats0:{};
-    const clean={}; for(const stat of ["health","defense","attack","weight","regen","speed"]) clean[stat]=Math.max(0,Math.min(10,Math.floor(Number(stats[stat])||0)));
-    a.petStatUpgrades[species]=clean;
+  const cleanStage=(value)=>{const st=safeText(value,20).toLowerCase();return st==="bigmomma"?"superboss":(validStages.has(st)?st:"baby");};
+  const stageRank={baby:0,adult:1,boss:2,superboss:3};
+
+  // Canonicalize legacy species names. Viper's internal key is `snake`; older
+  // builds could leave progression under `viper`, which made the menu show one
+  // stage while the actual starter spawned from a different key.
+  const sourceCards=(a.speciesCards&&typeof a.speciesCards==="object"&&!Array.isArray(a.speciesCards))?a.speciesCards:{};
+  const cards={};
+  for(const [k,v] of Object.entries(sourceCards)){
+    const type=canonicalAccountPetType(k); if(!type)continue;
+    const amount=Math.max(0,Math.min(1000000,Math.floor(Number(v)||0)));
+    cards[type]=Math.max(cards[type]||0,amount);
   }
-  a.starterPetType=safeText(a.starterPetType||"",24).toLowerCase();
+  a.speciesCards=cards;
+
+  const sourceOwned=(a.ownedStarters&&typeof a.ownedStarters==="object"&&!Array.isArray(a.ownedStarters))?a.ownedStarters:{};
+  const owned={};
+  for(const [k,v] of Object.entries(sourceOwned)){
+    let key=safeText(k,40);
+    if(key.startsWith("start_"))key=`start_${canonicalAccountPetType(key.slice(6))}`;
+    if(key)owned[key]=!!v || !!owned[key];
+  }
+  a.ownedStarters=owned;
+
+  const sourceStages=(a.petStages&&typeof a.petStages==="object"&&!Array.isArray(a.petStages))?a.petStages:{};
+  const stages={};
+  for(const [k,v] of Object.entries(sourceStages)){
+    const type=canonicalAccountPetType(k); if(!type)continue;
+    const st=cleanStage(v),old=stages[type]||"baby";
+    if(!(type in stages)||stageRank[st]>stageRank[old])stages[type]=st;
+  }
+  a.petStages=stages;
+
+  const sourceUpgrades=(a.petStatUpgrades&&typeof a.petStatUpgrades==="object"&&!Array.isArray(a.petStatUpgrades))?a.petStatUpgrades:{};
+  const upgrades={};
+  for(const [species,stats0] of Object.entries(sourceUpgrades)){
+    const type=canonicalAccountPetType(species); if(!type)continue;
+    const stats=(stats0&&typeof stats0==="object"&&!Array.isArray(stats0))?stats0:{};
+    const clean=upgrades[type]||{};
+    for(const stat of ["health","defense","attack","weight","regen","speed"]){
+      const level=Math.max(0,Math.min(10,Math.floor(Number(stats[stat])||0)));
+      clean[stat]=Math.max(clean[stat]||0,level);
+    }
+    upgrades[type]=clean;
+  }
+  a.petStatUpgrades=upgrades;
+
+  a.starterPetType=canonicalAccountPetType(a.starterPetType||"");
   a.starterPetName=safeText(a.starterPetName||"",20);
   a.starterPetGender=a.starterPetGender==="Female"?"Female":"Male";
+  ensureStarterPetEntitlements(a);
   return a;
 }
 function hasIngredients(a,ingredients){ensureEconomyState(a);return Object.entries(ingredients||{}).every(([id,n])=>(a.materials[id]||0)>=n);}
@@ -612,7 +653,7 @@ function publicAccount(a) {
     ownerRank: Math.max(0, Math.floor(Number(a.ownerRank) || 0)),
     speciesCards: ensurePetProgressState(a).speciesCards,
     ownedStarters: {...a.ownedStarters},
-    petStages: {...a.petStages},
+    petStages: Object.fromEntries([...ACCOUNT_PET_TYPES].map(type=>[type,accountStarterStage(a,type)])),
     petStatUpgrades: JSON.parse(JSON.stringify(a.petStatUpgrades||{})),
     starterPetType: a.starterPetType||"",
     starterPetName: a.starterPetName||"",
@@ -751,13 +792,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 569, gameBuild: 641, rulesVersion: "600", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, rewardedAdsConfigured: REWARDED_ADS_CONFIGURED, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 570, gameBuild: 642, rulesVersion: "601", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, rewardedAdsConfigured: REWARDED_ADS_CONFIGURED, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 569, gameBuild: 641 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 570, gameBuild: 642 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -909,7 +950,7 @@ app.put("/api/account", requireAccount, async (req, res) => {
 
 app.post("/api/pets/unlock", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a);
-  const species=safeText(req.body?.species,24).toLowerCase(), method=safeText(req.body?.method,16).toLowerCase();
+  const species=canonicalAccountPetType(req.body?.species), method=safeText(req.body?.method,16).toLowerCase();
   const def=ACCOUNT_PET_UNLOCK[species]; if(!def)return res.status(404).json({ok:false,error:"unknown_species"});
   if(accountOwnsPetStarter(a,species))return res.json({ok:true,alreadyOwned:true,account:publicAccount(a)});
   if(method==="cards"){
@@ -924,7 +965,7 @@ app.post("/api/pets/unlock", requireAccount, async (req,res)=>{
 });
 
 app.post("/api/pets/upgrade-stage", requireAccount, async (req,res)=>{
-  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=safeText(req.body?.species,24).toLowerCase();
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=canonicalAccountPetType(req.body?.species);
   if(!ACCOUNT_PET_TYPES.has(species))return res.status(404).json({ok:false,error:"unknown_species"});
   if(!accountOwnsPetStarter(a,species))return res.status(403).json({ok:false,error:"pet_locked"});
   const current=accountStarterStage(a,species), idx=ACCOUNT_PET_STAGE_ORDER.indexOf(current), next=idx>=0&&idx<ACCOUNT_PET_STAGE_ORDER.length-1?ACCOUNT_PET_STAGE_ORDER[idx+1]:null;
@@ -935,7 +976,7 @@ app.post("/api/pets/upgrade-stage", requireAccount, async (req,res)=>{
 });
 
 app.post("/api/pets/upgrade-stat", requireAccount, async (req,res)=>{
-  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=safeText(req.body?.species,24).toLowerCase(),stat=safeText(req.body?.stat,16).toLowerCase();
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=canonicalAccountPetType(req.body?.species),stat=safeText(req.body?.stat,16).toLowerCase();
   if(!ACCOUNT_PET_TYPES.has(species)||!ACCOUNT_PET_STATS.has(stat))return res.status(404).json({ok:false,error:"unknown_upgrade"});
   if(!accountOwnsPetStarter(a,species))return res.status(403).json({ok:false,error:"pet_locked"});
   if(!a.petStatUpgrades[species])a.petStatUpgrades[species]={}; const level=Math.max(0,Math.min(ACCOUNT_PET_STAT_MAX,Math.floor(Number(a.petStatUpgrades[species][stat])||0)));
@@ -1252,7 +1293,7 @@ configureHostlAccountHooks({
     if (!a) return null;
     ensurePetProgressState(a); ensureStarterPetEntitlements(a);
     return { userId:uid, username:a.username||"", title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)),
-      petStatUpgrades:JSON.parse(JSON.stringify(a.petStatUpgrades||{})), petStages:{...(a.petStages||{})}, ownedStarters:{...(a.ownedStarters||{})},
+      petStatUpgrades:JSON.parse(JSON.stringify(a.petStatUpgrades||{})), petStages:Object.fromEntries([...ACCOUNT_PET_TYPES].map(type=>[type,accountStarterStage(a,type)])), ownedStarters:{...(a.ownedStarters||{})},
       starterPetEntitlements:(a.starterPetEntitlements||[]).map(x=>({...x})), starterPetType:a.starterPetType||"", starterPetName:a.starterPetName||"", starterPetGender:a.starterPetGender||"Male" };
   },
   rewardTesterKill,
