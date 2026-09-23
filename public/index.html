@@ -4846,7 +4846,7 @@
 
 
 
-  /* ---------- 643 home + shop pet-art UI pass ---------- */
+  /* ---------- 643 home + shop pet-art UI pass (retained; 644 overrides below) ---------- */
   :root{--hostl-ink:#172019;--hostl-ink-soft:#243126;}
 
   /* Home now uses the same chunky inked/cel-shaded language as the pets and
@@ -5078,6 +5078,93 @@
     #materialShopGrid.rotating-material-grid{grid-template-columns:repeat(2,minmax(86px,1fr)) !important;}
   }
 
+</style>
+
+<style id="hostl-game644-ui-fix">
+/* 644: remove the large block behind the Play/name controls. */
+#home.home-themed .home-main-panel,
+body.mobile-home-layout #home.home-themed .home-main-panel{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  padding:0 !important;
+  -webkit-backdrop-filter:none !important;
+  backdrop-filter:none !important;
+}
+
+/* The right side of Materials Shop belongs to the shopkeeper only. */
+#expandedShopModal .materials-shop-layout{
+  grid-template-columns:minmax(0,1fr) clamp(210px,27vw,330px) !important;
+  align-items:stretch !important;
+}
+#expandedShopModal .shopkeeper-panel{
+  justify-content:center !important;
+  align-items:center !important;
+  padding:14px !important;
+  min-height:58vh !important;
+}
+#expandedShopModal .shopkeeper-panel .shopkeeper-placeholder{
+  width:min(270px,92%) !important;
+  max-width:270px !important;
+  min-height:360px !important;
+  aspect-ratio:4/5 !important;
+  margin:auto !important;
+  padding:18px !important;
+}
+#expandedShopModal .shopkeeper-panel .shopkeeper-placeholder .shopkeeper-icon{font-size:54px !important;margin-bottom:12px !important;}
+#expandedShopModal .shopkeeper-panel .shopkeeper-placeholder strong{font-size:18px !important;}
+#expandedShopModal .shopkeeper-panel .shopkeeper-placeholder span{font-size:11px !important;margin-top:7px !important;}
+
+/* Item information is a popup now, not part of the shopkeeper column. */
+#expandedShopModal .material-description-popup{
+  position:absolute;inset:0;z-index:30;
+  display:flex;align-items:center;justify-content:center;
+  padding:18px;box-sizing:border-box;
+  background:rgba(5,8,6,.64);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity .10s ease,visibility .10s;
+}
+#expandedShopModal .material-description-popup.show{opacity:1;visibility:visible;pointer-events:auto;}
+#expandedShopModal .material-description-card{
+  position:relative;width:min(430px,92vw);max-height:min(620px,86vh);overflow:auto;
+  border:3px solid var(--hostl-ink);border-radius:20px;padding:16px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--ht-panel) 94%,white 6%),color-mix(in srgb,var(--ht-panel2) 96%,black 4%));
+  box-shadow:0 7px 0 rgba(10,15,11,.72),0 24px 58px rgba(0,0,0,.44);
+}
+#expandedShopModal .material-description-card .material-selection-panel{
+  border:0 !important;box-shadow:none !important;background:transparent !important;padding:4px !important;
+}
+#expandedShopModal .material-description-close{
+  position:absolute;right:9px;top:9px;z-index:3;width:34px;height:34px;padding:0 !important;
+  display:grid;place-items:center;border-radius:50% !important;font-size:22px;line-height:1;
+}
+
+/* Shop controls stay visually stable under the cursor instead of bouncing/twitching. */
+#expandedShopModal button,
+#expandedShopModal button:hover,
+#expandedShopModal button:active,
+#expandedShopModal button:focus-visible{
+  transform:none !important;
+}
+#expandedShopModal button{transition:filter .10s ease,background .10s ease,border-color .10s ease !important;}
+#expandedShopModal .shop-tab{min-height:38px;box-sizing:border-box;}
+#expandedShopModal #materialDetailBuyBtn{min-height:46px;box-sizing:border-box;}
+
+/* Purchase reveal must sit above the 9000-z Shop modal and last two seconds. */
+#purchaseReveal{
+  z-index:16000 !important;
+  background:rgba(5,8,6,.38);
+}
+#purchaseReveal.show{pointer-events:auto;}
+
+@media(max-width:760px){
+  #expandedShopModal .materials-shop-layout{grid-template-columns:minmax(0,1fr) 150px !important;gap:8px !important;}
+  #expandedShopModal .shopkeeper-panel{min-height:420px !important;padding:8px !important;}
+  #expandedShopModal .shopkeeper-panel .shopkeeper-placeholder{width:100% !important;min-height:300px !important;aspect-ratio:auto !important;padding:9px !important;}
+  #expandedShopModal .shopkeeper-panel .shopkeeper-placeholder .shopkeeper-icon{font-size:38px !important;}
+  #materialShopGrid.rotating-material-grid{grid-template-columns:repeat(2,minmax(76px,1fr)) !important;}
+}
 </style>
 </head>
 <body>
@@ -25529,6 +25616,7 @@ function openExpandedShop(page="shop") {
   loadRotatingShopStock(false);
 }
 function closeExpandedShop() {
+  closeMaterialDescription();
   document.getElementById("expandedShopModal")?.classList.remove("on");
   document.body.classList.remove("hostl-shop-open");
 }
@@ -25540,6 +25628,7 @@ function selectShopPage(page) {
   document.querySelectorAll("#expandedShopModal .shop-page").forEach(p=>p.classList.remove("active"));
   const ids = { shop:"shopPageShop", build:"shopPageBuild", learn:"shopPageLearn", chests:"shopPageChests", codes:"shopPageCodes" };
   document.getElementById(ids[page] || "shopPageShop")?.classList.add("active");
+  if(page!=="shop") closeMaterialDescription();
   if (page === "codes") syncPromoCodeUi();
   if (page === "shop") loadRotatingShopStock(false); else if (page === "build" || page === "learn") renderMaterialsAndRecipes();
 }
@@ -25571,20 +25660,34 @@ function hostlItemVisual(id,fallback="📦"){ return HOSTL_ITEM_VISUALS[String(i
 let selectedMaterialSlotId="";
 let shopPurchaseBusy="";
 let purchaseRevealTimer=0;
-function showPurchaseReveal(name, icon="📦", kicker="Purchased", sub="Added to your account"){
-  const root=document.getElementById("purchaseReveal"); if(!root)return;
+let materialDescriptionRestoreSlot="";
+function openMaterialDescription(slotId=selectedMaterialSlotId){
+  if(slotId) selectedMaterialSlotId=String(slotId);
+  renderMaterialSelectionPanel();
+  const popup=document.getElementById("materialDescriptionPopup");
+  if(popup){ popup.classList.add("show"); popup.setAttribute("aria-hidden","false"); }
+}
+function closeMaterialDescription(){
+  const popup=document.getElementById("materialDescriptionPopup");
+  if(popup){ popup.classList.remove("show"); popup.setAttribute("aria-hidden","true"); }
+}
+function showPurchaseReveal(name, icon="📦", kicker="Purchased", sub="Added to your account", onDone=null){
+  const root=document.getElementById("purchaseReveal"); if(!root){ if(typeof onDone==="function")onDone(); return; }
   const ico=document.getElementById("purchaseRevealIcon"), k=document.getElementById("purchaseRevealKicker"), n=document.getElementById("purchaseRevealName"), small=document.getElementById("purchaseRevealSub");
   if(ico)ico.textContent=icon||"📦"; if(k)k.textContent=kicker||"Purchased"; if(n)n.textContent=name||"Item"; if(small)small.textContent=sub||"Added to your account";
   clearTimeout(purchaseRevealTimer);
   root.classList.remove("show"); void root.offsetWidth; root.classList.add("show"); root.setAttribute("aria-hidden","false");
-  purchaseRevealTimer=setTimeout(()=>{root.classList.remove("show");root.setAttribute("aria-hidden","true");},1250);
+  purchaseRevealTimer=setTimeout(()=>{
+    root.classList.remove("show"); root.setAttribute("aria-hidden","true");
+    if(typeof onDone==="function")onDone();
+  },2000);
 }
 function selectMaterialListing(slotId){
   selectedMaterialSlotId=String(slotId||"");
   document.querySelectorAll("#materialShopGrid .material-card[data-slot-id]").forEach(card=>{
     const on=card.dataset.slotId===selectedMaterialSlotId; card.classList.toggle("selected",on); card.setAttribute("aria-selected",on?"true":"false");
   });
-  renderMaterialSelectionPanel();
+  openMaterialDescription(selectedMaterialSlotId);
 }
 function renderMaterialSelectionPanel(){
   const panel=document.getElementById("materialSelectionPanel"); if(!panel)return;
@@ -25718,8 +25821,15 @@ async function buyShopListing(slotId){
     showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits.`:result.data?.error==="already_purchased"?"You already bought this exact shop slot during this rotation.":"Could not buy that material."); return;
   }
   const local=rotatingShopState.listings.find(x=>x.slotId===slotId); if(local)local.purchased=true;
+  materialDescriptionRestoreSlot=slotId;
+  closeMaterialDescription();
   renderMaterialsAndRecipes();
-  showPurchaseReveal(item.name,hostlItemVisual(listing.materialId),"Purchased","+1 material added to your account");
+  showPurchaseReveal(item.name,hostlItemVisual(listing.materialId),"Purchased","+1 material added to your account",()=>{
+    if(document.getElementById("expandedShopModal")?.classList.contains("on") && materialDescriptionRestoreSlot===slotId){
+      openMaterialDescription(slotId);
+    }
+    materialDescriptionRestoreSlot="";
+  });
 }
 async function attemptBuild(id){
   const r=HOSTL_BUILD_RECIPES[id]; if(!r)return;
@@ -26163,6 +26273,8 @@ function bindAccountAndShopUi() {
   once(document.getElementById("openShopFromAccount"), "click",
     ()=>{ closeAccountModal(); openExpandedShop("shop"); });
   once(document.getElementById("expandedShopClose"), "click", closeExpandedShop);
+  once(document.getElementById("materialDescriptionClose"), "click", closeMaterialDescription);
+  once(document.getElementById("materialDescriptionPopup"), "pointerdown", e=>{ if(e.target===e.currentTarget) closeMaterialDescription(); });
 
   document.querySelectorAll(".shop-tab").forEach(b =>
     once(b, "click", ()=>selectShopPage(b.dataset.shopPage))
@@ -26209,6 +26321,9 @@ document.addEventListener("keydown", e => {
     e.preventDefault();
   } else if (document.getElementById("accountModal")?.classList.contains("on")) {
     closeAccountModal();
+    e.preventDefault();
+  } else if (document.getElementById("materialDescriptionPopup")?.classList.contains("show")) {
+    closeMaterialDescription();
     e.preventDefault();
   } else if (document.getElementById("expandedShopModal")?.classList.contains("on")) {
     closeExpandedShop();
@@ -26344,10 +26459,7 @@ syncAchievementAccountBridge();
             <p class="locked-note">The server controls the two-day rotation and daily resets, so changing your device clock cannot force an early refresh.</p>
           </aside>
         </div>
-        <aside class="shopkeeper-panel" aria-label="Selected shop item and shopkeeper area">
-          <div id="materialSelectionPanel" class="material-selection-panel">
-            <div class="material-selection-empty">Click a material card to see what it is, how many you own, and the Buy button.</div>
-          </div>
+        <aside class="shopkeeper-panel" aria-label="Shopkeeper area">
           <div class="shopkeeper-placeholder">
             <div class="shopkeeper-icon">🧑‍🌾</div>
             <strong>Shopkeeper Area</strong>
@@ -26404,6 +26516,15 @@ syncAchievementAccountBridge();
       </div>
       <p class="locked-note" id="promoCodeAccountNote">You need a HOSTL account to redeem codes.</p>
     </section>
+  </div>
+
+  <div id="materialDescriptionPopup" class="material-description-popup" aria-hidden="true">
+    <div class="material-description-card" role="dialog" aria-modal="true" aria-label="Item details">
+      <button id="materialDescriptionClose" class="material-description-close" type="button" aria-label="Close item details">×</button>
+      <div id="materialSelectionPanel" class="material-selection-panel">
+        <div class="material-selection-empty">Click a material card to see what it is and buy it.</div>
+      </div>
+    </div>
   </div>
 </div>
 

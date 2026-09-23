@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 571 / GAME 643 / RULES 601
+HOSTL — FULL RENDER PROJECT — SERVER 572 / GAME 644 / RULES 601
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 643 browser client
-- WorldRoom.js          Server 571 Colyseus multiplayer room
+- public/index.html      Game 644 browser client
+- WorldRoom.js          Server 572 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -68,8 +68,8 @@ RENDER DEPLOYMENT
 
 BUILD CHECK
 /healthz should report:
-- serverBuild: 571
-- gameBuild: 643
+- serverBuild: 572
+- gameBuild: 644
 - rulesVersion: 600
 - rewardedAdsConfigured: true/false
 - accountStoragePersistent: true/false
@@ -84,7 +84,7 @@ STARTER PET STAGE FIX (570/642)
 - Authenticated multiplayer uses the verified account starter selection and effective stage.
 
 
-SERVER 571 / GAME 643 — HOME + COMPACT SHOP PASS
+SERVER 572 / GAME 644 — SHOP POPUP + HOME CLEANUP PASS
 - Home screen now uses the same thick-ink, flat/cel-shaded UI language as the in-game pet/world art while preserving selectable theme palettes.
 - Home/menu buttons use stable Theme-card-style hover/focus feedback.
 - Rotating material stock uses much smaller tall cards so more items fit at once.

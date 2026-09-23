@@ -1,4 +1,4 @@
-HOSTL HOME + COMPACT SHOP PASS — SERVER 571 / GAME 643 / RULES 601
+HOSTL HOME + COMPACT SHOP PASS — PREVIOUS PASS (SERVER 571 / GAME 643 / RULES 601)
 
 CHANGES
 - Home screen now uses the pet/world art language: thick dark outlines, flatter themed panels, hard shadows, and less glassy UI.
