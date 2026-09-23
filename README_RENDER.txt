@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 570 / GAME 642 / RULES 601
+HOSTL — FULL RENDER PROJECT — SERVER 571 / GAME 643 / RULES 601
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 642 browser client
-- WorldRoom.js          Server 570 Colyseus multiplayer room
+- public/index.html      Game 643 browser client
+- WorldRoom.js          Server 571 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -68,8 +68,8 @@ RENDER DEPLOYMENT
 
 BUILD CHECK
 /healthz should report:
-- serverBuild: 570
-- gameBuild: 642
+- serverBuild: 571
+- gameBuild: 643
 - rulesVersion: 600
 - rewardedAdsConfigured: true/false
 - accountStoragePersistent: true/false
@@ -82,3 +82,13 @@ STARTER PET STAGE FIX (570/642)
 - Existing lower-stage starter pets are promoted to the configured stage instead of blocking repair.
 - Legacy Viper progression stored under `viper` is migrated to the internal `snake` key.
 - Authenticated multiplayer uses the verified account starter selection and effective stage.
+
+
+SERVER 571 / GAME 643 — HOME + COMPACT SHOP PASS
+- Home screen now uses the same thick-ink, flat/cel-shaded UI language as the in-game pet/world art while preserving selectable theme palettes.
+- Home/menu buttons use stable Theme-card-style hover/focus feedback.
+- Rotating material stock uses much smaller tall cards so more items fit at once.
+- Clicking a material selects it and opens a full detail/purchase panel instead of putting a large Buy button on every card.
+- Purchased items use a short glowing-circle reward reveal with temporary placeholder item art.
+- Material purchasing immediately shows a Purchasing state and avoids one redundant UI rebuild.
+- Account JSON writes are compact rather than pretty-printed, reducing disk work on purchase/progression saves.

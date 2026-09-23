@@ -1,0 +1,15 @@
+HOSTL HOME + COMPACT SHOP PASS — SERVER 571 / GAME 643 / RULES 601
+
+CHANGES
+- Home screen now uses the pet/world art language: thick dark outlines, flatter themed panels, hard shadows, and less glassy UI.
+- Home and home-menu buttons use consistent Theme-style hover/focus/press feedback.
+- Rotating material stock is now shown as compact tall cards so many more items fit on screen.
+- Material cards use temporary placeholder icons. Click a card to select it.
+- The selected material opens a detail panel with description, rarity, owned count, price, and Buy button.
+- Buy feedback begins immediately with a Purchasing state while the server validates the transaction.
+- Successful material, permanent starter, paid pet, paid theme, and paid chest purchases can show the glowing-circle item reveal.
+- Removed one redundant UI rebuild from generic account actions.
+- Server account JSON writes are compact to reduce save work during purchases/progression changes.
+
+NOTE
+The item/material pictures are intentionally placeholders so final HOSTL item art can replace them later without changing the purchase flow.

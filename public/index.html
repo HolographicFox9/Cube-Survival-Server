@@ -4844,6 +4844,240 @@
     pointer-events:none !important;
   }
 
+
+
+  /* ---------- 643 home + shop pet-art UI pass ---------- */
+  :root{--hostl-ink:#172019;--hostl-ink-soft:#243126;}
+
+  /* Home now uses the same chunky inked/cel-shaded language as the pets and
+     the in-game world instead of the older glass-panel treatment. Theme colors
+     still control the palette; only the drawing language is unified. */
+  #home.home-themed .home-topbar,
+  #home.home-themed .home-main-panel,
+  #home.home-themed .online-panel,
+  #home.home-themed #openStarterShop,
+  #home.home-themed .home-cubits-pill,
+  #home.home-themed #selectedStarterPet,
+  #home.home-themed #starterPetSetup{
+    -webkit-backdrop-filter:none !important;
+    backdrop-filter:none !important;
+    border:3px solid var(--hostl-ink) !important;
+    box-shadow:0 5px 0 rgba(10,15,11,.72),inset 0 1px 0 rgba(255,255,255,.07) !important;
+  }
+  #home.home-themed .home-topbar{
+    background:color-mix(in srgb,var(--ht-panel) 92%,black 8%) !important;
+    border-radius:18px !important;
+  }
+  #home .home-card{background:transparent !important;border:0 !important;box-shadow:none !important;-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}
+  #home.home-themed .home-main-panel{
+    padding:16px !important;
+    border-radius:20px !important;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--ht-panel) 92%,white 8%),color-mix(in srgb,var(--ht-panel2) 94%,black 6%)) !important;
+  }
+  #home.home-themed .online-panel{
+    background:color-mix(in srgb,var(--ht-panel2) 92%,black 8%) !important;
+    border-radius:14px !important;
+  }
+  #home.home-themed #openStarterShop{
+    background:linear-gradient(155deg,color-mix(in srgb,var(--ht-secondary) 85%,white 15%),color-mix(in srgb,var(--ht-panel2) 88%,black 12%)) !important;
+    border-radius:20px !important;
+  }
+  #home.home-themed .home-logo-badge,
+  #home.home-themed #homePreview{
+    border:3px solid var(--hostl-ink) !important;
+    box-shadow:0 4px 0 rgba(10,15,11,.66) !important;
+  }
+  #home.home-themed .home-row input[type=text],
+  #home.home-themed #serverUrl,
+  #home.home-themed #starterPetSetup input,
+  #home.home-themed #starterPetSetup select,
+  #home.home-themed .world-select-wrap select{
+    border:2px solid var(--hostl-ink) !important;
+    box-shadow:inset 0 2px 0 rgba(0,0,0,.22) !important;
+    border-radius:10px !important;
+  }
+
+  /* Home-screen menus get the same dark-outline construction as the game art. */
+  #expandedShopModal .modal-card,
+  #petShopOverlay .card,
+  #cardInventoryOverlay .card,
+  #chooseStarterPetOverlay .card,
+  #playerDesignOverlay .card,
+  #homeThemeOverlay .card,
+  #accountModal .modal-card,
+  #accountSettingsModal .modal-card,
+  #legalSupportOverlay .card{
+    border:3px solid var(--hostl-ink) !important;
+    box-shadow:0 7px 0 rgba(10,15,11,.72),0 22px 52px rgba(0,0,0,.34) !important;
+    -webkit-backdrop-filter:none !important;backdrop-filter:none !important;
+  }
+  #home button,
+  #expandedShopModal button,
+  #petShopOverlay button,
+  #cardInventoryOverlay button,
+  #chooseStarterPetOverlay button,
+  #playerDesignOverlay button,
+  #homeThemeOverlay button,
+  #friendsModal button,
+  #accountModal button,
+  #accountSettingsModal button,
+  #legalSupportOverlay button{
+    border:2px solid var(--hostl-ink) !important;
+    box-shadow:0 4px 0 rgba(10,15,11,.64) !important;
+  }
+
+  /* Match Theme-card interaction: a stable hit target with a brighter inked
+     border/shadow on hover, rather than buttons jumping around under the mouse. */
+  #home button,
+  #expandedShopModal button,
+  #petShopOverlay button,
+  #cardInventoryOverlay button,
+  #chooseStarterPetOverlay button,
+  #playerDesignOverlay button,
+  #homeThemeOverlay button,
+  #friendsModal button,
+  #accountModal button,
+  #accountSettingsModal button,
+  #legalSupportOverlay button{
+    transition:border-color .12s,filter .12s,box-shadow .12s,background .12s,transform .08s !important;
+  }
+  @media (hover:hover) and (pointer:fine){
+    #home button:hover,
+    #expandedShopModal button:hover:not(:disabled),
+    #petShopOverlay button:hover:not(:disabled),
+    #cardInventoryOverlay button:hover:not(:disabled),
+    #chooseStarterPetOverlay button:hover:not(:disabled),
+    #playerDesignOverlay button:hover:not(:disabled),
+    #homeThemeOverlay button:hover:not(:disabled),
+    #friendsModal button:hover:not(:disabled),
+    #accountModal button:hover:not(:disabled),
+    #accountSettingsModal button:hover:not(:disabled),
+    #legalSupportOverlay button:hover:not(:disabled){
+      filter:brightness(1.09) !important;
+      border-color:color-mix(in srgb,var(--ht-accent) 68%,#fff 12%) !important;
+      box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 23%,transparent),0 5px 0 rgba(10,15,11,.62) !important;
+    }
+  }
+  #home button:active,
+  #expandedShopModal button:active:not(:disabled),
+  #petShopOverlay button:active:not(:disabled),
+  #cardInventoryOverlay button:active:not(:disabled),
+  #chooseStarterPetOverlay button:active:not(:disabled),
+  #playerDesignOverlay button:active:not(:disabled){transform:translateY(2px) !important;box-shadow:0 2px 0 rgba(10,15,11,.72) !important;}
+
+  /* Compact material stock: tall narrow cards so many more choices fit at once. */
+  #materialShopGrid.rotating-material-grid{
+    display:grid !important;
+    grid-template-columns:repeat(auto-fill,minmax(96px,1fr)) !important;
+    gap:8px !important;
+    max-height:61vh !important;
+    padding:3px 6px 5px 2px !important;
+  }
+  #materialShopGrid .material-card{
+    min-height:164px !important;
+    padding:8px 7px !important;
+    border:3px solid var(--hostl-ink) !important;
+    border-radius:13px !important;
+    background:color-mix(in srgb,var(--ht-panel2) 88%,black 12%) !important;
+    box-shadow:0 4px 0 rgba(10,15,11,.62) !important;
+    display:flex !important;
+    flex-direction:column !important;
+    align-items:center !important;
+    justify-content:flex-start !important;
+    text-align:center !important;
+    cursor:pointer !important;
+    user-select:none;
+    overflow:hidden;
+  }
+  #materialShopGrid .material-card:hover{
+    filter:brightness(1.07);
+    border-color:color-mix(in srgb,var(--ht-accent) 68%,var(--hostl-ink) 32%) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 22%,transparent),0 4px 0 rgba(10,15,11,.62) !important;
+  }
+  #materialShopGrid .material-card.selected{
+    border-color:var(--ht-accent) !important;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ht-accent) 24%,transparent),0 4px 0 rgba(10,15,11,.70) !important;
+    background:color-mix(in srgb,var(--ht-accent) 13%,var(--ht-panel2) 87%) !important;
+  }
+  #materialShopGrid .material-card.sold{opacity:.58 !important;}
+  .material-card-icon-ring{
+    width:58px;height:58px;flex:0 0 58px;margin:4px auto 8px;border-radius:50%;
+    display:grid;place-items:center;font-size:30px;line-height:1;
+    background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.22),rgba(255,255,255,.06) 42%,rgba(0,0,0,.18) 72%);
+    border:3px solid var(--hostl-ink);box-shadow:0 3px 0 rgba(10,15,11,.58),0 0 16px color-mix(in srgb,var(--ht-accent) 24%,transparent);
+  }
+  .material-card-name{font-size:11px;font-weight:1000;line-height:1.08;color:var(--ht-text);min-height:24px;display:flex;align-items:center;justify-content:center;}
+  .material-card-rarity{font-size:8px;font-weight:1000;letter-spacing:.04em;text-transform:uppercase;margin-top:5px;}
+  .material-card-price{font-size:9px;font-weight:1000;line-height:1.15;color:var(--ht-special);margin-top:auto;padding-top:7px;}
+  .material-card-owned{font-size:8px;color:var(--ht-muted);margin-top:4px;font-weight:850;}
+
+  /* Clicking a compact card selects it; purchase controls and full information
+     live here so the stock grid can stay tiny and readable. */
+  .shopkeeper-panel{justify-content:flex-start !important;gap:10px !important;padding:12px !important;}
+  .material-selection-panel{
+    position:relative;z-index:2;width:100%;box-sizing:border-box;text-align:left;
+    border:3px solid var(--hostl-ink);border-radius:18px;padding:14px;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--ht-panel) 92%,white 8%),color-mix(in srgb,var(--ht-panel2) 94%,black 6%));
+    box-shadow:0 5px 0 rgba(10,15,11,.68);
+  }
+  .material-selection-empty{min-height:250px;display:grid;place-items:center;text-align:center;color:var(--ht-muted);font-size:12px;line-height:1.45;padding:18px;}
+  .material-detail-hero{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+  .material-detail-icon-ring{
+    width:82px;height:82px;flex:0 0 82px;border-radius:50%;display:grid;place-items:center;font-size:43px;
+    border:3px solid var(--hostl-ink);background:radial-gradient(circle at 38% 32%,rgba(255,255,255,.24),rgba(255,255,255,.06) 45%,rgba(0,0,0,.18) 73%);
+    box-shadow:0 4px 0 rgba(10,15,11,.6),0 0 24px color-mix(in srgb,var(--ht-accent) 30%,transparent);
+  }
+  .material-detail-name{font-size:20px;font-weight:1000;color:var(--ht-text);line-height:1.05;}
+  .material-detail-rarity{font-size:10px;font-weight:1000;letter-spacing:.07em;text-transform:uppercase;margin-top:5px;}
+  .material-detail-desc{font-size:12px;line-height:1.45;color:var(--ht-muted);margin:10px 0 12px;}
+  .material-detail-stats{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0 12px;}
+  .material-detail-stat{padding:8px 9px;border:2px solid var(--hostl-ink);border-radius:10px;background:color-mix(in srgb,var(--ht-bg) 52%,transparent);font-size:10px;color:var(--ht-muted);}
+  .material-detail-stat b{display:block;color:var(--ht-text);font-size:12px;margin-top:2px;}
+  #materialDetailBuyBtn{width:100%;min-height:44px;font-weight:1000;}
+  #materialDetailBuyBtn.buying{cursor:progress;filter:saturate(.72);}
+  .shopkeeper-panel .shopkeeper-placeholder{width:100% !important;max-width:none !important;aspect-ratio:auto !important;min-height:105px !important;margin-top:auto;padding:10px !important;border:2px dashed color-mix(in srgb,var(--ht-accent) 36%,transparent) !important;}
+  .shopkeeper-panel .shopkeeper-placeholder .shopkeeper-icon{font-size:30px !important;margin-bottom:5px !important;}
+  .shopkeeper-panel .shopkeeper-placeholder strong{font-size:13px !important;}
+  .shopkeeper-panel .shopkeeper-placeholder span{font-size:9px !important;margin-top:3px !important;}
+
+  /* Purchase reveal: temporary placeholder art until final item sprites exist. */
+  #purchaseReveal{
+    position:fixed;inset:0;z-index:1200;display:grid;place-items:center;pointer-events:none;
+    opacity:0;visibility:hidden;transition:opacity .12s ease,visibility .12s;
+  }
+  #purchaseReveal.show{opacity:1;visibility:visible;}
+  .purchase-reveal-card{
+    min-width:220px;max-width:min(360px,88vw);padding:22px 24px 18px;text-align:center;
+    border:3px solid var(--hostl-ink);border-radius:20px;
+    background:color-mix(in srgb,var(--ht-panel2) 94%,black 6%);color:var(--ht-text);
+    box-shadow:0 7px 0 rgba(10,15,11,.72),0 22px 55px rgba(0,0,0,.42);
+    animation:hostlPurchasePop .22s cubic-bezier(.2,.9,.25,1.25);
+  }
+  .purchase-reveal-icon-wrap{width:132px;height:132px;position:relative;display:grid;place-items:center;margin:0 auto 8px;}
+  .purchase-reveal-glow{
+    position:absolute;width:108px;height:108px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,239,153,.80) 0%,color-mix(in srgb,var(--ht-accent) 54%,transparent) 38%,transparent 72%);
+    box-shadow:0 0 30px color-mix(in srgb,var(--ht-accent) 58%,transparent),0 0 64px color-mix(in srgb,var(--ht-special) 34%,transparent);
+    animation:hostlPurchaseGlow .9s ease-in-out infinite alternate;
+  }
+  .purchase-reveal-icon{position:relative;z-index:2;font-size:64px;filter:drop-shadow(0 5px 0 rgba(0,0,0,.28));}
+  .purchase-reveal-kicker{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ht-accent);font-weight:1000;}
+  .purchase-reveal-name{font-size:20px;font-weight:1000;margin-top:4px;line-height:1.08;}
+  .purchase-reveal-sub{font-size:10px;color:var(--ht-muted);margin-top:5px;}
+  @keyframes hostlPurchasePop{from{transform:scale(.74);opacity:0}to{transform:scale(1);opacity:1}}
+  @keyframes hostlPurchaseGlow{from{transform:scale(.92);opacity:.72}to{transform:scale(1.08);opacity:1}}
+
+  @media(max-width:760px){
+    #materialShopGrid.rotating-material-grid{grid-template-columns:repeat(3,minmax(82px,1fr)) !important;max-height:44vh !important;}
+    #materialShopGrid .material-card{min-height:148px !important;}
+    .materials-shop-layout{grid-template-columns:1fr !important;}
+    .shopkeeper-panel{min-height:0 !important;}
+    .material-selection-empty{min-height:150px;}
+  }
+  @media(max-width:430px){
+    #materialShopGrid.rotating-material-grid{grid-template-columns:repeat(2,minmax(86px,1fr)) !important;}
+  }
+
 </style>
 </head>
 <body>
@@ -24071,7 +24305,8 @@ function buildPetShop() {
           }
           const result=await accountAction("/api/pets/unlock",{species:type,method});
           if(!result?.ok){showGameMessage("Unlock Failed",result?.data?.error==="not_enough_cards"?"Your server card balance changed. Reopen the pet page and try again.":result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That pet could not be unlocked.");return;}
-          banner(`Unlocked ${info.name}${method==="cards"?" with cards":""}!`);
+          if(method==="cubits") showPurchaseReveal(info.name,hostlItemVisual(type,info.emoji),"Purchased","Pet permanently unlocked");
+          else banner(`Unlocked ${info.name} with cards!`);
           buildPetShop();buildCardInventory();setupHome();return;
         }
         if (currentCards >= unlock.cards) {
@@ -24413,13 +24648,13 @@ function setupHome() {
       if(accountState?.loggedIn){
         const result=await accountAction("/api/starters/buy",{id:item.id});
         if(!result?.ok){showGameMessage("Purchase Failed",result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That starter unlock could not be purchased.");return;}
-        setupHome(); showGameMessage("Purchased", `${item.name} is now a permanent starter unlock.`); return;
+        setupHome(); showPurchaseReveal(item.name,hostlItemVisual(item.id),"Purchased","Permanent starter unlock"); return;
       }
       meta.servs -= item.price;
       meta.ownedStarters[item.id] = true;
       saveMeta();
       setupHome();
-      showGameMessage("Purchased", `${item.name} is now a permanent starter unlock.`);
+      showPurchaseReveal(item.name,hostlItemVisual(item.id),"Purchased","Permanent starter unlock");
     });
     grid.appendChild(div);
   });
@@ -25104,7 +25339,7 @@ window.__hostlBuyTheme = async function(themeId, shownPrice){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ showGameMessage?.("Theme", d?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(d.price||shownPrice||0).toLocaleString()}.`:"That theme could not be purchased."); return; }
     if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
-    showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
+    showPurchaseReveal(HOME_THEMES?.[themeId]?.name||"Theme","🎨","Purchased","Permanent Home theme unlocked");
   }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
 };
 async function requestRewardedAdProof(kind,subject){
@@ -25323,6 +25558,57 @@ const HOSTL_MATERIALS = {
   sharpFang:{name:"Sharpened Fang",price:2500,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
   apexScale:{name:"Apex Scale",price:6500,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
 };
+
+const HOSTL_ITEM_VISUALS = {
+  leather:"🟫", resin:"🟠", swiftFiber:"🧵", ironBuckle:"🔩", ironPlate:"🛡️",
+  animalNotes:"📒", toolKit:"🧰", beastBook:"📕", predatorStudy:"🔎", sharpFang:"🦷", apexScale:"🐉",
+  wood50:"🪵", wood100:"🪵", stone20:"🪨", stone50:"🪨", gold5:"🪙", gold15:"🪙", berries10:"🫐",
+  startAxe:"🪓", startPickaxe:"⛏️", startSword:"🗡️", startBow:"🏹", speedyBoots:"🥾", ironShell:"🛡️",
+  hunterWrap:"🥋", gatherGloves:"🧤", animalWhisperer:"🐾", saddle:"🪑",
+  dog:"🐶", cat:"🐱", dragon:"🦎", rabbit:"🐰", fox:"🦊", owl:"🦉", deer:"🦌", wolf:"🐺", snake:"🐍", boar:"🐗", bear:"🐻", saber:"🐯"
+};
+function hostlItemVisual(id,fallback="📦"){ return HOSTL_ITEM_VISUALS[String(id||"")] || fallback; }
+let selectedMaterialSlotId="";
+let shopPurchaseBusy="";
+let purchaseRevealTimer=0;
+function showPurchaseReveal(name, icon="📦", kicker="Purchased", sub="Added to your account"){
+  const root=document.getElementById("purchaseReveal"); if(!root)return;
+  const ico=document.getElementById("purchaseRevealIcon"), k=document.getElementById("purchaseRevealKicker"), n=document.getElementById("purchaseRevealName"), small=document.getElementById("purchaseRevealSub");
+  if(ico)ico.textContent=icon||"📦"; if(k)k.textContent=kicker||"Purchased"; if(n)n.textContent=name||"Item"; if(small)small.textContent=sub||"Added to your account";
+  clearTimeout(purchaseRevealTimer);
+  root.classList.remove("show"); void root.offsetWidth; root.classList.add("show"); root.setAttribute("aria-hidden","false");
+  purchaseRevealTimer=setTimeout(()=>{root.classList.remove("show");root.setAttribute("aria-hidden","true");},1250);
+}
+function selectMaterialListing(slotId){
+  selectedMaterialSlotId=String(slotId||"");
+  document.querySelectorAll("#materialShopGrid .material-card[data-slot-id]").forEach(card=>{
+    const on=card.dataset.slotId===selectedMaterialSlotId; card.classList.toggle("selected",on); card.setAttribute("aria-selected",on?"true":"false");
+  });
+  renderMaterialSelectionPanel();
+}
+function renderMaterialSelectionPanel(){
+  const panel=document.getElementById("materialSelectionPanel"); if(!panel)return;
+  let listing=rotatingShopState.listings.find(x=>x.slotId===selectedMaterialSlotId);
+  if(!listing && rotatingShopState.listings.length){ listing=rotatingShopState.listings.find(x=>!x.purchased)||rotatingShopState.listings[0]; selectedMaterialSlotId=listing?.slotId||""; }
+  if(!listing){ panel.innerHTML=`<div class="material-selection-empty">${rotatingShopState.loading?"Loading this shop rotation…":"Click a material card to see its details and Buy button."}</div>`; return; }
+  const item=HOSTL_MATERIALS[listing.materialId]||listing, price=Number(listing.price||item.price||0), owned=materialCount(listing.materialId), busy=shopPurchaseBusy===listing.slotId;
+  const buttonText=listing.purchased?"Bought this rotation":busy?"Purchasing…":accountState.loggedIn?`Buy for ${price.toLocaleString()} Gold Cubits`:"Sign In to Buy";
+  panel.innerHTML=`
+    <div class="material-detail-hero">
+      <div class="material-detail-icon-ring">${hostlItemVisual(listing.materialId)}</div>
+      <div><div class="material-detail-name">${item.name}</div><div class="material-detail-rarity rarity-${item.rarity}">${item.rarity}</div></div>
+    </div>
+    <div class="material-detail-desc">${item.desc||"Crafting material."}</div>
+    <div class="material-detail-stats">
+      <div class="material-detail-stat">You own<b>${owned}</b></div>
+      <div class="material-detail-stat">Price<b>${price.toLocaleString()} Gold Cubits</b></div>
+    </div>
+    <button id="materialDetailBuyBtn" class="account-btn${busy?" buying":""}" type="button" ${(listing.purchased||busy)?"disabled":""}>${buttonText}</button>`;
+  panel.querySelector("#materialDetailBuyBtn")?.addEventListener("click",()=>{
+    if(!accountState.loggedIn){openAccountModal();return;} buyShopListing(listing.slotId);
+  });
+}
+
 const HOSTL_BUILD_RECIPES = {
   speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
   ironShell:{name:"Iron Shell",chance:.60,desc:"Permanent starter equipment: begin each run with a 250-HP non-healable shell.",ingredients:{ironPlate:8,resin:5,leather:3}},
@@ -25373,22 +25659,30 @@ async function refreshServerDay(){
 function renderMaterialsAndRecipes(){
   const bar=document.getElementById("materialInventoryBar");
   if(bar) bar.innerHTML = accountState.loggedIn
-    ? Object.entries(HOSTL_MATERIALS).filter(([id])=>materialCount(id)>0).map(([id,v])=>`<span class="shop-inventory-chip">${v.name} · ${v.rarity}: ${materialCount(id)}</span>`).join("") || `<span class="muted">No crafting materials yet.</span>`
+    ? Object.entries(HOSTL_MATERIALS).filter(([id])=>materialCount(id)>0).map(([id,v])=>`<span class="shop-inventory-chip">${hostlItemVisual(id)} ${v.name} · ${v.rarity}: ${materialCount(id)}</span>`).join("") || `<span class="muted">No crafting materials yet.</span>`
     : `<span class="muted">Sign in to own materials, build equipment, and learn skills.</span>`;
   const owned=document.getElementById("materialOwnedList");
-  if(owned) owned.innerHTML=Object.entries(HOSTL_MATERIALS).map(([id,v])=>`<div class="material-owned-row"><span>${v.name}<br><small class="rarity-${v.rarity}">${v.rarity}</small></span><b>${materialCount(id)}</b></div>`).join("");
+  if(owned) owned.innerHTML=Object.entries(HOSTL_MATERIALS).map(([id,v])=>`<div class="material-owned-row"><span>${hostlItemVisual(id)} ${v.name}<br><small class="rarity-${v.rarity}">${v.rarity}</small></span><b>${materialCount(id)}</b></div>`).join("");
   const shop=document.getElementById("materialShopGrid");
   if(shop){
     shop.innerHTML="";
     if(rotatingShopState.loading && !rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Loading this rotation…</div>`;}
     else if(!rotatingShopState.listings.length){shop.innerHTML=`<div class="muted">Shop stock could not be loaded yet. Try reopening the Shop.</div>`;}
-    else for(const listing of rotatingShopState.listings){
-      const item=HOSTL_MATERIALS[listing.materialId]||listing; const d=document.createElement("div"); d.className="material-card"+(listing.purchased?" sold":"");
-      const buttonText=listing.purchased?"Bought this rotation":`Buy · ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits`;
-      d.innerHTML=`<span class="material-rarity rarity-${item.rarity}">${item.rarity}</span><h4>${item.name}</h4><div class="muted">${item.desc||"Crafting material."}</div><div class="owned-count">Owned: ${materialCount(listing.materialId)}</div><button class="account-btn" type="button" ${(!accountState.loggedIn||listing.purchased)?'disabled':''}>${buttonText}</button>`;
-      d.querySelector("button")?.addEventListener("click",()=>buyShopListing(listing.slotId)); shop.appendChild(d);
+    else {
+      if(!rotatingShopState.listings.some(x=>x.slotId===selectedMaterialSlotId)) selectedMaterialSlotId=(rotatingShopState.listings.find(x=>!x.purchased)||rotatingShopState.listings[0])?.slotId||"";
+      for(const listing of rotatingShopState.listings){
+        const item=HOSTL_MATERIALS[listing.materialId]||listing, price=Number(listing.price||item.price||0);
+        const d=document.createElement("div");
+        d.className="material-card"+(listing.purchased?" sold":"")+(listing.slotId===selectedMaterialSlotId?" selected":"");
+        d.dataset.slotId=listing.slotId; d.tabIndex=0; d.setAttribute("role","button"); d.setAttribute("aria-selected",listing.slotId===selectedMaterialSlotId?"true":"false");
+        d.innerHTML=`<div class="material-card-icon-ring">${hostlItemVisual(listing.materialId)}</div><div class="material-card-name">${item.name}</div><div class="material-card-rarity rarity-${item.rarity}">${item.rarity}</div><div class="material-card-owned">Owned ${materialCount(listing.materialId)}</div><div class="material-card-price">${listing.purchased?"BOUGHT":price.toLocaleString()+" GC"}</div>`;
+        d.addEventListener("click",()=>selectMaterialListing(listing.slotId));
+        d.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectMaterialListing(listing.slotId);}});
+        shop.appendChild(d);
+      }
     }
   }
+  renderMaterialSelectionPanel();
   updateShopRefreshUi();
   const build=document.getElementById("buildRecipeGrid");
   if(build){ build.innerHTML=""; for(const [id,r] of Object.entries(HOSTL_BUILD_RECIPES)){
@@ -25408,19 +25702,24 @@ async function accountAction(path,body){
   try{
     const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},credentials:"same-origin",body:JSON.stringify(body||{})});
     const data=await r.json().catch(()=>({})); if(r.status===401){ logoutAccount(false); return null; }
-    if(data?.account) setAccountFromServer(data.account); syncAccountUi(); renderMaterialsAndRecipes(); return {ok:r.ok,data};
+    if(data?.account) setAccountFromServer(data.account); syncAccountUi(); return {ok:r.ok,data};
   }catch(_){ return {ok:false,data:{error:"network"}}; }
 }
 async function buyShopListing(slotId){
-  const listing=rotatingShopState.listings.find(x=>x.slotId===slotId); if(!listing)return;
+  const listing=rotatingShopState.listings.find(x=>x.slotId===slotId); if(!listing||listing.purchased||shopPurchaseBusy)return;
   const item=HOSTL_MATERIALS[listing.materialId]||listing;
-  const result=await accountAction("/api/shop/buy-stock",{slotId}); if(!result)return;
+  shopPurchaseBusy=slotId; selectedMaterialSlotId=slotId; renderMaterialSelectionPanel();
+  const result=await accountAction("/api/shop/buy-stock",{slotId});
+  shopPurchaseBusy="";
+  if(!result){renderMaterialsAndRecipes();return;}
   if(!result.ok){
+    renderMaterialsAndRecipes();
     if(result.data?.error==="shop_refreshed"){showGameMessage("Shop Refreshed","The two-day shop rotation changed. Loading the new stock now.");await loadRotatingShopStock(true);return;}
     showGameMessage("Purchase Failed",result.data?.error==="not_enough_cubits"?`You need ${Number(listing.price||item.price||0).toLocaleString()} Gold Cubits.`:result.data?.error==="already_purchased"?"You already bought this exact shop slot during this rotation.":"Could not buy that material."); return;
   }
   const local=rotatingShopState.listings.find(x=>x.slotId===slotId); if(local)local.purchased=true;
-  showGameMessage("Material Purchased",`+1 ${item.name}`); renderMaterialsAndRecipes();
+  renderMaterialsAndRecipes();
+  showPurchaseReveal(item.name,hostlItemVisual(listing.materialId),"Purchased","+1 material added to your account");
 }
 async function attemptBuild(id){
   const r=HOSTL_BUILD_RECIPES[id]; if(!r)return;
@@ -25536,7 +25835,9 @@ async function openAccountChest(name,cost,kind="forest",isFreeDaily=false,adProo
     showChestResult(name,[msg]); syncChestUi(); return;
   }
   const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
-  showChestResult(name,rewards); syncChestUi(); renderMaterialsAndRecipes();
+  showChestResult(name,rewards);
+  if(!isFreeDaily) showPurchaseReveal(name,"🧰","Purchased","Chest opened — rewards added");
+  syncChestUi(); renderMaterialsAndRecipes();
 }
 
 async function openDailyChestNow() {
@@ -26043,11 +26344,14 @@ syncAchievementAccountBridge();
             <p class="locked-note">The server controls the two-day rotation and daily resets, so changing your device clock cannot force an early refresh.</p>
           </aside>
         </div>
-        <aside class="shopkeeper-panel" aria-label="Shopkeeper area">
+        <aside class="shopkeeper-panel" aria-label="Selected shop item and shopkeeper area">
+          <div id="materialSelectionPanel" class="material-selection-panel">
+            <div class="material-selection-empty">Click a material card to see what it is, how many you own, and the Buy button.</div>
+          </div>
           <div class="shopkeeper-placeholder">
             <div class="shopkeeper-icon">🧑‍🌾</div>
             <strong>Shopkeeper Area</strong>
-            <span>Reserved for your HOSTL shopkeeper character. The material stock stays on the left.</span>
+            <span>Your final shopkeeper design can replace this placeholder later.</span>
           </div>
         </aside>
       </div>
@@ -26100,6 +26404,15 @@ syncAchievementAccountBridge();
       </div>
       <p class="locked-note" id="promoCodeAccountNote">You need a HOSTL account to redeem codes.</p>
     </section>
+  </div>
+</div>
+
+<div id="purchaseReveal" role="status" aria-live="polite" aria-hidden="true">
+  <div class="purchase-reveal-card">
+    <div class="purchase-reveal-icon-wrap"><div class="purchase-reveal-glow"></div><div id="purchaseRevealIcon" class="purchase-reveal-icon">📦</div></div>
+    <div id="purchaseRevealKicker" class="purchase-reveal-kicker">Purchased</div>
+    <div id="purchaseRevealName" class="purchase-reveal-name">Item</div>
+    <div id="purchaseRevealSub" class="purchase-reveal-sub">Added to your account</div>
   </div>
 </div>
 
