@@ -1656,7 +1656,7 @@
 
   .theme-choice{
     position:relative;
-    min-height:138px;
+    min-height:158px;
     padding:13px;
     border-radius:16px;
     border:1px solid rgba(255,255,255,.12);
@@ -1666,12 +1666,20 @@
     text-align:left;
     font-family:inherit;
     box-shadow:0 10px 22px rgba(0,0,0,.18);
-    transition:transform .12s,border-color .12s,filter .12s;
+    transform:none;
+    z-index:0;
+    transition:border-color .12s,filter .12s,box-shadow .12s;
   }
 
+  /* Stable hover: never resize/transform the hit target. The brighter border
+     and outward shadow create the small "bigger" look without changing card
+     geometry, so hover cannot pulse even with the pointer in the center. */
   .theme-choice:hover{
-    transform:translateY(-2px);
+    transform:none !important;
     filter:brightness(1.07);
+    border-color:color-mix(in srgb,var(--ht-accent) 58%,rgba(255,255,255,.35));
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 30%,transparent),0 14px 28px rgba(0,0,0,.26);
+    z-index:3;
   }
 
   .theme-choice.selected{
@@ -1708,35 +1716,57 @@
     text-shadow:0 2px 7px rgba(0,0,0,.42);
   }
 
-  .theme-swatch-row{
-    position:absolute;
-    left:13px;
-    right:13px;
-    bottom:13px;
-    z-index:2;
+  .theme-card-meta{
+    position:relative;
+    z-index:3;
     display:flex;
     align-items:center;
-    gap:6px;
+    flex-wrap:wrap;
+    gap:5px;
+    margin-bottom:5px;
+  }
+  .theme-card-meta .theme-element-badge{margin-bottom:0;}
+
+  .theme-card-footer{
+    position:absolute;
+    left:12px;
+    right:12px;
+    bottom:11px;
+    z-index:4;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+
+  .theme-swatch-row{
+    position:static;
+    z-index:auto;
+    display:flex;
+    align-items:center;
+    gap:5px;
+    min-width:0;
   }
 
   .theme-mini-swatch{
-    width:26px;
-    height:26px;
-    border-radius:8px;
+    width:22px;
+    height:22px;
+    flex:0 0 22px;
+    border-radius:7px;
     border:1px solid rgba(255,255,255,.28);
     box-shadow:0 3px 8px rgba(0,0,0,.18);
   }
 
   .theme-selected-pill{
-    margin-left:auto;
-    padding:5px 8px;
+    padding:4px 6px;
     border-radius:999px;
     background:rgba(255,255,255,.16);
     border:1px solid rgba(255,255,255,.18);
     color:#fff;
-    font-size:9px;
+    font-size:8px;
     font-weight:900;
     opacity:0;
+    white-space:nowrap;
   }
 
   .theme-choice.selected .theme-selected-pill{opacity:1;}
@@ -1748,12 +1778,12 @@
   .theme-group-title{font-size:15px;font-weight:1000;color:var(--ht-text);margin-bottom:3px;}
   .theme-group-desc{font-size:11px;line-height:1.4;color:var(--ht-muted);}
   .theme-choice.locked{opacity:1;filter:none;}
-  .theme-choice .theme-lock-state{position:absolute;left:10px;right:10px;bottom:10px;display:flex;gap:6px;align-items:center;justify-content:space-between;z-index:4;}
-  .theme-choice .theme-unlock-badge{font-size:9px;font-weight:1000;letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);}
-  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 10px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 8px;cursor:pointer;min-height:30px;}
-  .theme-choice .theme-action:hover{transform:translateY(-1px);filter:brightness(1.08);}
+  .theme-choice .theme-lock-state{position:static;display:flex;align-items:center;justify-content:flex-end;z-index:auto;flex:0 0 auto;}
+  .theme-choice .theme-unlock-badge{font-size:8px;font-weight:1000;letter-spacing:.055em;text-transform:uppercase;padding:3px 6px;border-radius:999px;background:rgba(0,0,0,.62);color:#fff;border:1px solid rgba(255,255,255,.28);white-space:nowrap;max-width:126px;overflow:hidden;text-overflow:ellipsis;}
+  .theme-choice .theme-action{appearance:none;border:1px solid color-mix(in srgb,var(--ht-accent) 55%,#fff 10%);background:color-mix(in srgb,var(--ht-panel) 82%,#000 18%);color:var(--ht-text);font:900 9px/1.1 system-ui,sans-serif;border-radius:8px;padding:6px 7px;cursor:pointer;min-height:28px;white-space:nowrap;}
+  .theme-choice .theme-action:hover{transform:none;filter:brightness(1.08);}
   .theme-choice.locked .theme-choice-bg{filter:saturate(.75) brightness(.72);}
-  .theme-choice.locked .theme-choice-content{padding-bottom:46px;}
+  .theme-choice.locked .theme-choice-content{padding-bottom:42px;}
   .theme-choice.unlocked-account .theme-unlock-badge{background:rgba(54,108,171,.82);}
   .theme-choice.unlocked-ad .theme-unlock-badge{background:rgba(130,72,170,.82);}
   .theme-choice.unlocked-gold .theme-unlock-badge{background:rgba(156,109,20,.88);}
@@ -4769,7 +4799,7 @@
     -webkit-backdrop-filter:none !important;
   }
 
-  /* ---------- 633 gameplay UI hard guard ---------- */
+  /* ---------- 636 owned themes + acquisition labels beside type ---------- */
   /* The home screen may still receive account/theme refreshes while a run is active.
      This class makes those refreshes incapable of putting Home back over gameplay. */
   body.hostl-game-active #home{
@@ -5551,7 +5581,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "597";
+const CUBE_SHARED_RULES_VERSION = "598";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7275,8 +7305,11 @@ function applyHomeTheme(themeId, save = false) {
   }
   document.body.classList.toggle("home-ui-glitch", currentHomeTheme === "glitch");
 
-  if (save) localStorage.setItem(HOME_THEME_STORAGE_KEY, currentHomeTheme);
-  buildHomeThemeGrid();
+  if (save) {
+    localStorage.setItem(HOME_THEME_STORAGE_KEY, currentHomeTheme);
+    try { window.__hostlSaveSelectedTheme?.(currentHomeTheme); } catch (_) {}
+  }
+  updateHomeThemeSelectionUi();
   renderHomeThemeEffects();
   updateHomeBackgroundEffectsToggle();
   syncHomeWorldThemeState();
@@ -7289,9 +7322,33 @@ function themePreviewBackground(theme) {
   return `radial-gradient(circle at 85% 18%, ${theme.accent}55, transparent 34%), linear-gradient(145deg, ${theme.bg}, ${theme.panel} 56%, ${theme.panel2})`;
 }
 
-function buildHomeThemeGrid() {
+let homeThemeGridSignature = "";
+function updateHomeThemeSelectionUi() {
+  const grid=document.getElementById("homeThemeGrid");
+  if(!grid) return;
+  grid.querySelectorAll(".theme-choice[data-theme-id]").forEach(card=>{
+    const id=card.dataset.themeId||"";
+    const selected=id===currentHomeTheme;
+    card.classList.toggle("selected",selected);
+    const pill=card.querySelector(".theme-selected-pill");
+    if(pill) pill.textContent=selected?"Selected":"";
+    const action=card.querySelector(".theme-action");
+    if(action && card.dataset.unlocked==="1") action.textContent=selected?"Selected":"Use Theme";
+  });
+}
+function buildHomeThemeGrid(force=false) {
   const grid = document.getElementById("homeThemeGrid");
   if (!grid) return;
+
+  // Account/friends polling calls syncAccountUi often. Rebuilding this entire
+  // grid replaces the DOM element currently under the mouse, which resets
+  // :hover and made cards pulse between normal/hover sizes. Only rebuild when
+  // theme access or the selected theme actually changed.
+  const sigAccount = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[]};
+  const sigUnlocked = Array.isArray(sigAccount.unlockedThemes) ? [...sigAccount.unlockedThemes].map(String).sort().join(",") : "";
+  const nextSignature = `${sigAccount.loggedIn?1:0}|${sigUnlocked}`;
+  if (!force && homeThemeGridSignature === nextSignature && grid.childElementCount > 0) return;
+  homeThemeGridSignature = nextSignature;
   grid.innerHTML = "";
 
   const classicThemeOrder = ["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"];
@@ -7303,27 +7360,70 @@ function buildHomeThemeGrid() {
   const known = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder];
   const otherThemeOrder = Object.keys(HOME_THEMES).filter(id => !known.includes(id));
 
-  const guestFree = new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
-  const accountFree = new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
-  const adThemes = new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon","sakuraBreeze","lavenderDream","rainyWindow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
+  // Theme unlock assignment v1 (frozen).
+  // These methods were randomized ONCE while building this version, then written
+  // directly into the game. They NEVER reroll when the menu opens, on a new day,
+  // after a login, or after an update unless we intentionally edit this table.
+  const guestFree = new Set([...classicThemeOrder]);
+  const accountFree = new Set([
+    "stoneElement",
+    "strawberryMilk","honeyBee","candyComet","pumpkinMoon",
+    "arcticPulse","viperwave","hologram","hacker","blackNeon","thunderStorm","auroraVale","oceanAbyss",
+    "dragonForge","celestialCrown","goldenEclipse","crystalCavern",
+    "rainyWindow","owlNight","beardedDunes","moonPetal","kemonoCamp"
+  ]);
+  const adThemes = new Set([
+    "waterElement","lightningElement","powerElement","windElement","soundElement",
+    "rabbitMeadow","cottonCandy","roseQuartz",
+    "nightDrive","hyperwave","blackNight","glitch","prismTech","auroraBorealis",
+    "emberKingdom","ancientRuins","explosion","castorianopsia",
+    "deerGrove","autumnHearth","goldenPrairie"
+  ]);
+  const goldThemes = new Set([
+    "fireElement","plantElement","earthElement",
+    "peachBunny","bubblegumSky","cozyPlush","blossomCandy",
+    "chromeWave","toxicReactor","solarPunk","cyberCircuit","slime","computerVirus",
+    "titanStorm","saberFang","voidObsidian","bloodMoon",
+    "sakuraBreeze","lavenderDream","quietMeadow","midnightGarden"
+  ]);
   const account = window.__hostlThemeAccountState || {loggedIn:false,unlockedThemes:[],goldCubits:0};
   const owned = new Set(Array.isArray(account.unlockedThemes) ? account.unlockedThemes : []);
-  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : "gold";
+  const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : goldThemes.has(id) ? "gold" : "gold";
   const priceOf = id => {
-    if (elementThemeOrder.includes(id)) return 6500;
-    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 28000 : 20000;
-    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 16000 : 11000;
-    if (cuteThemeOrder.includes(id)) return 8500;
-    if (relaxingThemeOrder.includes(id)) return 9500;
-    return 12000;
+    if (elementThemeOrder.includes(id)) return 5900;
+    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 25200 : 18000;
+    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 14400 : 9900;
+    if (cuteThemeOrder.includes(id)) return 7650;
+    if (relaxingThemeOrder.includes(id)) return 8550;
+    return 10800;
   };
   const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
 
+  const unlockedOrder = Array.isArray(account.unlockedThemes) ? account.unlockedThemes.map(String).filter(id=>HOME_THEMES[id]) : [];
+  const permanentNewestFirst = [...new Set(unlockedOrder)].reverse();
+  const permanentOwned = new Set(permanentNewestFirst);
+  const allThemeOrder = [...classicThemeOrder,...elementThemeOrder,...cuteThemeOrder,...coolThemeOrder,...epicThemeOrder,...relaxingThemeOrder,...otherThemeOrder];
+  // "Owned Themes" means every theme the current player can use right now.
+  // Permanent purchases/ad/code unlocks are shown first (newest first), followed
+  // by free/account themes. Lower groups contain only themes not yet owned.
+  // Stable pseudo-random order: mixed-looking, but it does not reshuffle while
+  // the player is browsing. This prevents CUTE/COOL/EPIC/etc. from forming
+  // long blocks inside one acquisition section.
+  const themeMixKey = id => {
+    let h=2166136261>>>0;
+    const text=`hostl-theme-mix-v1:${id}`;
+    for(let i=0;i<text.length;i++){ h=Math.imul(h^text.charCodeAt(i),16777619)>>>0; }
+    return h;
+  };
+  const mixThemeOrder = ids => [...ids].sort((a,b)=>(themeMixKey(a)-themeMixKey(b)) || a.localeCompare(b));
+
+  const otherOwned = mixThemeOrder(allThemeOrder.filter(id=>HOME_THEMES[id] && isUnlocked(id) && !permanentOwned.has(id)));
+  const allOwnedThemes = [...permanentNewestFirst,...otherOwned];
   const groups = [
-    {key:"guest",title:"Guest Free",desc:"Available to everyone, even without an account.",ids:[...classicThemeOrder,...otherThemeOrder].filter(id=>guestFree.has(id))},
-    {key:"account",title:"Free with Account",desc:"Sign in to a HOSTL account and these unlock automatically.",ids:known.filter(id=>accountFree.has(id))},
-    {key:"gold",title:"Gold Cubits",desc:"Permanent account unlocks purchased with Gold Cubits.",ids:known.filter(id=>categoryOf(id)==="gold")},
-    {key:"ad",title:"Watch Ad",desc:"Permanent account unlocks earned by watching a rewarded ad.",ids:known.filter(id=>adThemes.has(id))},
+    {key:"owned",title:"Owned Themes",desc:"Every theme you can use. New permanent unlocks appear first.",ids:allOwnedThemes},
+    {key:"account",title:"Free with Account",desc:"A mixed selection of styles that unlock automatically with a HOSTL account.",ids:mixThemeOrder(allThemeOrder.filter(id=>accountFree.has(id) && !isUnlocked(id)))},
+    {key:"gold",title:"Gold Cubits",desc:"A mixed selection of permanent themes purchased with Gold Cubits.",ids:mixThemeOrder(allThemeOrder.filter(id=>goldThemes.has(id) && !isUnlocked(id)))},
+    {key:"ad",title:"Watch Ad",desc:"A mixed selection of permanent themes earned by watching a rewarded ad.",ids:mixThemeOrder(allThemeOrder.filter(id=>adThemes.has(id) && !isUnlocked(id)))},
   ];
 
   const addHeading = g => {
@@ -7338,24 +7438,35 @@ function buildHomeThemeGrid() {
     for (const id of ids) {
       const theme=HOME_THEMES[id]; const unlocked=isUnlocked(id); const cat=categoryOf(id); const price=priceOf(id);
       const btn=document.createElement("div");
+      btn.dataset.themeId=id;
+      btn.dataset.unlocked=unlocked?"1":"0";
       btn.className=`theme-choice ${unlocked?"":"locked"} unlocked-${cat}` + (id===currentHomeTheme?" selected":"");
       const moodBadge = elementThemeOrder.includes(id) ? "ELEMENT" : cuteThemeOrder.includes(id) ? "CUTE" : coolThemeOrder.includes(id) ? "COOL" : epicThemeOrder.includes(id) ? "EPIC" : relaxingThemeOrder.includes(id) ? "RELAX" : "CLASSIC";
-      let unlockText = cat==="guest" ? "Guest Free" : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
-      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad to Unlock" : `Buy ${price.toLocaleString()}`;
+      // Acquisition info lives beside COOL / EPIC / CUTE / etc., never over
+      // the color palette. Once a paid theme is owned, its old price disappears.
+      let unlockText = unlocked
+        ? (cat==="guest" ? "Free" : cat==="account" ? "Account Free" : "Owned")
+        : cat==="account" ? "Account Free" : cat==="ad" ? "Watch Ad" : `${price.toLocaleString()} Gold Cubits`;
+      let actionText = unlocked ? (id===currentHomeTheme?"Selected":"Use Theme") : cat==="account" ? "Sign In to Unlock" : cat==="ad" ? "Watch Ad" : "Buy";
       btn.innerHTML = `
         <span class="theme-choice-bg" style="background:${themePreviewBackground(theme)}"></span>
         <span class="theme-choice-content">
-          <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+          <span class="theme-card-meta">
+            <span class="theme-element-badge theme-badge-${moodBadge.toLowerCase()}">${moodBadge}</span>
+            <span class="theme-unlock-badge">${unlockText}</span>
+          </span>
           <span class="theme-choice-name">${theme.name}</span>
           <span class="theme-choice-desc">${theme.desc}</span>
         </span>
-        <span class="theme-swatch-row">
-          <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
-          <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
-          <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
-          <span class="theme-selected-pill">Selected</span>
-        </span>
-        <span class="theme-lock-state"><span class="theme-unlock-badge">${unlockText}</span><button class="theme-action" type="button">${actionText}</button></span>`;
+        <span class="theme-card-footer">
+          <span class="theme-swatch-row">
+            <span class="theme-mini-swatch" style="background:${theme.primary}"></span>
+            <span class="theme-mini-swatch" style="background:${theme.secondary}"></span>
+            <span class="theme-mini-swatch" style="background:${theme.accent}"></span>
+            <span class="theme-selected-pill">${id===currentHomeTheme?"Selected":""}</span>
+          </span>
+          <span class="theme-lock-state"><button class="theme-action" type="button">${actionText}</button></span>
+        </span>`;
       const action=btn.querySelector(".theme-action");
       action.addEventListener("click", async (e)=>{
         e.stopPropagation();
@@ -7368,12 +7479,13 @@ function buildHomeThemeGrid() {
       grid.appendChild(btn);
     }
   }
+  updateHomeThemeSelectionUi();
 }
 
 window.__hostlRefreshThemeAccess = function(){
   const account=window.__hostlThemeAccountState||{loggedIn:false,unlockedThemes:[]};
-  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight"]);
-  const acct=new Set(["mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade","rabbitMeadow","quietMeadow"]);
+  const guest=new Set(["forestGold","blueEmber","sunsetJungle","royalStone","mossCream","lavaNight","mintTech","oceanCoral","frostPine","desertDusk","crimsonSteel","neonArcade"]);
+  const acct=new Set(["stoneElement","strawberryMilk","honeyBee","candyComet","pumpkinMoon","arcticPulse","viperwave","hologram","hacker","blackNeon","thunderStorm","auroraVale","oceanAbyss","dragonForge","celestialCrown","goldenEclipse","crystalCavern","rainyWindow","owlNight","beardedDunes","moonPetal","kemonoCamp"]);
   const owned=new Set(Array.isArray(account.unlockedThemes)?account.unlockedThemes:[]);
   const allowed=guest.has(currentHomeTheme)||(account.loggedIn&&(acct.has(currentHomeTheme)||owned.has(currentHomeTheme)));
   if(!allowed) applyHomeTheme("forestGold",true); else buildHomeThemeGrid();
@@ -7462,12 +7574,12 @@ const ANIMAL_BALANCE = {
   dragon: { hpMul:1.05, damageTaken:0.93, attack:6.2 },
   fox:    { hpMul:0.92, damageTaken:1.05, attack:8.5 },
   wolf:   { hpMul:1.20, damageTaken:0.82, attack:9.5 },
-  bear:   { hpMul:1.45, damageTaken:0.72, attack:8.5 },
+  bear:   { hpMul:1.70, damageTaken:0.60, attack:8.5 },
   rabbit: { hpMul:0.72, damageTaken:1.15, attack:4.25 },
   owl:    { hpMul:0.88, damageTaken:1.02, attack:6.0 },
   snake:  { hpMul:0.84, damageTaken:1.10, attack:9.0 },
   deer:   { hpMul:1.08, damageTaken:0.94, attack:6.0 },
-  boar:   { hpMul:1.30, damageTaken:0.80, attack:9.0 },
+  boar:   { hpMul:1.55, damageTaken:0.68, attack:9.0 },
   saber:  { hpMul:1.00, babyHpMul:1.78, damageTaken:0.98, attack:12.0 },
 };
 
@@ -7528,7 +7640,13 @@ function animalDamageTaken(type, stage, rawDamage) {
   if (raw <= 0) return 0;
   const b = animalBalance(type);
   const stageMul = ANIMAL_STAGE_DAMAGE_TAKEN[stage] ?? 1;
-  return Math.max(0.1, raw * b.damageTaken * stageMul);
+  // Bear and Boar are the game's natural tanks. Their larger wild stages gain
+  // extra armor instead of only scaling raw HP, so Big Mommas feel genuinely
+  // hard to bring down rather than just being oversized damage sponges.
+  const heavyStageDefense = (type === "bear" || type === "boar")
+    ? (stage === "bigmomma" ? 0.72 : stage === "superboss" ? 0.86 : stage === "boss" ? 0.93 : 1)
+    : 1;
+  return Math.max(0.1, raw * b.damageTaken * stageMul * heavyStageDefense);
 }
 function dogWallStats(stage, level=1) {
   const lv = Math.max(1, Number(level) || 1);
@@ -7675,15 +7793,15 @@ const PET_UNLOCK = {
   dog:    { cards: 0,  servs: 0,    rarity: PET_RARITY.dog },
   cat:    { cards: 0,  servs: 0,    rarity: PET_RARITY.cat },
   dragon: { cards: 0,  servs: 0,    rarity: PET_RARITY.dragon },
-  rabbit: { cards: 55, servs: 600,  rarity: PET_RARITY.rabbit },
-  fox:    { cards: 55, servs: 650,  rarity: PET_RARITY.fox },
-  owl:    { cards: 60, servs: 750,  rarity: PET_RARITY.owl },
-  deer:   { cards: 70, servs: 900,  rarity: PET_RARITY.deer },
-  wolf:   { cards: 80, servs: 1100, rarity: PET_RARITY.wolf },
-  snake:  { cards: 85, servs: 1200, rarity: PET_RARITY.snake },
-  boar:   { cards: 95, servs: 1400, rarity: PET_RARITY.boar },
-  bear:   { cards: 110,servs: 1800, rarity: PET_RARITY.bear },
-  saber:  { cards: 120,servs: 2200, rarity: PET_RARITY.saber },
+  rabbit: { cards: 55, servs: 540,  rarity: PET_RARITY.rabbit },
+  fox:    { cards: 55, servs: 585,  rarity: PET_RARITY.fox },
+  owl:    { cards: 60, servs: 675,  rarity: PET_RARITY.owl },
+  deer:   { cards: 70, servs: 810,  rarity: PET_RARITY.deer },
+  wolf:   { cards: 80, servs: 990,  rarity: PET_RARITY.wolf },
+  snake:  { cards: 85, servs: 1080, rarity: PET_RARITY.snake },
+  boar:   { cards: 95, servs: 1260, rarity: PET_RARITY.boar },
+  bear:   { cards: 110,servs: 1620, rarity: PET_RARITY.bear },
+  saber:  { cards: 120,servs: 1980, rarity: PET_RARITY.saber },
 };
 const PET_CARD_STAGE_ORDER = ["baby", "adult", "boss", "superboss"];
 const PET_CARD_STAGE_COST = {
@@ -7948,7 +8066,7 @@ function animalHeadHitbox(a) {
   else if (a.type === "wolf" || a.type === "dog") { forward = 1.20; radiusMul = 0.44; }
   else if (a.type === "owl") { forward = 1.05; radiusMul = 0.49; }
   else if (a.type === "deer") { forward = 1.12; radiusMul = 0.34; }
-  else if (a.type === "boar") { forward = 1.18; radiusMul = 0.45; }
+  else if (a.type === "boar") { forward = 0.94; radiusMul = 0.33; }
   else if (a.type === "saber") { forward = 1.00; radiusMul = 0.34; }
   else if (a.type === "snake") { forward = 1.26; radiusMul = 0.29; }
   else if (a.type === "dragon") { forward = 1.22; radiusMul = 0.40; }
@@ -14138,15 +14256,15 @@ function queryStaticForRender(kind, x, y, range = 320) {
 }
 
 const RUN_SHOP_ITEMS = [
-  {id:"minerHat",cat:"hat",icon:"⛏️",name:"Miner Hat",cost:25,desc:"Gather 25% more wood, stone, berries, and mined gold."},
-  {id:"healerHood",cat:"hat",icon:"💚",name:"Healer Hood",cost:35,desc:"Regenerate 0.7 HP per second while alive."},
-  {id:"warriorHelm",cat:"hat",icon:"⚔️",name:"Warrior Helm",cost:45,desc:"Deal 18% more player damage."},
-  {id:"tamerCape",cat:"cape",icon:"🟩",name:"Tamer Cape",cost:40,desc:"Adds +10 percentage points to tame chance."},
-  {id:"cardCape",cat:"cape",icon:"🃏",name:"Cardseeker Cape",cost:45,desc:"75% higher chance to get pet cards from kills."},
-  {id:"mentorCape",cat:"cape",icon:"⭐",name:"Mentor Cape",cost:50,desc:"Pets earn 50% more XP from kills."},
-  {id:"leatherArmor",cat:"armor",icon:"🟤",name:"Leather Armor",cost:30,desc:"Take 12% less damage."},
-  {id:"ironArmor",cat:"armor",icon:"🛡️",name:"Iron Armor",cost:55,desc:"Take 22% less damage."},
-  {id:"guardianArmor",cat:"armor",icon:"🔰",name:"Guardian Armor",cost:90,desc:"Take 34% less damage."}
+  {id:"minerHat",cat:"hat",icon:"⛏️",name:"Miner Hat",cost:23,desc:"Gather 25% more wood, stone, berries, and mined gold."},
+  {id:"healerHood",cat:"hat",icon:"💚",name:"Healer Hood",cost:32,desc:"Regenerate 0.7 HP per second while alive."},
+  {id:"warriorHelm",cat:"hat",icon:"⚔️",name:"Warrior Helm",cost:41,desc:"Deal 18% more player damage."},
+  {id:"tamerCape",cat:"cape",icon:"🟩",name:"Tamer Cape",cost:36,desc:"Adds +10 percentage points to tame chance."},
+  {id:"cardCape",cat:"cape",icon:"🃏",name:"Cardseeker Cape",cost:41,desc:"75% higher chance to get pet cards from kills."},
+  {id:"mentorCape",cat:"cape",icon:"⭐",name:"Mentor Cape",cost:45,desc:"Pets earn 50% more XP from kills."},
+  {id:"leatherArmor",cat:"armor",icon:"🟤",name:"Leather Armor",cost:27,desc:"Take 12% less damage."},
+  {id:"ironArmor",cat:"armor",icon:"🛡️",name:"Iron Armor",cost:50,desc:"Take 22% less damage."},
+  {id:"guardianArmor",cat:"armor",icon:"🔰",name:"Guardian Armor",cost:82,desc:"Take 34% less damage."}
 ];
 const RUN_SHOP_BY_ID = Object.fromEntries(RUN_SHOP_ITEMS.map(i=>[i.id,i]));
 function freshRunShopState(){return {purchased:new Set(),hat:"",cape:"",armor:""};}
@@ -14190,6 +14308,42 @@ function petKillXpForAnimal(a){
   const species=PET_KILL_SPECIES_XP[a.type] ?? 1;
   return Math.max(1,Math.round(base*species));
 }
+
+const MAX_WILD_BIG_MOMMAS = 5;
+function wildBigMommaCount(except=null){
+  let n=0;
+  for(const a of animals) if(a && a!==except && !a.dead && !a.owned && a.stage==="bigmomma") n++;
+  return n;
+}
+function growWildAnimalStage(a,next){
+  if(!a || a.dead || a.owned || !next) return false;
+  if(next==="bigmomma" && wildBigMommaCount(a)>=MAX_WILD_BIG_MOMMAS) return false;
+  a.stage=next;
+  a.r=animalRadius(a.type,next);
+  a.maxHp=typeHp(a.type,next);
+  a.hp=a.maxHp;
+  a.speed=animalSpeed(a.type,next,false);
+  a.level=1;
+  a.exp=0;
+  a.abilityCd=0;
+  a.sleeping=false;
+  spark(a.x,a.y,next==="bigmomma"?"#ffcf6e":"#a0e0ff",next==="bigmomma"?30:18,next==="bigmomma"?185:125);
+  floatText(a.x,a.y-a.r-16,stageDisplayName(next)+"!","#ffe49b");
+  return true;
+}
+function giveWildAnimalExp(a,amount){
+  if(!a || a.dead || a.owned || a.stage==="bigmomma") return;
+  amount=Math.max(0,Number(amount)||0);
+  if(amount<=0)return;
+  a.exp=(Number(a.exp)||0)+amount;
+  a.level=Math.max(1,Number(a.level)||1)+1;
+  let next=null;
+  if(a.stage==="baby" && (a.level>=3 || a.exp>=18)) next="adult";
+  else if(a.stage==="adult" && (a.level>=5 || a.exp>=90)) next="boss";
+  else if(a.stage==="boss" && (a.level>=6 || a.exp>=240)) next="superboss";
+  else if(a.stage==="superboss" && (a.level>=7 || a.exp>=650) && wildBigMommaCount(a)<MAX_WILD_BIG_MOMMAS) next="bigmomma";
+  if(next) growWildAnimalStage(a,next);
+}
 function petKillXpForEnemy(en){
   if(!en)return 0;
   if(en.moonMarked)return MOONMARK_BIOMES[en.moonBiome||CURRENT_BIOME_ID]?.xp||320;
@@ -14220,17 +14374,17 @@ function awardPetXpContributors(target,killerPet=null){
   target._petXpContrib=null;
 }
 function petFollowRangeFor(p){
-  // Roaming freedom is driven mainly by actual movement speed.
-  // Fast/light animals are comfortable ranging farther; slow/heavy animals
-  // naturally stay closer. Body size only supplies the minimum personal space.
+  // Roaming radius grows with BOTH age/stage and actual final movement speed.
+  // Babies stay close, while large/fast pets are trusted to range much farther.
   const bodyR=Math.max(10,Number(p?.r)||18);
   const moveSpeed=Math.max(24,Number(p?.speed)||60);
+  const stageRoam={baby:.56,adult:1,boss:1.28,superboss:1.52,bigmomma:1.76}[p?.stage]||1;
   const clingPad=(p?.type === "wolf" || p?.type === "boar") ? 14 : 6;
-  const stop=clamp(PLAYER_R + bodyR*0.70 + 26 + clingPad,64,126);
-  const roamBand=clamp(24 + moveSpeed*0.50,34,128);
+  const stop=clamp(PLAYER_R + bodyR*0.70 + 24 + clingPad,56,148);
+  const roamBand=clamp((22 + moveSpeed*0.46)*stageRoam,24,188);
   const start=stop + roamBand;
-  const run=start + clamp(80 + moveSpeed*0.48,105,190);
-  const sprint=run + clamp(120 + moveSpeed*0.62,145,270);
+  const run=start + clamp((72 + moveSpeed*0.44)*Math.sqrt(stageRoam),88,228);
+  const sprint=run + clamp((108 + moveSpeed*0.56)*Math.sqrt(stageRoam),126,320);
   return {stop,start,run,sprint,wanderMax:start};
 }
 
@@ -14349,6 +14503,10 @@ function animalBodyHitboxes(a) {
       fox:    [[-0.37,0.17],[-0.19,0.25],[0.04,0.30],[0.27,0.26],[0.44,0.21],[0.56,0.16]],
       wolf:   [[-0.36,0.18],[-0.18,0.27],[0.05,0.32],[0.28,0.28],[0.45,0.23],[0.57,0.17]],
       bear:   [[-0.30,0.21],[-0.14,0.32],[0.07,0.38],[0.28,0.34],[0.43,0.27],[0.54,0.20]],
+      // Boar uses a purpose-built invisible body + cropped head profile instead
+      // of the old long generic chain. The final tiny circle is only the visible
+      // snout tip; movement collision drops that tip and keeps body + skull.
+      boar:   [[-0.10,0.34],[0.43,0.27],[0.72,0.13]],
       deer:   [[-0.28,0.13],[-0.09,0.20],[0.12,0.24],[0.33,0.21],[0.49,0.16],[0.61,0.11]]
     }[a.type];
 
@@ -14374,7 +14532,9 @@ function animalBodyHitboxes(a) {
   if (a.type === "snake") {
     parts = [[-1.00,0,0.31],[-0.76,0,0.41],[-0.24,0,0.49],[0.32,0,0.47],[0.80,0,0.41],[1.16,0,0.33],[1.42,0,0.24]];
   } else if (a.type === "boar") {
-    parts = [[-0.74,0,0.53],[-0.48,0,0.73],[0.08,0,0.83],[0.68,0,0.68],[1.08,0,0.50],[1.42,0,0.39],[1.66,0,0.28]];
+    // Boar-only collision: one compact torso, one cropped skull, then a tiny
+    // cosmetic snout tip. The real drawing is untouched.
+    parts = [[-0.10,0,0.62],[0.50,0,0.39],[0.86,0,0.18]];
   } else if (a.type === "saber") {
     parts = [[-0.58,0,0.42],[-0.34,0,0.56],[0.08,0,0.64],[0.48,0,0.53],[0.80,0,0.40],[1.04,0,0.30],[1.22,0,0.21]];
   } else if (a.type === "deer") {
@@ -14854,6 +15014,7 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
     else if (sr < 0.95) stage = "boss";
     else stage = "superboss";
   }
+  if(stage==="bigmomma" && wildBigMommaCount()>=MAX_WILD_BIG_MOMMAS) return null;
 
   const r = animalRadius(type, stage);
   const spawnR = animalSpawnFootprint(type, stage);
@@ -16470,7 +16631,7 @@ function rebuildWildFightGrid() {
   wildFightAnimalGrid = new Map();
   wildFightEnemyGrid = new Map();
   for (const other of animals) {
-    if (!other || other.dead || other.owned || other.enemyOwner || other.stage === "baby") continue;
+    if (!other || other.dead || other.owned || other.enemyOwner) continue;
     const k = wildFightGridKey(other.x, other.y);
     let bucket = wildFightAnimalGrid.get(k);
     if (!bucket) wildFightAnimalGrid.set(k, bucket = []);
@@ -16497,17 +16658,21 @@ function nearbyWildFightCandidates(grid, x, y) {
 }
 
 function chooseWildlifeFightTarget(a) {
-  if (!a || a.dead || a.owned || a.stage === "baby") return null;
+  if (!a || a.dead || a.owned) return null;
   const info = PET_TYPES[a.type] || {};
   const naturallyAggressive = !info.friendly && a.type !== "fox";
-  if (!naturallyAggressive && !a.enraged && !a.desperateAggro && !a.tameFailedAggro) return null;
+  const babyHunter = a.stage === "baby" && !!WILD_PREY[a.type]?.size;
+  // Babies never aggro players just for being nearby, but predator babies may
+  // hunt baby prey species and gain real XP from those kills.
+  if (!babyHunter && !naturallyAggressive && !a.enraged && !a.desperateAggro && !a.tameFailedAggro) return null;
 
   rebuildWildFightGrid();
   let best = null;
   let bestD = 230;
 
-  // Hostile cubes are always valid wildlife opponents.
-  for (const en of nearbyWildFightCandidates(wildFightEnemyGrid, a.x, a.y)) {
+  // Hostile cubes are valid for grown wildlife. Predator babies only hunt
+  // other baby animals that are on their normal prey list.
+  if (!babyHunter) for (const en of nearbyWildFightCandidates(wildFightEnemyGrid, a.x, a.y)) {
     if (!en || en.dead) continue;
     const d = dist(a.x, a.y, en.x, en.y);
     if (d < bestD) {
@@ -16519,7 +16684,8 @@ function chooseWildlifeFightTarget(a) {
   // Nearby wild animals can fight each other too. Avoid babies and animals
   // owned by hostile cubes so we don't accidentally make guard ownership weird.
   for (const other of nearbyWildFightCandidates(wildFightAnimalGrid, a.x, a.y)) {
-    if (!other || other === a || other.dead || other.owned || other.enemyOwner || other.stage === "baby") continue;
+    if (!other || other === a || other.dead || other.owned || other.enemyOwner) continue;
+    if (babyHunter && other.stage !== "baby") continue;
     if (!wildCanPreyOn(a.type, other.type)) continue;
     const d = dist(a.x, a.y, other.x, other.y);
     if (d < bestD) {
@@ -16537,7 +16703,7 @@ function damageTargetFromWild(attacker, target, dmg) {
     hitPlayer(dmg, attacker);
     return true;
   }
-  if (target.owned) dmg = animalDamageTaken(target.type, target.stage, dmg);
+  if (target.type && PET_TYPES[target.type]) dmg = animalDamageTaken(target.type, target.stage, dmg);
   target.hp -= dmg;
   target.flash = 0.12;
   if (target.owned) {
@@ -16553,7 +16719,12 @@ function damageTargetFromWild(attacker, target, dmg) {
     target.fleeUntil = 0;
     target.hostileTarget = attacker;
     target.combat = Math.max(target.combat || 0, 8);
-    if (target.hp <= 0) { setKilledBy(target, attacker); target.dead = true; awardPetXpContributors(target, attacker&&attacker.owned?attacker:null); }
+    if (target.hp <= 0) {
+      setKilledBy(target, attacker);
+      target.dead = true;
+      awardPetXpContributors(target, attacker&&attacker.owned?attacker:null);
+      if (attacker && !attacker.owned) giveWildAnimalExp(attacker, petKillXpForAnimal(target));
+    }
   }
   return true;
 }
@@ -17156,7 +17327,11 @@ function tryTameNearby() {
       best.desperateAggro = false;
       best.fleeUntil = 0;
       best.enraged = false;
-      best.exp = 0; best.level = 1; best.combat = 0; best.atkCd = 0;
+      // Keep XP/level earned while wild. A baby that already hunted prey
+      // reaches Adult sooner after being tamed instead of losing its history.
+      best.exp = Math.max(0, Number(best.exp) || 0);
+      best.level = Math.max(1, Number(best.level) || 1);
+      best.combat = 0; best.atkCd = 0;
       best.speed = upgradedPetSpeed(best.type, best.stage);
       best.maxHp = upgradedPetMaxHp(best.type, best.stage);
       best.hp = best.maxHp;
@@ -17351,22 +17526,29 @@ function animalResourceBlocksPath(a, r, targetX = null, targetY = null) {
   const desired = Number.isFinite(targetX) && Number.isFinite(targetY) ? angTo(a.x,a.y,targetX,targetY) : (Number(a.angle)||0);
   return Math.abs(angDiff(desired, angTo(a.x,a.y,c.x,c.y))) < 0.95;
 }
-function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
-  let best=null,bestScore=Infinity;
-  for (const r of queryStaticNearby("resources", a.x, a.y, Math.max(110,(a.r||18)+90))) {
+function findBlockingResourcesForAnimal(a, targetX = null, targetY = null) {
+  if (!a) return [];
+  const desired=Number.isFinite(targetX)&&Number.isFinite(targetY)?angTo(a.x,a.y,targetX,targetY):(Number(a.angle)||0);
+  const hits=[];
+  for (const r of queryStaticNearby("resources", a.x, a.y, Math.max(128,(a.r||18)+112))) {
     if (!animalResourceBlocksPath(a,r,targetX,targetY)) continue;
     const c=resourceSolidCenter(r), d=dist(a.x,a.y,c.x,c.y);
-    const desired=Number.isFinite(targetX)&&Number.isFinite(targetY)?angTo(a.x,a.y,targetX,targetY):(Number(a.angle)||0);
-    const score=d+Math.abs(angDiff(desired,angTo(a.x,a.y,c.x,c.y)))*35;
-    if(score<bestScore){bestScore=score;best=r;}
+    // Only splash blockers that are actually packed into the animal's immediate
+    // forward path. This lets a stuck animal break a cluster without attacking
+    // unrelated nearby resources.
+    const frontErr=Math.abs(angDiff(desired,angTo(a.x,a.y,c.x,c.y)));
+    const contactReach=Math.max(92,(Number(a.r)||18)*2.45+(Number(r.solidR)||16)+24);
+    if(d>contactReach||frontErr>1.02) continue;
+    hits.push({r,score:d+frontErr*32});
   }
-  return best;
+  hits.sort((x,y)=>x.score-y.score);
+  return hits.map(x=>x.r);
+}
+function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
+  return findBlockingResourcesForAnimal(a,targetX,targetY)[0] || null;
 }
 function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly = false) {
   if (!pet || pet.dead || net.room) return false;
-  // Following stays the movement goal. A physically stuck pet can bite the
-  // blocker while it keeps trying to route around it, but the resource never
-  // replaces the owner as a movement/combat target.
   if (player.riding !== pet && pet.follow && pet.orderMode === "follow") {
     const ownerDistance = dist(pet.x, pet.y, player.x, player.y);
     if (ownerDistance > petFollowRangeFor(pet).sprint + 900) {
@@ -17374,8 +17556,6 @@ function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly
       return false;
     }
   }
-  // Combat/defense always beats chewing a blocker. A resource is only a fallback
-  // obstacle action, never a state that can trap a pet in an attack loop.
   if (combatTargetAlive(pet.forcedTarget) || pet.orderMode === "combat" || (pet.huntTarget && combatTargetAlive(pet.huntTarget.obj))) {
     pet._blockingResourceTarget = null;
     return false;
@@ -17388,12 +17568,23 @@ function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly
   }
   pet._blockingResourceTarget = best || null;
   if (!best) return false;
-  // A resource is never a steering/combat target. Keep the pet's current heading
-  // and bite only because the object is physically blocking its path.
   if ((pet.atkCd||0) <= 0) {
     pet.atkCd = animalAttackCooldown(pet.type,pet.stage,true);
     pet.attackAnim=.22;
+
+    // The closest blocker gets the normal gather/reward hit. Any other resources
+    // physically packed into the same forward obstruction take the same collision
+    // damage, but do not multiply gathering rewards.
     petHitResourceOffline(pet,best,false);
+    const blockers=findBlockingResourcesForAnimal(pet,targetX,targetY);
+    for(const r of blockers){
+      if(!r||r===best||!r.alive) continue;
+      const c=resourceSolidCenter(r);
+      const damage=petResourceDamageAmount(pet,r,false);
+      r.hp=Math.max(0,(Number(r.hp)||1)-damage);r.pulse=1;
+      spark(c.x,c.y,r.type==="rock"?"#a9b3bd":r.type==="bush"?"#d1315c":"#c99a5b",3,48);
+      if(r.hp<=0){r.alive=false;r.gatherCredit=0;r.respawnAt=game.time+rand(12,22);}
+    }
     if (!best.alive) pet._blockingResourceTarget = null;
   }
   return true;
@@ -17431,12 +17622,55 @@ function movePetChaseWithRecovery(pet, target, speed, dt) {
   if (dist(ax, ay, pet.x, pet.y) < Math.max(0.15, expected * 0.12)) pet._combatAvoidSide *= -1;
 }
 
+const WILD_BERRY_EATERS = new Set(["deer","rabbit"]);
+function wildGrazeBerries(a,dt){
+  if(!a || a.dead || a.owned || a.enemyOwner || !WILD_BERRY_EATERS.has(a.type)) return false;
+  if(a.sleeping || combatTargetAlive(a.hostileTarget) || a.enraged || a.tameFailedAggro || a.desperateAggro || (a.fleeUntil && game.time<a.fleeUntil)) {
+    a._berryBushTarget=null;
+    return false;
+  }
+  a._berryHunger=(Number(a._berryHunger)||rand(2,9))-dt;
+  let bush=a._berryBushTarget;
+  if(!bush || !bush.alive || bush.type!=="bush" || dist(a.x,a.y,bush.x,bush.y)>340){
+    a._berryBushTarget=null;
+    if(a._berryHunger>0)return false;
+    let best=null,bestD=300;
+    for(const r of queryStaticNearby("resources",a.x,a.y,320)){
+      if(!r || !r.alive || r.type!=="bush" || (Number(r.hp)||0)<=0)continue;
+      const d=dist(a.x,a.y,r.x,r.y);
+      if(d<bestD){bestD=d;best=r;}
+    }
+    bush=best;
+    a._berryBushTarget=bush||null;
+    if(!bush){a._berryHunger=rand(3,7);return false;}
+  }
+  const contact=Math.max(16,(a.r||18)*.55+(bush.solidR||12)+4);
+  const d=dist(a.x,a.y,bush.x,bush.y);
+  if(d>contact){
+    smoothTurn(a,angTo(a.x,a.y,bush.x,bush.y),dt,3.8);
+    moveFacing(a,(a.speed||60)*.46,dt);
+    resolveAnimalWorld(a);
+    return true;
+  }
+  a._berryEatCd=Math.max(0,(Number(a._berryEatCd)||0)-dt);
+  if(a._berryEatCd<=0){
+    a._berryEatCd=2.2;
+    bush.hp=Math.max(0,(Number(bush.hp)||1)-1);
+    bush.pulse=1;
+    a.hp=Math.min(a.maxHp,a.hp+Math.max(2,a.maxHp*.04));
+    floatText(a.x,a.y-a.r-8,"berries","#d85b83");
+    if(bush.hp<=0){
+      bush.alive=false;bush.gatherCredit=0;bush.respawnAt=game.time+rand(12,22);
+      a._berryBushTarget=null;a._berryHunger=rand(12,22);
+    }else{
+      a._berryHunger=rand(7,14);
+    }
+  }
+  return true;
+}
+
 function wildAttackBlockingResource(a) {
   if (!a || a.dead || net.room) return false;
-
-  // Threats and normal chase behavior outrank resources. If this animal was hit,
-  // is fleeing an attacker, already has a combat target, or is a natural chasing
-  // species with a nearby player, immediately abandon the resource.
   if (combatTargetAlive(a.hostileTarget)) {
     a._blockingResourceTarget = null;
     return false;
@@ -17457,17 +17691,25 @@ function wildAttackBlockingResource(a) {
     return false;
   }
 
-  const r = a._blockingResourceTarget;
-  if (!animalResourceBlocksPath(a,r)) { a._blockingResourceTarget=null; return false; }
-  const c=resourceSolidCenter(r);
-  smoothTurn(a,angTo(a.x,a.y,c.x,c.y),.12,7);
+  const primary=a._blockingResourceTarget;
+  // Wildlife only starts obstacle attacks after movement collision marked a real
+  // blocker. Merely seeing a resource ahead never makes it a target.
+  if(!animalResourceBlocksPath(a,primary)){a._blockingResourceTarget=null;return false;}
+  const blockers=findBlockingResourcesForAnimal(a,null,null);
+  if(!blockers.includes(primary))blockers.unshift(primary);
+
   if ((a.atkCd||0)<=0) {
     a.atkCd=animalAttackCooldown(a.type,a.stage,false);
     a.attackAnim=.22;
-    const damage = petResourceDamageAmount(a, r, false);
-    r.hp=Math.max(0,(Number(r.hp)||1)-damage); r.pulse=1;
-    spark(c.x,c.y,r.type==="rock"?"#a9b3bd":r.type==="bush"?"#d1315c":"#c99a5b",4,55);
-    if(r.hp<=0){r.alive=false;r.gatherCredit=0;r.respawnAt=game.time+rand(12,22);a._blockingResourceTarget=null;}
+    for(const r of blockers){
+      if(!r||!r.alive)continue;
+      const c=resourceSolidCenter(r);
+      const damage = petResourceDamageAmount(a, r, false);
+      r.hp=Math.max(0,(Number(r.hp)||1)-damage); r.pulse=1;
+      spark(c.x,c.y,r.type==="rock"?"#a9b3bd":r.type==="bush"?"#d1315c":"#c99a5b",4,55);
+      if(r.hp<=0){r.alive=false;r.gatherCredit=0;r.respawnAt=game.time+rand(12,22);}
+    }
+    if(!primary.alive)a._blockingResourceTarget=null;
   }
   return true;
 }
@@ -17558,10 +17800,12 @@ function damagePetAbilityTargetOffline(pet,target,isAnimal,rawDamage){
 function petAbilityAreaOffline(pet,x,y,range,rawDamage,opts={}){
   const hits=[];
   const knock=Math.max(0,Number(opts.knock)||0);
+  const pull=Math.max(0,Number(opts.pull)||0);
   for(const en of enemies){
     if(en.dead||dist(x,y,en.x,en.y)>range+(en.r||16)*.25)continue;
     damagePetAbilityTargetOffline(pet,en,false,rawDamage);
     if(knock&&!en.dead){const a=angTo(x,y,en.x,en.y);en.x+=Math.cos(a)*knock;en.y+=Math.sin(a)*knock;resolveEnemyWorld(en);}
+    if(pull&&!en.dead){const a=angTo(en.x,en.y,x,y);en.x+=Math.cos(a)*pull;en.y+=Math.sin(a)*pull;resolveEnemyWorld(en);}
     if(opts.stun)applyOfflineAbilityStun(en,opts.stun);
     if(opts.slowWeak)applyOfflineSlowWeak(en,opts.slowWeak,opts.slowMul||.55,opts.weakMul||.70);
     hits.push({obj:en,isAnimal:false});
@@ -17570,6 +17814,7 @@ function petAbilityAreaOffline(pet,x,y,range,rawDamage,opts={}){
     if(wa.dead||wa.owned||wa===pet||dist(x,y,wa.x,wa.y)>range+(wa.r||18)*.25)continue;
     damagePetAbilityTargetOffline(pet,wa,true,rawDamage);
     if(knock&&!wa.dead){const a=angTo(x,y,wa.x,wa.y),push=knock*animalKnockbackScale(wa);wa.x+=Math.cos(a)*push;wa.y+=Math.sin(a)*push;resolveAnimalWorld(wa);}
+    if(pull&&!wa.dead){const a=angTo(wa.x,wa.y,x,y),drag=pull*animalKnockbackScale(wa);wa.x+=Math.cos(a)*drag;wa.y+=Math.sin(a)*drag;resolveAnimalWorld(wa);}
     if(opts.stun)applyOfflineAbilityStun(wa,opts.stun);
     if(opts.slowWeak)applyOfflineSlowWeak(wa,opts.slowWeak,opts.slowMul||.55,opts.weakMul||.70);
     hits.push({obj:wa,isAnimal:true});
@@ -17655,8 +17900,8 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     petAbilityAreaOffline(pet,px,py,range,dmg,{slowWeak:4,slowMul:.55,weakMul:.68});petDamageResourcesAround(pet,px,py,range,true);
     abilityFx.push({type:"iceRing",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});
   }else if(info.elem==="Water"){
-    const range=petAbilityRangeFor(pet,185,3.65),dmg=stats.damage||16,heal=dmg*.5;
-    petAbilityAreaOffline(pet,px,py,range,dmg,{knock:18});pet.hp=clamp(pet.hp+heal,0,pet.maxHp);floatText(pet.x,pet.y-(pet.r||18)-10,`+${Math.round(heal)}`,"#7ad6ff");
+    const range=petAbilityRangeFor(pet,185,3.65),dmg=stats.damage||16,heal=dmg*.5,pull=Math.min(82,34+(pet.r||18)*.22);
+    petAbilityAreaOffline(pet,px,py,range,dmg,{pull});pet.hp=clamp(pet.hp+heal,0,pet.maxHp);floatText(pet.x,pet.y-(pet.r||18)-10,`+${Math.round(heal)}`,"#7ad6ff");
     petDamageResourcesAround(pet,px,py,range,true);abilityFx.push({type:"whirlpool",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});game.shake=5;
   }else if(info.elem==="Plant"){
     const a=petAbilityAimAngleOffline(pet,560),blast=stats.blast||5,ring=stats.ring||7,range=petAbilityRangeFor(pet,120,2.65),projScale=petProjectileStageSize(pet.stage);
@@ -17821,17 +18066,23 @@ function resolveAnimalWorld(a) {
   }
 }
 
+function wildAbilityUseRange(a){
+  const elem=PET_TYPES[a?.type]?.elem||"";
+  return {Stone:250,Sound:120,Fire:190,Lightning:180,Ice:155,Water:170,Plant:180,Wind:205,Poison:220,Light:175,Earth:170,Combat:280}[elem]||155;
+}
 function wildUseAbility(a) {
   // Wild babies only bite/flee. Baby powers unlock only after the animal is tamed.
   if ((a.abilityCd || 0) > 0 || a.dead || a.sleeping || a.stage === "baby") return false;
   const info = PET_TYPES[a.type];
   const target = wildCombatTarget(a);
-  if (!target) return;
+  if (!target) return false;
+  const px = a.x, py = a.y, tx = target.x, ty = target.y;
+  const dTarget = dist(px, py, tx, ty);
+  if(dTarget>wildAbilityUseRange(a)) return false;
+
   a.abilityCd = Math.max(4.5, info.abilityCd * 0.72);
   sfx.ability();
-  const px = a.x, py = a.y;
-  const tx = target.x, ty = target.y;
-  const dTarget = dist(px, py, tx, ty);
+  const stats=petAbilityStats(a);
   if (info.elem === "Stone") {
     const ws = dogWallStats(a.stage, a.level || 1);
     const wallR = 25;
@@ -17844,8 +18095,8 @@ function wildUseAbility(a) {
     abilityFx.push({ type: "stone", x: wall.x, y: wall.y, life: 0.6 });
   } else if (info.elem === "Sound") {
     abilityFx.push({ type: "sound", x: px, y: py, life: 0.45, r: 0 });
-    if (dTarget < 100) {
-      damageTargetFromWild(a, target, 6);
+    const dmg=stats.damage||6;
+    if (damageTargetFromWild(a, target, dmg)) {
       const ang = angTo(px, py, tx, ty);
       if (target === player) {
         player.x += Math.cos(ang) * 22; player.y += Math.sin(ang) * 22;
@@ -17856,33 +18107,79 @@ function wildUseAbility(a) {
     }
   } else if (info.elem === "Fire") {
     abilityFx.push({ type: "fire", x: px, y: py, life: 1.0, r: 0 });
-    if (dTarget < 85) damageTargetFromWild(a, target, 10);
+    damageTargetFromWild(a, target, stats.damage||10);
   } else if (info.elem === "Lightning") {
     abilityFx.push({ type: "lightning", x: px, y: py, life: 0.4 });
-    if (dTarget < 140) {
-      damageTargetFromWild(a, target, 11);
+    if (damageTargetFromWild(a, target, stats.damage||11)) {
       abilityFx.push({ type: "bolt", x: tx, y: ty, life: 0.25, fromX: px, fromY: py });
+      if(target!==player)applyOfflineAbilityStun(target,Math.min(4,stats.shockStun||stats.stun||2));
     }
   } else if (info.elem === "Ice") {
     abilityFx.push({ type: "ice", x: px, y: py, life: 0.6, r: 0 });
-    if (dTarget < 110) damageTargetFromWild(a, target, 9);
+    if(damageTargetFromWild(a, target, stats.damage||9) && target!==player)applyOfflineSlowWeak(target,3.5,.68,.78);
   } else if (info.elem === "Water") {
-    abilityFx.push({ type: "water", x: px, y: py, life: 0.7, r: 0 });
-    if (dTarget < 120) {
-      damageTargetFromWild(a, target, 10);
-      const ang = angTo(px, py, tx, ty);
-      if (target === player) {
-        player.x += Math.cos(ang) * 28; player.y += Math.sin(ang) * 28;
-      } else {
-        const push=28*animalKnockbackScale(target);
-        target.x += Math.cos(ang) * push; target.y += Math.sin(ang) * push;
-      }
+    // Bear whirlpool: damage + suction + self-heal. Pull the victim toward the
+    // bear instead of knocking it away.
+    abilityFx.push({ type: "water", x: px, y: py, life: 0.9, r: 0 });
+    const waterDmg = stats.damage || 10;
+    if (damageTargetFromWild(a, target, waterDmg)) {
+      const pullAng = angTo(target.x, target.y, px, py);
+      let pull = Math.min(72, 30 + (a.r||18)*0.20);
+      if (target !== player) pull *= animalKnockbackScale(target);
+      target.x = clamp(target.x + Math.cos(pullAng) * pull, 20, WORLD_W - 20);
+      target.y = clamp(target.y + Math.sin(pullAng) * pull, 20, WORLD_H - 20);
+      const heal=Math.max(4,a.maxHp*0.05,waterDmg*0.65);
+      a.hp = Math.min(a.maxHp, a.hp + heal);
+      floatText(a.x,a.y-a.r-10,"+"+Math.round(heal)+" HP","#7be8c4");
     }
   } else if (info.elem === "Plant") {
     abilityFx.push({ type: "plant", x: px, y: py, life: 0.5 });
-    if (dTarget < 100) damageTargetFromWild(a, target, 5);
+    const dmg=(stats.blast||stats.ring||5);
+    if(damageTargetFromWild(a, target, dmg))a.hp=Math.min(a.maxHp,a.hp+Math.max(2,dmg*.35));
+  } else if (info.elem === "Wind") {
+    abilityFx.push({type:"owlWave",x:px,y:py,life:.65,angle:angTo(px,py,tx,ty),r:petAbilityStageSize(a.stage)});
+    const dmg=stats.damage||10;
+    if(damageTargetFromWild(a,target,dmg) && target!==player)applyOfflineAbilityStun(target,stats.stun||2);
+  } else if (info.elem === "Poison") {
+    abilityFx.push({type:"poisonMuzzle",x:px,y:py,life:.55,angle:angTo(px,py,tx,ty)});
+    const dmg=stats.damage||5;
+    // Wild venom uses a heavier impact hit; tamed Vipers retain their full 5s DoT.
+    damageTargetFromWild(a,target,dmg*1.35);
+  } else if (info.elem === "Light") {
+    abilityFx.push({type:"lightRingBurst",x:px,y:py,life:.8,r:petAbilityRangeFor(a,155,3.15)});
+    const dmg=stats.damage||16;
+    if(damageTargetFromWild(a,target,dmg))a.hp=Math.min(a.maxHp,a.hp+dmg*.5);
+  } else if (info.elem === "Earth") {
+    abilityFx.push({type:"earthRingBurst",x:px,y:py,life:.8,r:petAbilityRangeFor(a,145,2.95)});
+    const dmg=stats.damage||20;
+    if(damageTargetFromWild(a,target,dmg)){
+      const ang=angTo(px,py,target.x,target.y);
+      let push=14;if(target!==player)push*=animalKnockbackScale(target);
+      target.x=clamp(target.x+Math.cos(ang)*push,20,WORLD_W-20);
+      target.y=clamp(target.y+Math.sin(ang)*push,20,WORLD_H-20);
+    }
+  } else if (info.elem === "Combat") {
+    // Saber pounce: jump toward the opponent, then land the shock hit. Shock
+    // visuals naturally scale with stage so babies (when tamed) stay smaller.
+    const ang=angTo(px,py,tx,ty),targetR=target===player?PLAYER_R:(target.r||18);
+    const jump=Math.min(185,Math.max(0,dTarget-((a.r||18)+targetR)*.62));
+    a.x=clamp(a.x+Math.cos(ang)*jump,20,WORLD_W-20);
+    a.y=clamp(a.y+Math.sin(ang)*jump,20,WORLD_H-20);
+    a.angle=ang;resolveAnimalWorld(a);
+    abilityFx.push({type:"pounce",fromX:px,fromY:py,targetX:a.x,targetY:a.y,angle:ang,life:.95,shockScale:petAbilityStageSize(a.stage)});
+    if(dist(a.x,a.y,target.x,target.y)<=a.r+targetR+30)damageTargetFromWild(a,target,stats.damage||34);
+    game.shake=Math.max(game.shake||0,Math.min(10,3+petAbilityStageSize(a.stage)*2.2));
   }
   return true;
+}
+
+function wildOpenFightWithAbility(a,target){
+  if(!a || !target || a.stage==="baby" || a.dead) return false;
+  if(a._abilityFightTarget === target) return false;
+  a.abilityCd = 0;
+  const used=!!wildUseAbility(a);
+  if(used)a._abilityFightTarget = target;
+  return used;
 }
 
 function chooseCombatHuntTarget(pet) {
@@ -18070,6 +18367,7 @@ function updateAnimals(dt) {
     if (a.atkCd > 0) a.atkCd -= dt;
     if (a.abilityCd > 0) a.abilityCd -= dt;
     if (a.combat > 0) a.combat -= dt;
+    if ((a.combat||0) <= 0 && !combatTargetAlive(a.hostileTarget)) a._abilityFightTarget = null;
     updateCreatureRecovery(a, dt, Math.max(0.8, a.maxHp * 0.018));
     a.tailPhase = (a.tailPhase || 0) + dt * (2.2 + a.speed * 0.02);
     if ((a._abilityStunT || 0) > 0) { a.attackAnim = 0; resolveAnimalWorld(a); continue; }
@@ -18081,6 +18379,11 @@ function updateAnimals(dt) {
 
     if (updateWildMorningMate(a, dt)) {
       a.x = clamp(a.x, 20, WORLD_W - 20); a.y = clamp(a.y, 20, WORLD_H - 20); resolveAnimalWorld(a);
+      continue;
+    }
+
+    if (wildGrazeBerries(a,dt)) {
+      a.x=clamp(a.x,20,WORLD_W-20);a.y=clamp(a.y,20,WORLD_H-20);resolveAnimalWorld(a);
       continue;
     }
 
@@ -18130,6 +18433,7 @@ function updateAnimals(dt) {
         const dPlayerGuard = dist(a.x,a.y,player.x,player.y);
         const wantsFight = !player.dead && (rider || dPlayerGuard < 300 || en.revengeTarget === player);
         if (wantsFight) {
+          wildOpenFightWithAbility(a,player);
           const face = angTo(a.x,a.y,player.x,player.y);
           smoothTurn(a,face,dt,rider?7.8:6.8);
           const ox=a.x,oy=a.y;
@@ -18185,6 +18489,8 @@ function updateAnimals(dt) {
       const foe = a.hostileTarget;
       a.sleeping = false;
       a.enraged = true;
+      // Non-babies ALWAYS open a new fight with their species ability.
+      wildOpenFightWithAbility(a,foe);
       const foeA = angTo(a.x, a.y, foe.x, foe.y);
       smoothTurn(a, foeA, dt, 5.0);
 
@@ -18294,6 +18600,7 @@ function updateAnimals(dt) {
       smoothTurn(a, a.wanderA, dt, 3.9);
       moveFacing(a, a.speed * 0.46, dt);
     } else if (isHostile && dPlayer < aggroRange && !player.dead) {
+      wildOpenFightWithAbility(a,player);
       const moveA = angTo(a.x, a.y, player.x, player.y);
       smoothTurn(a, moveA, dt, 4.8);
 
@@ -19097,7 +19404,7 @@ function deathCameraFocus() {
 // The reset build keeps the existing game content, but all local movement uses
 // bounded sub-steps so a slow frame can never tunnel a player or owned pet
 // through a tree, rock, chest, gold chunk, or wall.
-const RESET_CORE_BUILD = 561;
+const RESET_CORE_BUILD = 563;
 const RESET_SIM_STEP = 1 / 60;
 const RESET_WORLD_STEP = 1 / 30;
 const RESET_MAX_STEPS_PER_FRAME = 4;
@@ -24626,7 +24933,7 @@ let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
 let hostlServerDayKey = "";
-let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
+let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], selectedTheme:"", achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
 // Single source of truth used by the in-game HUD. Null means guest mode, so the
 // gameplay layer may use its local guest balance.
@@ -24668,7 +24975,7 @@ function setAccountFromServer(p={}) {
   window.__hostlAccountSessionActive = true;
   accountState = {
     loggedIn:true, userId:p.userId||"", username:String(p.username||""), displayName:String(p.displayName||""), email:p.email||"", picture:p.picture||"",
-    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[],
+    goldCubits:Number(p.goldCubits ?? p.cubits)||0, unlockedThemes:Array.isArray(p.unlockedThemes)?p.unlockedThemes:[], selectedTheme:String(p.selectedTheme||""),
     achievements:(p.achievements && typeof p.achievements==="object") ? p.achievements : {},
     speciesCards:(p.speciesCards && typeof p.speciesCards==="object") ? p.speciesCards : {},
     ownedStarters:(p.ownedStarters&&typeof p.ownedStarters==="object")?p.ownedStarters:{}, petStages:(p.petStages&&typeof p.petStages==="object")?p.petStages:{},
@@ -24684,8 +24991,19 @@ function setAccountFromServer(p={}) {
   // Push the server balance into gameplay immediately, before any HUD/home redraw can
   // render the guest fallback value.
   try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
-  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  window.__hostlThemeAccountState = {loggedIn:true,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0,selectedTheme:accountState.selectedTheme||""};
   try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
+  try {
+    if (accountState.selectedTheme && HOME_THEMES?.[accountState.selectedTheme]) {
+      applyHomeTheme(accountState.selectedTheme,false);
+      localStorage.setItem(HOME_THEME_STORAGE_KEY, accountState.selectedTheme);
+    } else if (accountState.loggedIn && HOME_THEMES?.[currentHomeTheme]) {
+      // Migrate older accounts that predate server-side theme selection: keep
+      // the player's already-selected browser theme if this account can use it.
+      accountState.selectedTheme=currentHomeTheme;
+      setTimeout(()=>{ try{ window.__hostlSaveSelectedTheme?.(currentHomeTheme); }catch(_){} },0);
+    }
+  } catch (_) {}
   try {
     if (!window.__hostlUsernameDirty) {
       meta.username=accountState.username||meta.username||"Cube";
@@ -24708,6 +25026,16 @@ function accountAuthHeaders() {
 }
 
 window.__hostlOpenAccountForTheme = function(){ try{ openAccountModal(); }catch(_){ document.getElementById("accountBtn")?.click(); } };
+window.__hostlSaveSelectedTheme = async function(themeId){
+  themeId=String(themeId||"");
+  if(!HOME_THEMES?.[themeId]) return;
+  accountState.selectedTheme=themeId;
+  if(!accountState.loggedIn || !hostlSessionToken) return;
+  try{
+    const r=await fetch("/api/account",{method:"PUT",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({selectedTheme:themeId})});
+    if(r.ok){ const d=await r.json().catch(()=>({})); if(d?.account?.recoveryToken) rememberAccountRecoveryToken(d.account.recoveryToken); if(d?.account?.selectedTheme) accountState.selectedTheme=String(d.account.selectedTheme); }
+  }catch(_){}
+};
 window.__hostlBuyTheme = async function(themeId, shownPrice){
   if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
   try{
@@ -24738,7 +25066,7 @@ async function pushAccountProfileNow() {
       body:JSON.stringify({
         // Username and Display Name are saved only by their dedicated profile editors.
         // Background Cubit/theme saves must never overwrite a name the player just chose.
-        title:accountState.title||"", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
+        title:accountState.title||"", selectedTheme:accountState.selectedTheme||currentHomeTheme||"forestGold", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
         unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
         achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
         lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
@@ -24817,7 +25145,7 @@ async function restoreAccountSession() {
   } catch (_) {
     hostlSessionToken="";
     window.__hostlAccountSessionActive = false;
-    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+    accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],selectedTheme:"",achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
     window.__hostlThemeAccountState={loggedIn:false,unlockedThemes:[],goldCubits:0};
     try { window.__hostlRefreshThemeAccess?.(); } catch(_) {}
     // Guest mode has its own clean starting balance and must never inherit account Gold Cubits.
@@ -24831,7 +25159,7 @@ function claimDailyCubits() {
   return false;
 }
 function syncAccountUi(msg="") {
-  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0};
+  window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0,selectedTheme:accountState.selectedTheme||""};
   try{ buildHomeThemeGrid(); }catch(_){}
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
@@ -24921,17 +25249,17 @@ function selectShopPage(page) {
 
 
 const HOSTL_MATERIALS = {
-  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
-  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
-  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
-  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
-  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
-  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
-  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
-  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
-  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
-  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
-  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
+  leather:{name:"Leather",price:600,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
+  resin:{name:"Hard Resin",price:725,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
+  swiftFiber:{name:"Swift Fiber",price:1450,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
+  ironBuckle:{name:"Iron Buckle",price:1900,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
+  ironPlate:{name:"Iron Plate",price:3800,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
+  animalNotes:{name:"Animal Field Notes",price:3250,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
+  toolKit:{name:"Fine Tool Kit",price:8100,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
+  beastBook:{name:"Beast Language Book",price:10800,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
+  predatorStudy:{name:"Predator Study Kit",price:9500,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
+  sharpFang:{name:"Sharpened Fang",price:25000,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
+  apexScale:{name:"Apex Scale",price:67500,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
 };
 const HOSTL_BUILD_RECIPES = {
   speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
@@ -25253,7 +25581,7 @@ function logoutAccount(showMessage=true) {
   try { fetch("/auth/logout", {method:"POST", headers:accountAuthHeaders(), credentials:"same-origin", keepalive:true}); } catch (_) {}
   hostlSessionToken="";
   window.__hostlAccountSessionActive = false;
-  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
+  accountState = { loggedIn:false,userId:"",username:"",displayName:"",email:"",picture:"",goldCubits:0,unlockedThemes:[],selectedTheme:"",achievements:{},speciesCards:{},ownedStarters:{},petStages:{},petStatUpgrades:{},starterPetType:"",starterPetName:"",starterPetGender:"Male",materials:{},craftedStarters:[],learnedSkills:[],title:"",unlockedTitles:[],testerRank:0,ownerRank:0,starterPetEntitlements:[],starterPetEntitlement:null,lastDailyCubits:"",lastDailyChest:"",createdAt:"",friendCount:0 };
   try { window.__hostlSetGameGoldCubits?.(5); saveMeta(); } catch (_) {}
   saveAccountSession();
   try { google?.accounts?.id?.disableAutoSelect?.(); } catch (_) {}
@@ -25682,9 +26010,9 @@ syncAchievementAccountBridge();
       </div>
 
       <div class="chest-card">
-        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Gold Cubits</span></div>
+        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,100 Gold Cubits</span></div>
         <p class="muted">A Gold Cubit chest with Gold Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
-        <button class="account-btn cubitChestBtn" data-cost="1200" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,200</button>
+        <button class="account-btn cubitChestBtn" data-cost="1100" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,100</button>
       </div>
 
       <div id="chestResult" class="chest-card" style="display:none">

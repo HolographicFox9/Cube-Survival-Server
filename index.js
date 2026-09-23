@@ -195,17 +195,17 @@ function repairSpecialPromoEntitlements(a) {
 const MATERIAL_CATALOG = {
   // Prices are balanced against normal high-skill play (~100–150 Gold Cubits/minute once waves are active).
   // Drops/chests are intentionally the efficient route; buying is the guaranteed route.
-  leather:{name:"Leather",price:650,rarity:"Common"},
-  resin:{name:"Hard Resin",price:800,rarity:"Common"},
-  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon"},
-  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon"},
-  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare"},
-  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare"},
-  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic"},
-  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic"},
-  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic"},
-  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary"},
-  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical"}
+  leather:{name:"Leather",price:600,rarity:"Common"},
+  resin:{name:"Hard Resin",price:725,rarity:"Common"},
+  swiftFiber:{name:"Swift Fiber",price:1450,rarity:"Uncommon"},
+  ironBuckle:{name:"Iron Buckle",price:1900,rarity:"Uncommon"},
+  ironPlate:{name:"Iron Plate",price:3800,rarity:"Rare"},
+  animalNotes:{name:"Animal Field Notes",price:3250,rarity:"Rare"},
+  toolKit:{name:"Fine Tool Kit",price:8100,rarity:"Epic"},
+  beastBook:{name:"Beast Language Book",price:10800,rarity:"Epic"},
+  predatorStudy:{name:"Predator Study Kit",price:9500,rarity:"Epic"},
+  sharpFang:{name:"Sharpened Fang",price:25000,rarity:"Legendary"},
+  apexScale:{name:"Apex Scale",price:67500,rarity:"Mythical"}
 };
 const BUILD_RECIPES = {
   speedyBoots:{chance:.85,ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
@@ -240,12 +240,12 @@ const THEME_COOL=new Set(["arcticPulse","chromeWave","nightDrive","toxicReactor"
 const THEME_CUTE=new Set(["strawberryMilk","peachBunny","bubblegumSky","honeyBee","cozyPlush","rabbitMeadow","blossomCandy","cottonCandy","candyComet","roseQuartz","pumpkinMoon"]);
 const THEME_RELAX=new Set(["sakuraBreeze","lavenderDream","rainyWindow","quietMeadow","deerGrove","owlNight","beardedDunes","moonPetal","kemonoCamp","autumnHearth","midnightGarden","goldenPrairie"]);
 function themeGoldPrice(id){
-  if(THEME_ELEMENT.has(id))return 6500;
-  if(THEME_EPIC.has(id))return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id)?28000:20000;
-  if(THEME_COOL.has(id))return ["glitch","hologram","hacker","computerVirus"].includes(id)?16000:11000;
-  if(THEME_CUTE.has(id))return 8500;
-  if(THEME_RELAX.has(id))return 9500;
-  return 12000;
+  if(THEME_ELEMENT.has(id))return 5900;
+  if(THEME_EPIC.has(id))return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id)?25200:18000;
+  if(THEME_COOL.has(id))return ["glitch","hologram","hacker","computerVirus"].includes(id)?14400:9900;
+  if(THEME_CUTE.has(id))return 7650;
+  if(THEME_RELAX.has(id))return 8550;
+  return 10800;
 }
 function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_GOLD.has(id);}
 function accountCanUseTheme(a,id){return isKnownTheme(id) && (THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||(Array.isArray(a?.unlockedThemes)&&a.unlockedThemes.includes(id)));}
@@ -680,13 +680,13 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 566, gameBuild: 638, rulesVersion: "597", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 567, gameBuild: 639, rulesVersion: "598", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 566, gameBuild: 638 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 567, gameBuild: 639 });
 });
 
 app.get("/auth/config", (_req, res) => {
@@ -923,7 +923,7 @@ app.post("/api/themes/ad-unlock", requireAccount, async (req,res)=>{
 app.post("/api/open-chest", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); if(!a.speciesCards||typeof a.speciesCards!=="object")a.speciesCards={}; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const kind=safeText(req.body?.kind,20).toLowerCase(); const daily=kind==="daily"; const forest=kind==="forest"; if(!daily&&!forest)return res.status(400).json({ok:false,error:"unknown_chest"});
-  const day=new Date().toISOString().slice(0,10); const cost=forest?1200:0; if(daily&&a.lastDailyChest===day)return res.status(409).json({ok:false,error:"already_claimed",account:publicAccount(a)});
+  const day=new Date().toISOString().slice(0,10); const cost=forest?1100:0; if(daily&&a.lastDailyChest===day)return res.status(409).json({ok:false,error:"already_claimed",account:publicAccount(a)});
   if(ensureGoldCubits(a)<cost)return res.status(409).json({ok:false,error:"not_enough_cubits",cost,account:publicAccount(a)}); if(cost)setGoldCubits(a,ensureGoldCubits(a)-cost);
   const rewards=[]; const rand=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
   const goldCubits=daily?rand(18,45):rand(260,620); addGoldCubits(a,goldCubits); rewards.push(`+${goldCubits} Gold Cubits`);
