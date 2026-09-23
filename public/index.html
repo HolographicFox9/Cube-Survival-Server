@@ -5581,7 +5581,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "597";
+const CUBE_SHARED_RULES_VERSION = "598";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -7390,12 +7390,12 @@ function buildHomeThemeGrid(force=false) {
   const owned = new Set(Array.isArray(account.unlockedThemes) ? account.unlockedThemes : []);
   const categoryOf = id => guestFree.has(id) ? "guest" : accountFree.has(id) ? "account" : adThemes.has(id) ? "ad" : goldThemes.has(id) ? "gold" : "gold";
   const priceOf = id => {
-    if (elementThemeOrder.includes(id)) return 6500;
-    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 28000 : 20000;
-    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 16000 : 11000;
-    if (cuteThemeOrder.includes(id)) return 8500;
-    if (relaxingThemeOrder.includes(id)) return 9500;
-    return 12000;
+    if (elementThemeOrder.includes(id)) return 1800;
+    if (epicThemeOrder.includes(id)) return ["bloodMoon","voidObsidian","goldenEclipse"].includes(id) ? 7000 : 5000;
+    if (coolThemeOrder.includes(id)) return ["glitch","hologram","hacker","computerVirus"].includes(id) ? 4200 : 3000;
+    if (cuteThemeOrder.includes(id)) return 2200;
+    if (relaxingThemeOrder.includes(id)) return 2400;
+    return 3000;
   };
   const isUnlocked = id => guestFree.has(id) || (account.loggedIn && accountFree.has(id)) || owned.has(id);
 
@@ -7574,12 +7574,12 @@ const ANIMAL_BALANCE = {
   dragon: { hpMul:1.05, damageTaken:0.93, attack:6.2 },
   fox:    { hpMul:0.92, damageTaken:1.05, attack:8.5 },
   wolf:   { hpMul:1.20, damageTaken:0.82, attack:9.5 },
-  bear:   { hpMul:1.45, damageTaken:0.72, attack:8.5 },
+  bear:   { hpMul:1.78, damageTaken:0.64, attack:8.5 },
   rabbit: { hpMul:0.72, damageTaken:1.15, attack:4.25 },
   owl:    { hpMul:0.88, damageTaken:1.02, attack:6.0 },
   snake:  { hpMul:0.84, damageTaken:1.10, attack:9.0 },
   deer:   { hpMul:1.08, damageTaken:0.94, attack:6.0 },
-  boar:   { hpMul:1.30, damageTaken:0.80, attack:9.0 },
+  boar:   { hpMul:1.62, damageTaken:0.70, attack:9.0 },
   saber:  { hpMul:1.00, babyHpMul:1.78, damageTaken:0.98, attack:12.0 },
 };
 
@@ -7640,7 +7640,8 @@ function animalDamageTaken(type, stage, rawDamage) {
   if (raw <= 0) return 0;
   const b = animalBalance(type);
   const stageMul = ANIMAL_STAGE_DAMAGE_TAKEN[stage] ?? 1;
-  return Math.max(0.1, raw * b.damageTaken * stageMul);
+  const speciesStage = stage === "bigmomma" && type === "bear" ? 0.72 : stage === "bigmomma" && type === "boar" ? 0.78 : 1;
+  return Math.max(0.1, raw * b.damageTaken * stageMul * speciesStage);
 }
 function dogWallStats(stage, level=1) {
   const lv = Math.max(1, Number(level) || 1);
@@ -14332,18 +14333,13 @@ function awardPetXpContributors(target,killerPet=null){
   target._petXpContrib=null;
 }
 function petFollowRangeFor(p){
-  // Roaming freedom is driven mainly by actual movement speed.
-  // Fast/light animals are comfortable ranging farther; slow/heavy animals
-  // naturally stay closer. Body size only supplies the minimum personal space.
-  const bodyR=Math.max(10,Number(p?.r)||18);
-  const moveSpeed=Math.max(24,Number(p?.speed)||60);
-  const clingPad=(p?.type === "wolf" || p?.type === "boar") ? 14 : 6;
-  const stop=clamp(PLAYER_R + bodyR*0.70 + 26 + clingPad,64,126);
-  const roamBand=clamp(24 + moveSpeed*0.50,34,128);
-  const start=stop + roamBand;
-  const run=start + clamp(80 + moveSpeed*0.48,105,190);
-  const sprint=run + clamp(120 + moveSpeed*0.62,145,270);
-  return {stop,start,run,sprint,wanderMax:start};
+  const bodyR=Math.max(10,Number(p?.r)||18),moveSpeed=Math.max(24,Number(p?.speed)||60);
+  const stageFreedom=({baby:.56,adult:1,boss:1.28,superboss:1.55,bigmomma:1.82})[p?.stage]||1;
+  const clingPad=(p?.type==="wolf"||p?.type==="boar")?14:6;
+  const stop=clamp(PLAYER_R+bodyR*.70+22*stageFreedom+clingPad,54,170);
+  const roamBand=clamp((22+moveSpeed*.50)*stageFreedom,20,205);
+  const start=stop+roamBand,run=start+clamp((70+moveSpeed*.46)*Math.sqrt(stageFreedom),82,245),sprint=run+clamp((105+moveSpeed*.60)*Math.sqrt(stageFreedom),120,330);
+  return{stop,start,run,sprint,wanderMax:start};
 }
 
 const player = {
@@ -14554,6 +14550,21 @@ function animalPhysicalHitboxes(a) {
   // ghosting through it.
   const hits = animalBodyHitboxes(collisionAnimal);
   if (!hits.length) return hits;
+
+  if (collisionAnimal?.type === "boar") {
+    const ang = Number(collisionAnimal.angle) || 0;
+    const r = Math.max(8, Number(collisionAnimal.r) || 18);
+    const body = hits[Math.max(0, Math.min(hits.length - 1, Math.floor((hits.length - 1) * 0.45)))] || hits[0];
+    const skull = hits[Math.max(0, hits.length - 2)] || hits[hits.length - 1] || body;
+    const bodyMul = ({baby:0.43,adult:0.52,boss:0.55,superboss:0.57,bigmomma:0.59})[collisionAnimal.stage] || 0.52;
+    const headMul = ({baby:0.25,adult:0.31,boss:0.30,superboss:0.29,bigmomma:0.28})[collisionAnimal.stage] || 0.31;
+    const cutBack = ({baby:0.16,adult:0.18,boss:0.20,superboss:0.22,bigmomma:0.24})[collisionAnimal.stage] || 0.18;
+    const mountedMul = (typeof player !== "undefined" && player?.riding === a) ? 0.92 : 1;
+    return [
+      { x:body.x, y:body.y, r:Math.max(3, r * bodyMul * mountedMul) },
+      { x:skull.x - Math.cos(ang)*r*cutBack, y:skull.y - Math.sin(ang)*r*cutBack, r:Math.max(2.4, r * headMul * mountedMul) }
+    ];
+  }
 
   // Drop only the final nose/muzzle-tip circle. The circle directly behind it is
   // the solid head/skull zone and is kept at a reduced radius.
@@ -14966,6 +14977,8 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
     else if (sr < 0.95) stage = "boss";
     else stage = "superboss";
   }
+
+  if (stage === "bigmomma" && animals.filter(q => q && !q.dead && !q.owned && q.stage === "bigmomma").length >= 5) stage = "superboss";
 
   const r = animalRadius(type, stage);
   const spawnR = animalSpawnFootprint(type, stage);
@@ -16582,7 +16595,7 @@ function rebuildWildFightGrid() {
   wildFightAnimalGrid = new Map();
   wildFightEnemyGrid = new Map();
   for (const other of animals) {
-    if (!other || other.dead || other.owned || other.enemyOwner || other.stage === "baby") continue;
+    if (!other || other.dead || other.owned || other.enemyOwner) continue;
     const k = wildFightGridKey(other.x, other.y);
     let bucket = wildFightAnimalGrid.get(k);
     if (!bucket) wildFightAnimalGrid.set(k, bucket = []);
@@ -16608,18 +16621,31 @@ function nearbyWildFightCandidates(grid, x, y) {
   return out;
 }
 
+
+function giveWildKillExpOffline(a,victim){
+  if(!a||a.dead||a.owned||!victim)return;
+  const need=({baby:4,adult:65,boss:210,superboss:560})[a.stage];if(!need)return;
+  a.exp=Math.max(0,Number(a.exp)||0)+petKillXpForAnimal(victim);a.level=Math.max(1,Number(a.level)||1)+1;
+  if(a.exp<need)return;
+  let next=({baby:"adult",adult:"boss",boss:"superboss",superboss:"bigmomma"})[a.stage];if(!next)return;
+  if(next==="bigmomma"&&animals.filter(q=>q&&!q.dead&&!q.owned&&q.stage==="bigmomma").length>=5){a.exp=Math.min(a.exp,need-1);return;}
+  a.exp=Math.max(0,a.exp-need);a.stage=next;a.level=1;a.r=animalRadius(a.type,next);a.maxHp=typeHp(a.type,next);a.hp=a.maxHp;a.speed=animalSpeed(a.type,next,false);a.sleeping=false;a.enraged=false;a._abilityFightTarget=null;
+  floatText(a.x,a.y-a.r-18,`${next.toUpperCase()}!`,"#ffe66d");
+}
 function chooseWildlifeFightTarget(a) {
-  if (!a || a.dead || a.owned || a.stage === "baby") return null;
+  if (!a || a.dead || a.owned) return null;
+  const babyHunter = a.stage === "baby";
   const info = PET_TYPES[a.type] || {};
   const naturallyAggressive = !info.friendly && a.type !== "fox";
-  if (!naturallyAggressive && !a.enraged && !a.desperateAggro && !a.tameFailedAggro) return null;
+  if (babyHunter && !(WILD_PREY[a.type]?.size)) return null;
+  if (!babyHunter && !naturallyAggressive && !a.enraged && !a.desperateAggro && !a.tameFailedAggro) return null;
 
   rebuildWildFightGrid();
   let best = null;
   let bestD = 230;
 
-  // Hostile cubes are always valid wildlife opponents.
-  for (const en of nearbyWildFightCandidates(wildFightEnemyGrid, a.x, a.y)) {
+  // Babies hunt only baby prey; grown wildlife may also fight Hostls.
+  for (const en of (babyHunter ? [] : nearbyWildFightCandidates(wildFightEnemyGrid, a.x, a.y))) {
     if (!en || en.dead) continue;
     const d = dist(a.x, a.y, en.x, en.y);
     if (d < bestD) {
@@ -16631,7 +16657,9 @@ function chooseWildlifeFightTarget(a) {
   // Nearby wild animals can fight each other too. Avoid babies and animals
   // owned by hostile cubes so we don't accidentally make guard ownership weird.
   for (const other of nearbyWildFightCandidates(wildFightAnimalGrid, a.x, a.y)) {
-    if (!other || other === a || other.dead || other.owned || other.enemyOwner || other.stage === "baby") continue;
+    if (!other || other === a || other.dead || other.owned || other.enemyOwner) continue;
+    if (babyHunter && other.stage !== "baby") continue;
+    if (!babyHunter && other.stage === "baby") continue;
     if (!wildCanPreyOn(a.type, other.type)) continue;
     const d = dist(a.x, a.y, other.x, other.y);
     if (d < bestD) {
@@ -16649,7 +16677,7 @@ function damageTargetFromWild(attacker, target, dmg) {
     hitPlayer(dmg, attacker);
     return true;
   }
-  if (target.owned) dmg = animalDamageTaken(target.type, target.stage, dmg);
+  if (target.owned || targetIsWildAnimal) dmg = animalDamageTaken(target.type, target.stage, dmg);
   target.hp -= dmg;
   target.flash = 0.12;
   if (target.owned) {
@@ -16665,7 +16693,7 @@ function damageTargetFromWild(attacker, target, dmg) {
     target.fleeUntil = 0;
     target.hostileTarget = attacker;
     target.combat = Math.max(target.combat || 0, 8);
-    if (target.hp <= 0) { setKilledBy(target, attacker); target.dead = true; awardPetXpContributors(target, attacker&&attacker.owned?attacker:null); }
+    if (target.hp <= 0) { setKilledBy(target, attacker); target.dead = true; if(targetIsWildAnimal&&!attacker.owned)giveWildKillExpOffline(attacker,target); awardPetXpContributors(target, attacker&&attacker.owned?attacker:null); }
   }
   return true;
 }
@@ -17463,6 +17491,10 @@ function animalResourceBlocksPath(a, r, targetX = null, targetY = null) {
   const desired = Number.isFinite(targetX) && Number.isFinite(targetY) ? angTo(a.x,a.y,targetX,targetY) : (Number(a.angle)||0);
   return Math.abs(angDiff(desired, angTo(a.x,a.y,c.x,c.y))) < 0.95;
 }
+function blockingResourcesForAnimal(a,targetX=null,targetY=null,limit=6){
+  const out=[];for(const r of queryStaticNearby("resources",a.x,a.y,Math.max(130,(a.r||18)+105))){if(!animalResourceBlocksPath(a,r,targetX,targetY))continue;const c=resourceSolidCenter(r);out.push({r,d:dist(a.x,a.y,c.x,c.y)});}
+  out.sort((x,y)=>x.d-y.d);return out.slice(0,Math.max(1,limit)).map(v=>v.r);
+}
 function findBlockingResourceForAnimal(a, targetX = null, targetY = null) {
   let best=null,bestScore=Infinity;
   for (const r of queryStaticNearby("resources", a.x, a.y, Math.max(110,(a.r||18)+90))) {
@@ -17505,7 +17537,8 @@ function petAttackStuckResource(pet, targetX = null, targetY = null, contactOnly
   if ((pet.atkCd||0) <= 0) {
     pet.atkCd = animalAttackCooldown(pet.type,pet.stage,true);
     pet.attackAnim=.22;
-    petHitResourceOffline(pet,best,false);
+    const blockers=blockingResourcesForAnimal(pet,targetX,targetY,6);if(!blockers.length)blockers.push(best);
+    for(const r of blockers)petHitResourceOffline(pet,r,false);
     if (!best.alive) pet._blockingResourceTarget = null;
   }
   return true;
@@ -17572,14 +17605,12 @@ function wildAttackBlockingResource(a) {
   const r = a._blockingResourceTarget;
   if (!animalResourceBlocksPath(a,r)) { a._blockingResourceTarget=null; return false; }
   const c=resourceSolidCenter(r);
-  smoothTurn(a,angTo(a.x,a.y,c.x,c.y),.12,7);
   if ((a.atkCd||0)<=0) {
     a.atkCd=animalAttackCooldown(a.type,a.stage,false);
     a.attackAnim=.22;
-    const damage = petResourceDamageAmount(a, r, false);
-    r.hp=Math.max(0,(Number(r.hp)||1)-damage); r.pulse=1;
-    spark(c.x,c.y,r.type==="rock"?"#a9b3bd":r.type==="bush"?"#d1315c":"#c99a5b",4,55);
-    if(r.hp<=0){r.alive=false;r.gatherCredit=0;r.respawnAt=game.time+rand(12,22);a._blockingResourceTarget=null;}
+    const blockers=blockingResourcesForAnimal(a,null,null,6);if(!blockers.length)blockers.push(r);
+    for(const br of blockers){const bc=resourceSolidCenter(br),damage=petResourceDamageAmount(a,br,false);br.hp=Math.max(0,(Number(br.hp)||1)-damage);br.pulse=1;spark(bc.x,bc.y,br.type==="rock"?"#a9b3bd":br.type==="bush"?"#d1315c":"#c99a5b",4,55);if(br.hp<=0){br.alive=false;br.gatherCredit=0;br.respawnAt=game.time+rand(12,22);}}
+    if(!r.alive)a._blockingResourceTarget=null;
   }
   return true;
 }
@@ -17669,11 +17700,11 @@ function damagePetAbilityTargetOffline(pet,target,isAnimal,rawDamage){
 }
 function petAbilityAreaOffline(pet,x,y,range,rawDamage,opts={}){
   const hits=[];
-  const knock=Math.max(0,Number(opts.knock)||0);
+  const knock=Math.max(0,Number(opts.knock)||0),pull=Math.max(0,Number(opts.pull)||0);
   for(const en of enemies){
     if(en.dead||dist(x,y,en.x,en.y)>range+(en.r||16)*.25)continue;
     damagePetAbilityTargetOffline(pet,en,false,rawDamage);
-    if(knock&&!en.dead){const a=angTo(x,y,en.x,en.y);en.x+=Math.cos(a)*knock;en.y+=Math.sin(a)*knock;resolveEnemyWorld(en);}
+    if((knock||pull)&&!en.dead){const a=pull?angTo(en.x,en.y,x,y):angTo(x,y,en.x,en.y),force=pull||knock;en.x+=Math.cos(a)*force;en.y+=Math.sin(a)*force;resolveEnemyWorld(en);}
     if(opts.stun)applyOfflineAbilityStun(en,opts.stun);
     if(opts.slowWeak)applyOfflineSlowWeak(en,opts.slowWeak,opts.slowMul||.55,opts.weakMul||.70);
     hits.push({obj:en,isAnimal:false});
@@ -17681,7 +17712,7 @@ function petAbilityAreaOffline(pet,x,y,range,rawDamage,opts={}){
   for(const wa of animals){
     if(wa.dead||wa.owned||wa===pet||dist(x,y,wa.x,wa.y)>range+(wa.r||18)*.25)continue;
     damagePetAbilityTargetOffline(pet,wa,true,rawDamage);
-    if(knock&&!wa.dead){const a=angTo(x,y,wa.x,wa.y),push=knock*animalKnockbackScale(wa);wa.x+=Math.cos(a)*push;wa.y+=Math.sin(a)*push;resolveAnimalWorld(wa);}
+    if((knock||pull)&&!wa.dead){const a=pull?angTo(wa.x,wa.y,x,y):angTo(x,y,wa.x,wa.y),push=(pull||knock)*animalKnockbackScale(wa);wa.x+=Math.cos(a)*push;wa.y+=Math.sin(a)*push;resolveAnimalWorld(wa);}
     if(opts.stun)applyOfflineAbilityStun(wa,opts.stun);
     if(opts.slowWeak)applyOfflineSlowWeak(wa,opts.slowWeak,opts.slowMul||.55,opts.weakMul||.70);
     hits.push({obj:wa,isAnimal:true});
@@ -17767,8 +17798,8 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     petAbilityAreaOffline(pet,px,py,range,dmg,{slowWeak:4,slowMul:.55,weakMul:.68});petDamageResourcesAround(pet,px,py,range,true);
     abilityFx.push({type:"iceRing",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});
   }else if(info.elem==="Water"){
-    const range=petAbilityRangeFor(pet,185,3.65),dmg=stats.damage||16,heal=dmg*.5;
-    petAbilityAreaOffline(pet,px,py,range,dmg,{knock:18});pet.hp=clamp(pet.hp+heal,0,pet.maxHp);floatText(pet.x,pet.y-(pet.r||18)-10,`+${Math.round(heal)}`,"#7ad6ff");
+    const range=petAbilityRangeFor(pet,185,3.65),dmg=stats.damage||16;
+    const whirlHits=petAbilityAreaOffline(pet,px,py,range,dmg,{pull:46}),heal=dmg*.45*Math.max(1,Math.min(5,whirlHits.length));pet.hp=clamp(pet.hp+heal,0,pet.maxHp);floatText(pet.x,pet.y-(pet.r||18)-10,`+${Math.round(heal)}`,"#7ad6ff");
     petDamageResourcesAround(pet,px,py,range,true);abilityFx.push({type:"whirlpool",x:px,y:py,life:7,maxLife:7,r:range,baseR:range,petR:pet.r,anchorPet:pet,persistentRing:true});game.shake=5;
   }else if(info.elem==="Plant"){
     const a=petAbilityAimAngleOffline(pet,560),blast=stats.blast||5,ring=stats.ring||7,range=petAbilityRangeFor(pet,120,2.65),projScale=petProjectileStageSize(pet.stage);
@@ -17933,6 +17964,14 @@ function resolveAnimalWorld(a) {
   }
 }
 
+
+function tryWildEatBerryOffline(a,dt){
+  if(!a||a.dead||a.owned||a.sleeping||a.enraged||(a.combat||0)>0||combatTargetAlive(a.hostileTarget)||(a.type!=="deer"&&a.type!=="rabbit"))return false;
+  if((Number(a._berryCooldownUntil)||0)>game.time)return false;
+  let b=a._berryTarget;if(!b||!b.alive||b.type!=="bush"||dist(a.x,a.y,b.x,b.y)>430){b=null;for(const q of queryStaticNearby("resources",a.x,a.y,320+(a.speed||60)*.8)){if(!q.alive||q.type!=="bush")continue;if(!b||dist(a.x,a.y,q.x,q.y)<dist(a.x,a.y,b.x,b.y))b=q;}a._berryTarget=b;}
+  if(!b)return false;const c=resourceSolidCenter(b),d=dist(a.x,a.y,c.x,c.y);if(d>(a.r||18)+(b.solidR||12)+8){smoothTurn(a,angTo(a.x,a.y,c.x,c.y),dt,3.6);a.x+=Math.cos(a.angle)*(a.speed||60)*.48*dt;a.y+=Math.sin(a.angle)*(a.speed||60)*.48*dt;return true;}
+  b.hp=Math.max(0,(b.hp||1)-Math.max(.25,(b.maxHp||8)*.035));b.pulse=1;a.hp=Math.min(a.maxHp,a.hp+a.maxHp*.06);a._berryCooldownUntil=game.time+rand(8,15);a._berryTarget=null;if(b.hp<=0){b.alive=false;b.respawnAt=game.time+rand(12,22);}return true;
+}
 function wildUseAbility(a) {
   // Wild babies only bite/flee. Baby powers unlock only after the animal is tamed.
   if ((a.abilityCd || 0) > 0 || a.dead || a.sleeping || a.stage === "baby") return false;
@@ -17981,13 +18020,14 @@ function wildUseAbility(a) {
   } else if (info.elem === "Water") {
     abilityFx.push({ type: "water", x: px, y: py, life: 0.7, r: 0 });
     if (dTarget < 120) {
-      damageTargetFromWild(a, target, 10);
-      const ang = angTo(px, py, tx, ty);
+      const whirlDmg = petAbilityStats(a).damage || 10;
+      if (damageTargetFromWild(a, target, whirlDmg)) a.hp = clamp(a.hp + whirlDmg * 0.50, 0, a.maxHp);
+      const ang = angTo(tx, ty, px, py);
       if (target === player) {
-        player.x += Math.cos(ang) * 28; player.y += Math.sin(ang) * 28;
+        player.x += Math.cos(ang) * 42; player.y += Math.sin(ang) * 42;
       } else {
-        const push=28*animalKnockbackScale(target);
-        target.x += Math.cos(ang) * push; target.y += Math.sin(ang) * push;
+        const pull=42*animalKnockbackScale(target);
+        target.x += Math.cos(ang) * pull; target.y += Math.sin(ang) * pull;
       }
     }
   } else if (info.elem === "Plant") {
@@ -18186,10 +18226,8 @@ function updateAnimals(dt) {
     a.tailPhase = (a.tailPhase || 0) + dt * (2.2 + a.speed * 0.02);
     if ((a._abilityStunT || 0) > 0) { a.attackAnim = 0; resolveAnimalWorld(a); continue; }
 
-    if (wildAttackBlockingResource(a)) {
-      resolveAnimalWorld(a);
-      continue;
-    }
+    if (wildAttackBlockingResource(a)) { resolveAnimalWorld(a); continue; }
+    if (tryWildEatBerryOffline(a,dt)) { resolveAnimalWorld(a); continue; }
 
     if (updateWildMorningMate(a, dt)) {
       a.x = clamp(a.x, 20, WORLD_W - 20); a.y = clamp(a.y, 20, WORLD_H - 20); resolveAnimalWorld(a);
@@ -18317,7 +18355,8 @@ function updateAnimals(dt) {
         }
       }
 
-      if (a.stage !== "baby" && a.abilityCd <= 0 && dist(a.x, a.y, foe.x, foe.y) < 150) wildUseAbility(a);
+      if (a.stage !== "baby" && dist(a.x,a.y,foe.x,foe.y)<150 && a._abilityFightTarget !== foe) { a._abilityFightTarget=foe; a.abilityCd=0; wildUseAbility(a); }
+      else if (a.stage !== "baby" && a.abilityCd <= 0 && dist(a.x, a.y, foe.x, foe.y) < 150) wildUseAbility(a);
       if (wildAttackConnects(a, foe) && a.atkCd <= 0) {
         // Keep wildlife-vs-wildlife bites real: this damage path accepts animals.
         const stageDmg = typeDmg(a.type, a.stage) * (a._abilityWeakMul || 1);
@@ -18417,6 +18456,12 @@ function updateAnimals(dt) {
       resolveAnimalWorld(a);
       carryPlayerWithOfflineWildMovement(a, oldX, oldY);
 
+      // Grown wildlife opens every new fight with its species ability before its first bite.
+      const abilityTarget = wildCombatTarget(a);
+      if(!abilityTarget && (a.combat||0)<=0) a._abilityFightTarget=null;
+      if (a.stage !== "baby" && abilityTarget && dist(a.x,a.y,abilityTarget.x,abilityTarget.y)<150 && a._abilityFightTarget !== abilityTarget) { a._abilityFightTarget=abilityTarget; a.abilityCd=0; wildUseAbility(a); }
+      else if (a.stage !== "baby" && a.abilityCd <= 0 && abilityTarget && dist(a.x, a.y, abilityTarget.x, abilityTarget.y) < 150) wildUseAbility(a);
+
       const headOnPlayer = wildAttackConnects(a, player);
       if (headOnPlayer && a.atkCd <= 0) {
         const stageDmg = typeDmg(a.type, a.stage) * (a._abilityWeakMul || 1);
@@ -18427,9 +18472,6 @@ function updateAnimals(dt) {
         a.flash = 0.1;
         spark(player.x, player.y, "#e0563f", 6, 70);
       }
-      // Wild powers use the same real combat target as bites.
-      const abilityTarget = wildCombatTarget(a);
-      if (a.stage !== "baby" && a.abilityCd <= 0 && abilityTarget && dist(a.x, a.y, abilityTarget.x, abilityTarget.y) < 150) wildUseAbility(a);
     } else if (!isHostile && isFriendly && dPlayer < 300 && dPlayer > 45 && !player.dead) {
       a.wanderT -= dt;
       if (a.wanderT <= 0) {
@@ -18653,7 +18695,11 @@ function updateAnimals(dt) {
       }
 
       if (p.followReturning) {
-        const targetAngle = angTo(p.x, p.y, player.x, player.y);
+        if (!Number.isFinite(p._returnSide)) { const key=String(p.id||p.netId||p.type||"pet"); p._returnSide=(key.length&1)?1:-1; }
+        const ownerHeading=ownerMoveSpeed>2.5?Math.atan2(ownerMoveVY,ownerMoveVX):(player.angle||0);
+        const returnOffset=followRange.stop+Math.max(12,(p.r||18)*.35),returnA=ownerHeading+Math.PI+p._returnSide*.58;
+        const returnPoint=safePetFollowPoint(p,player.x+Math.cos(returnA)*returnOffset,player.y+Math.sin(returnA)*returnOffset);
+        const targetAngle = angTo(p.x, p.y, returnPoint.x, returnPoint.y);
         const turnRate = ownerDistance >= followRange.sprint ? 6.4 : ownerDistance >= followRange.run ? 5.8 : 4.8;
         smoothTurn(p, targetAngle, dt, turnRate);
 
@@ -18685,7 +18731,7 @@ function updateAnimals(dt) {
                 const key = String(p.id || p.netId || p.type || "pet");
                 p._followAvoidSide = (key.length & 1) ? 1 : -1;
               }
-              const direct = angTo(p.x, p.y, player.x, player.y);
+              const direct = angTo(p.x, p.y, returnPoint.x, returnPoint.y);
               p.angle = direct + p._followAvoidSide * 0.72;
               const sx = p.x, sy = p.y;
               moveOwnedPetSwept(p, followSpeed * 0.88, dt);
@@ -25054,17 +25100,17 @@ function selectShopPage(page) {
 
 
 const HOSTL_MATERIALS = {
-  leather:{name:"Leather",price:650,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
-  resin:{name:"Hard Resin",price:800,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
-  swiftFiber:{name:"Swift Fiber",price:1600,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
-  ironBuckle:{name:"Iron Buckle",price:2100,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
-  ironPlate:{name:"Iron Plate",price:4200,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
-  animalNotes:{name:"Animal Field Notes",price:3600,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
-  toolKit:{name:"Fine Tool Kit",price:9000,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
-  beastBook:{name:"Beast Language Book",price:12000,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
-  predatorStudy:{name:"Predator Study Kit",price:10500,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
-  sharpFang:{name:"Sharpened Fang",price:28000,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
-  apexScale:{name:"Apex Scale",price:75000,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
+  leather:{name:"Leather",price:150,rarity:"Common",desc:"Basic hide used in straps, wraps, saddles, and equipment."},
+  resin:{name:"Hard Resin",price:180,rarity:"Common",desc:"Strong natural binder used to reinforce constructed gear."},
+  swiftFiber:{name:"Swift Fiber",price:300,rarity:"Uncommon",desc:"Tough light fiber used where flexibility and speed matter."},
+  ironBuckle:{name:"Iron Buckle",price:400,rarity:"Uncommon",desc:"Reliable fastening hardware for wearable equipment."},
+  ironPlate:{name:"Iron Plate",price:650,rarity:"Rare",desc:"Heavy protective plate used in defensive builds."},
+  animalNotes:{name:"Animal Field Notes",price:550,rarity:"Rare",desc:"Detailed observations needed for animal-related skills."},
+  toolKit:{name:"Fine Tool Kit",price:1100,rarity:"Epic",desc:"Precision tools needed for harder permanent builds."},
+  beastBook:{name:"Beast Language Book",price:1300,rarity:"Epic",desc:"A specialized training book used to learn animal behavior."},
+  predatorStudy:{name:"Predator Study Kit",price:1200,rarity:"Epic",desc:"Tracks, bite measurements, and predator behavior records."},
+  sharpFang:{name:"Sharpened Fang",price:2500,rarity:"Legendary",desc:"A rare trophy component. Super Boss Snakes can drop 1–2, or it can appear in the rotating shop."},
+  apexScale:{name:"Apex Scale",price:6500,rarity:"Mythical",desc:"An extremely rare dragon scale. It can drop in dangerous gameplay, chests, or occasionally appear in the shop."}
 };
 const HOSTL_BUILD_RECIPES = {
   speedyBoots:{name:"Speedy Boots",chance:.85,desc:"Permanent starter equipment: move 18% faster on foot.",ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
@@ -25817,7 +25863,7 @@ syncAchievementAccountBridge();
       <div class="chest-card">
         <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Gold Cubits</span></div>
         <p class="muted">A Gold Cubit chest with Gold Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
-        <button class="account-btn cubitChestBtn" data-cost="1200" data-kind="forest" data-name="Forest Chest" type="button">Buy for 1,200</button>
+        <button class="account-btn cubitChestBtn" data-cost="600" data-kind="forest" data-name="Forest Chest" type="button">Buy for 600</button>
       </div>
 
       <div id="chestResult" class="chest-card" style="display:none">
