@@ -1,58 +1,77 @@
-HOSTL — FULL RENDER PROJECT — SERVER 498 / GAME 570 / RULES 570
+HOSTL — FULL RENDER PROJECT — SERVER 569 / GAME 641 / RULES 600
 
-CURRENT GAME 557 PET TARGETING / GENDER / ANTI-STUCK PASS
+This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
-Gameplay fixes:
-- Ridden pets keep their normal movement animation, tail/body motion, and attack/head animation.
-- Mounted movement steers toward the pressed arrow/joystick direction while actual travel stays along the animal's current facing direction during the turn.
-- While mounted, incoming damage is absorbed by the mount first. The same hit does not spill into the rider if the mount is defeated.
-- Eating a berry while mounted heals the ridden pet instead of the rider.
-- Pet cards now show Species + Stage + Gender, while world labels keep stage/gender for pets and wildlife.
-- Wildlife uses species abilities more deliberately while fighting. Wild babies never cast powers; tamed baby pets remain allowed to use pet powers.
-- Animals that become physically stuck on trees/rocks/logs/bushes remember the blocker, bite it with real head attack animation, and continue until it breaks or stops blocking their path.
+BUILD CONTENTS
+- public/index.html      Game 641 browser client
+- WorldRoom.js          Server 569 Colyseus multiplayer room
+- index.js              Express + account/economy/auth API + Colyseus launcher
+- package.json          Node start/dependency configuration
+- render.yaml           Free/test Render web-service configuration
+- render-persistent-example.yaml  Optional paid persistent-disk Blueprint example
+- PERSISTENT_ACCOUNT_STORAGE.txt
+- REWARDED_AD_SETUP.txt
 
-Collision / bug fixes:
-- Riding uses one consistent animal body instead of resolving both mount collision and a second player-circle collision.
-- Mounted animal hitboxes use the real multi-circle body with a small 8% movement-only forgiveness trim to reduce snagging.
-- Mounted creature contact is a smooth two-way slide rather than treating the mount as an immovable anchor.
-- Client and server mounted separation math now match to reduce multiplayer correction jitter.
-- Fixed log collision normals so a head/shoulder contact pushes from the exact contacting body circle instead of snapping from the animal center.
-- Hostl-vs-animal collision now uses tuned physical movement geometry rather than full combat/snout geometry.
-- Existing tight Boar, Wolf, Bear, Dog, Viper, Deer, and Saber collision tuning remains intact; bite/damage reach was not enlarged.
+SERVER 569 / GAME 641 SKILL + ART STYLE PASS
+- Player Skill XP is now always visible directly above the hotbar instead of living in the crafting menu.
+- The Skill bar fills left-to-right with a lighter fill and reacts immediately whenever validated XP is earned.
+- Skill can grow from combat hits and kills, resource/chest hits, taming, successful breeding, chest completion,
+  and other validated survival actions. Multiplayer XP is authoritative on the server.
+- Skill has no five-level cap. At Skill 10, 20, 30, 40, and every 10 levels after that, choose one stackable
+  run boost: +8% movement speed, +8% survivor melee/bow damage, or 8% less incoming damage.
+- Existing crafting upgrades now unlock from the visible Skill level instead of using a second hidden crafting XP track.
+- Multiplayer movement, damage, and defense validation use the same Skill boost ranks as the browser client.
+- Trees, rocks, logs, bushes, gold, walls, towers, chests, the player, Hostls, the gameplay HUD, and gameplay menus
+  now use stronger near-black ink outlines, flatter colors, and simple cel-shaded highlights to match the pet art language.
 
-Performance cleanup:
-- Browser download and Render public/index.html are kept byte-for-byte identical for each update so online and offline use the same client code.
-- Multiplayer player reconciliation no longer pulls an actively moving player backward toward a slightly stale server snapshot; lateral/server collision correction is preserved.
-- Full resource/gold topology scans are heavily throttled because live Colyseus netState objects already receive patch updates; nearby resource state still refreshes continuously.
-- Offline and online animal-vs-resource damage now share one stage-percentage rule: Baby 5%, Adult 10%, Boss 15%, Super Boss 20%, Big Momma 40%, scaled by species attack strength; pet abilities use a modest 1.25x resource multiplier.
-- Removed several per-tick concat/filter/Array.from allocations in hot collision, rendering, wildlife cleanup, projectile, wall, pet-death, and resource-respawn paths.
-- Added a cheap broad-phase distance test before Hostls do exact multi-circle animal collision checks.
-- Idle mounts no longer rescan every creature at 60 Hz; the world separation pass handles creatures moving into a stationary mount.
-- Distant wildlife throttling and spatial collision buckets remain active.
+SERVER 568 / GAME 640 SECURITY + PRODUCTION FIX PASS
+- Permanent account economy is no longer writable through the generic profile-save route.
+- Gold Cubits, species cards, pet unlocks, permanent pet stages, pet stat upgrades, starter purchases,
+  achievements, and rewarded-ad rewards now use server-validated mutations.
+- Logged-in multiplayer ignores client-claimed permanent pet stat upgrades and pet starting stages.
+  The server loads the verified account entitlements instead.
+- Starter pets are verified server-side before spawning for logged-in players.
+- Owned/account pet stages are capped at Super Boss. Old Big Momma account starter-stage data is
+  normalized down to Super Boss; Big Momma remains a wild-animal stage.
+- Online achievement rewards are recorded by the authoritative world server before permanent
+  account currency/cards are granted. Offline signed-in play cannot mint permanent account rewards.
+- Survive-the-night credit requires the player to actually be alive during Night or Midnight.
+- Rewarded theme and daily-chest grants require a replay-protected server-signed ad completion proof.
+  If the rewarded-ad integration is not configured, those reward buttons stay unavailable instead
+  of handing out unverified rewards.
+- Forest Chest display price and server price now both use 600 Gold Cubits.
+- The account snapshot from the server replaces logged-in permanent progression in the browser;
+  edited localStorage values are not merged upward into the account.
+- Four named worlds remain available in the world selector and retain deterministic world seeds.
+- Health/config endpoints report rewarded-ad and persistent-storage configuration status.
 
-FILES
-- public/index.html      Game 557
-- WorldRoom.js          Server 485 authoritative multiplayer room
-- index.js              Express + Colyseus launcher and /healthz + /status
-- package.json          Node dependencies/start command
-- render.yaml           Render service configuration
-- .gitignore            Git ignore rules
-- README_RENDER.txt     This file
+IMPORTANT EXTERNAL SETUP
+Two production dependencies cannot be created by game code itself:
+1. Durable Render storage: the included render.yaml stays on Render Free for testing. Render Free
+   web services cannot attach persistent disks. For production, upgrade the web service and mount a
+   persistent disk (see render-persistent-example.yaml), or use another durable database/storage service.
+   Set HOSTL_DATA_DIR to the mounted directory. See PERSISTENT_ACCOUNT_STORAGE.txt.
+2. Rewarded ads: connect an ad provider/backend and return a server-signed completion proof only after
+   a completed ad. See REWARDED_AD_SETUP.txt. Until then, rewarded-ad grants intentionally stay locked.
 
 RENDER DEPLOYMENT
-1. Put every file/folder from this project at the root of your GitHub repository.
-2. Connect that repository to Render as a Web Service.
-3. Render can use render.yaml, or set Build Command to: npm install
-4. Start Command: npm start
+1. Put the project files at the root of your GitHub repository.
+2. Connect the repository to Render as a Web Service / Blueprint.
+3. Build command: npm install
+4. Start command: npm start
 5. Health check path: /healthz
-6. Open the Render HTTPS service URL after deployment. It redirects to /index.html?server=self so the included game connects to the same server over WSS.
+6. Keep HOSTL_SESSION_SECRET private and stable. render.yaml generates one for a Blueprint deployment.
+7. For durable accounts, mount persistent storage and set HOSTL_DATA_DIR as described in
+   PERSISTENT_ACCOUNT_STORAGE.txt.
+8. Open the Render HTTPS service URL. The root redirects to /index.html?server=self and the game
+   connects back to that service over secure WebSocket.
 
 BUILD CHECK
-/healthz reports serverBuild 498, gameBuild 570, rulesVersion 570.
+/healthz should report:
+- serverBuild: 569
+- gameBuild: 641
+- rulesVersion: 600
+- rewardedAdsConfigured: true/false
+- accountStoragePersistent: true/false
+
 /status reports the live connected-player count used by the home screen.
-Game 561 cosmetic fix: Horned Owl awake parts now match the supplied assembled reference; torso/lower-wing mapping corrected, Y-only wing flap, tail/head motion.
-
-
-Game 567 / Server 495: redesigned stage/level-scaled pet abilities, smaller Deer hitboxes, stronger ability visuals, and matched offline/online ability rules.
-
-Game 570 / Server 498: all pet projectile/blast abilities now travel strictly in the pet's current facing direction; target selection no longer snaps Fire, Plant, Horned Owl sonic, or Viper poison shots toward a target.

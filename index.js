@@ -14,6 +14,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.join(__dirname, "public");
 const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || "").trim();
+const REWARDED_AD_SECRET = String(process.env.HOSTL_REWARDED_AD_SECRET || "").trim();
+const REWARDED_ADS_CONFIGURED = REWARDED_AD_SECRET.length >= 32;
 // Account records are server-authoritative. For true persistence across Render deploys/restarts,
 // HOSTL_DATA_DIR should point at a mounted persistent disk (recommended: /var/data/hostl).
 // Without a persistent mount, the fallback project data folder can be replaced by the host.
@@ -27,6 +29,9 @@ if (!process.env.HOSTL_SESSION_SECRET) {
 }
 if (!GOOGLE_CLIENT_ID) {
   console.warn("GOOGLE_CLIENT_ID is not set. Google Sign-In will remain disabled.");
+}
+if (!REWARDED_ADS_CONFIGURED) {
+  console.warn("HOSTL_REWARDED_AD_SECRET is not set (or is too short). Rewarded-ad grants are disabled until a server-verified ad provider is connected.");
 }
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -250,6 +255,72 @@ function themeGoldPrice(id){
 function isKnownTheme(id){return THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||THEME_AD.has(id)||THEME_GOLD.has(id);}
 function accountCanUseTheme(a,id){return isKnownTheme(id) && (THEME_GUEST_FREE.has(id)||THEME_ACCOUNT_FREE.has(id)||(Array.isArray(a?.unlockedThemes)&&a.unlockedThemes.includes(id)));}
 
+const ACCOUNT_PET_TYPES=new Set(["dog","cat","dragon","rabbit","fox","owl","deer","wolf","snake","boar","bear","saber"]);
+const ACCOUNT_FREE_STARTER_PETS=new Set(["dog","cat","dragon"]);
+const ACCOUNT_PET_UNLOCK={
+  dog:{cards:0,cubits:0},cat:{cards:0,cubits:0},dragon:{cards:0,cubits:0},
+  rabbit:{cards:55,cubits:600},fox:{cards:55,cubits:650},owl:{cards:60,cubits:750},deer:{cards:70,cubits:900},
+  wolf:{cards:80,cubits:1100},snake:{cards:85,cubits:1200},boar:{cards:95,cubits:1400},bear:{cards:110,cubits:1800},saber:{cards:120,cubits:2200}
+};
+const ACCOUNT_PET_STAGE_ORDER=["baby","adult","boss","superboss"];
+const ACCOUNT_PET_STAGE_COST={adult:20,boss:50,superboss:100};
+const ACCOUNT_PET_STATS=new Set(["health","defense","attack","weight","regen","speed"]);
+const ACCOUNT_PET_STAT_MAX=10;
+const STARTER_SHOP_ITEMS={
+  wood50:750,wood100:1800,stone20:700,stone50:1700,gold5:1200,gold15:3200,berries10:950,
+  startAxe:2200,startPickaxe:2500,startSword:4200,startBow:5200,speedyBoots:6500,ironShell:12000,
+  hunterWrap:8000,gatherGloves:6000,animalWhisperer:9500,saddle:1800
+};
+function accountOwnsPetStarter(a,type){
+  type=safeText(type,24).toLowerCase(); if(!ACCOUNT_PET_TYPES.has(type))return false;
+  ensurePetProgressState(a); ensureStarterPetEntitlements(a);
+  return ACCOUNT_FREE_STARTER_PETS.has(type) || !!a.ownedStarters?.[`start_${type}`] || a.starterPetEntitlements.some(x=>x?.type===type);
+}
+function accountStarterStage(a,type){
+  type=safeText(type,24).toLowerCase(); ensurePetProgressState(a); ensureStarterPetEntitlements(a);
+  let stage=ACCOUNT_PET_STAGE_ORDER.includes(a.petStages?.[type])?a.petStages[type]:"baby";
+  for(const ent of a.starterPetEntitlements||[]){
+    if(ent?.type!==type)continue; const st=ACCOUNT_PET_STAGE_ORDER.includes(ent.stage)?ent.stage:(ent.stage==="bigmomma"?"superboss":"baby");
+    if(ACCOUNT_PET_STAGE_ORDER.indexOf(st)>ACCOUNT_PET_STAGE_ORDER.indexOf(stage))stage=st;
+  }
+  return stage;
+}
+function cleanAccountStarterSelection(a,type,name,gender){
+  ensurePetProgressState(a); type=safeText(type,24).toLowerCase();
+  if(type && !accountOwnsPetStarter(a,type)) return false;
+  a.starterPetType=type;
+  a.starterPetName=type?safeText(name,20):"";
+  a.starterPetGender=gender==="Female"?"Female":"Male";
+  return true;
+}
+function timingSafeStringEqual(a,b){
+  const aa=Buffer.from(String(a||"")),bb=Buffer.from(String(b||""));
+  return aa.length===bb.length && crypto.timingSafeEqual(aa,bb);
+}
+function verifyRewardedAdProof(account,rawProof,expectedKind,expectedSubject){
+  if(!REWARDED_ADS_CONFIGURED)return {ok:false,status:503,error:"rewarded_ads_not_configured"};
+  try{
+    const [body,sig]=String(rawProof||"").split("."); if(!body||!sig)return {ok:false,status:403,error:"missing_ad_proof"};
+    const expected=crypto.createHmac("sha256",REWARDED_AD_SECRET).update(body).digest("base64url");
+    if(!timingSafeStringEqual(sig,expected))return {ok:false,status:403,error:"invalid_ad_proof"};
+    const payload=JSON.parse(Buffer.from(body,"base64url").toString("utf8"));
+    const now=Date.now(),uid=String(account?.userId||"");
+    if(String(payload?.uid||"")!==uid || String(payload?.kind||"")!==String(expectedKind||"") || String(payload?.subject||"")!==String(expectedSubject||""))return {ok:false,status:403,error:"ad_proof_mismatch"};
+    const iat=Number(payload?.iat||0),exp=Number(payload?.exp||0),jti=safeText(payload?.jti,120);
+    if(!jti || exp<now || exp<iat || exp>iat+30*60*1000 || iat>now+60000 || iat<now-30*60*1000)return {ok:false,status:403,error:"expired_ad_proof"};
+    payload.jti=jti;
+    if(!account.rewardedAdClaims || typeof account.rewardedAdClaims!=="object" || Array.isArray(account.rewardedAdClaims))account.rewardedAdClaims={};
+    if(account.rewardedAdClaims[String(payload.jti)])return {ok:false,status:409,error:"ad_proof_already_used"};
+    return {ok:true,jti:String(payload.jti)};
+  }catch(_){return {ok:false,status:403,error:"invalid_ad_proof"};}
+}
+function consumeRewardedAdProof(account,check){
+  if(!check?.ok)return; if(!account.rewardedAdClaims || typeof account.rewardedAdClaims!=="object")account.rewardedAdClaims={};
+  account.rewardedAdClaims[check.jti]=Date.now();
+  const entries=Object.entries(account.rewardedAdClaims).sort((a,b)=>Number(b[1]||0)-Number(a[1]||0)).slice(0,200);
+  account.rewardedAdClaims=Object.fromEntries(entries);
+}
+
 function ensureEconomyState(a){
   if(!a.materials||typeof a.materials!=="object"||Array.isArray(a.materials))a.materials={};
   for(const id of Object.keys(MATERIAL_CATALOG))a.materials[id]=Math.max(0,Math.min(100000,Math.floor(Number(a.materials[id])||0)));
@@ -264,8 +335,8 @@ function ensurePetProgressState(a){
   if(!a.ownedStarters || typeof a.ownedStarters!=="object" || Array.isArray(a.ownedStarters)) a.ownedStarters={};
   for(const k of Object.keys(a.ownedStarters)) a.ownedStarters[k]=!!a.ownedStarters[k];
   if(!a.petStages || typeof a.petStages!=="object" || Array.isArray(a.petStages)) a.petStages={};
-  const validStages=new Set(["baby","adult","boss","superboss","bigmomma"]);
-  for(const [k,v] of Object.entries(a.petStages)){ const s=safeText(v,20).toLowerCase(); a.petStages[k]=validStages.has(s)?s:"baby"; }
+  const validStages=new Set(["baby","adult","boss","superboss"]);
+  for(const [k,v] of Object.entries(a.petStages)){ const st=safeText(v,20).toLowerCase(); a.petStages[k]=st==="bigmomma"?"superboss":(validStages.has(st)?st:"baby"); }
   if(!a.petStatUpgrades || typeof a.petStatUpgrades!=="object" || Array.isArray(a.petStatUpgrades)) a.petStatUpgrades={};
   for(const [species,stats0] of Object.entries(a.petStatUpgrades)){
     const stats=(stats0&&typeof stats0==="object"&&!Array.isArray(stats0))?stats0:{};
@@ -680,18 +751,18 @@ app.disable("x-powered-by");
 app.use(express.json({ limit: "256kb" }));
 
 app.get("/healthz", (_req, res) => {
-  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 567, gameBuild: 639, rulesVersion: "598", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
+  res.status(200).json({ ok: true, game: "HOSTL", multiplayer: true, serverBuild: 569, gameBuild: 641, rulesVersion: "600", chat: true, googleAuth: !!GOOGLE_CLIENT_ID, rewardedAdsConfigured: REWARDED_ADS_CONFIGURED, accountStoragePersistent: ACCOUNT_STORAGE_PERSISTENT, accountRecoveryBackup: true, accountDataDir: DATA_DIR, ...getCubeServerStats() });
 });
 
 app.get("/status", (_req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
-  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 567, gameBuild: 639 });
+  res.status(200).json({ ok: true, ...getCubeServerStats(), maxPlayersPerRoom: 12, serverBuild: 569, gameBuild: 641 });
 });
 
 app.get("/auth/config", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json({ ok: true, googleClientId: GOOGLE_CLIENT_ID || "" });
+  res.json({ ok: true, googleClientId: GOOGLE_CLIENT_ID || "", rewardedAdsConfigured: REWARDED_ADS_CONFIGURED });
 });
 
 app.post("/auth/google", async (req, res) => {
@@ -817,43 +888,71 @@ app.put("/api/account", requireAccount, async (req, res) => {
     if (!requestedTitle) a.title = "";
     else if (a.unlockedTitles.includes(requestedTitle)) a.title = requestedTitle;
   }
-  if (Number.isFinite(Number(body.goldCubits))) setGoldCubits(a, body.goldCubits);
-  else if (Number.isFinite(Number(body.cubits))) setGoldCubits(a, body.cubits); // legacy client compatibility
-  if (Array.isArray(body.unlockedThemes)) a.unlockedThemes = [...new Set(body.unlockedThemes.map(x => safeText(x, 40)).filter(Boolean))].slice(0, 100);
   if (typeof body.selectedTheme === "string") {
     const requestedTheme=safeText(body.selectedTheme,40);
     if(accountCanUseTheme(a,requestedTheme)) a.selectedTheme=requestedTheme;
   }
-  if (body.achievements && typeof body.achievements === "object" && !Array.isArray(body.achievements)) a.achievements = body.achievements;
-  if (typeof body.lastDailyCubits === "string") a.lastDailyCubits = safeText(body.lastDailyCubits, 20);
-  if (typeof body.lastDailyChest === "string") a.lastDailyChest = safeText(body.lastDailyChest, 20);
-  if (body.speciesCards && typeof body.speciesCards === "object" && !Array.isArray(body.speciesCards)) {
-    if (!a.speciesCards || typeof a.speciesCards !== "object") a.speciesCards = {};
-    for (const [species, raw] of Object.entries(body.speciesCards)) {
-      const key = safeText(species, 24).toLowerCase();
-      const n = Math.max(0, Math.min(1000000, Math.floor(Number(raw) || 0)));
-      if (key) a.speciesCards[key] = n;
-    }
+  // Security: economy/progression fields are intentionally ignored here. Gold Cubits,
+  // cards, unlocks, stages, stat upgrades, achievements and rewards are mutated only by
+  // dedicated server-validated routes or authoritative multiplayer hooks.
+  if (typeof body.starterPetType === "string" || typeof body.starterPetName === "string" || typeof body.starterPetGender === "string") {
+    const type=typeof body.starterPetType==="string"?body.starterPetType:a.starterPetType;
+    const name=typeof body.starterPetName==="string"?body.starterPetName:a.starterPetName;
+    const gender=typeof body.starterPetGender==="string"?body.starterPetGender:a.starterPetGender;
+    cleanAccountStarterSelection(a,type,name,gender);
   }
-  if (body.ownedStarters && typeof body.ownedStarters === "object" && !Array.isArray(body.ownedStarters)) {
-    a.ownedStarters={}; for(const [k,v] of Object.entries(body.ownedStarters)) if(v) a.ownedStarters[safeText(k,40)]=true;
-  }
-  if (body.petStages && typeof body.petStages === "object" && !Array.isArray(body.petStages)) {
-    a.petStages={}; const valid=new Set(["baby","adult","boss","superboss","bigmomma"]);
-    for(const [k,v] of Object.entries(body.petStages)){const s=safeText(v,20).toLowerCase();a.petStages[safeText(k,24).toLowerCase()]=valid.has(s)?s:"baby";}
-  }
-  if (body.petStatUpgrades && typeof body.petStatUpgrades === "object" && !Array.isArray(body.petStatUpgrades)) {
-    a.petStatUpgrades={}; for(const [species,stats0] of Object.entries(body.petStatUpgrades)){const stats=(stats0&&typeof stats0==="object")?stats0:{};const clean={};for(const stat of ["health","defense","attack","weight","regen","speed"])clean[stat]=Math.max(0,Math.min(10,Math.floor(Number(stats[stat])||0)));a.petStatUpgrades[safeText(species,24).toLowerCase()]=clean;}
-  }
-  if(typeof body.starterPetType==="string") a.starterPetType=safeText(body.starterPetType,24).toLowerCase();
-  if(typeof body.starterPetName==="string") a.starterPetName=safeText(body.starterPetName,20);
-  if(typeof body.starterPetGender==="string") a.starterPetGender=body.starterPetGender==="Female"?"Female":"Male";
   ensurePetProgressState(a);
   a.updatedAt = new Date().toISOString();
   await saveAccounts();
   res.json({ ok: true, account: publicAccount(a) });
 });
 
+app.post("/api/pets/unlock", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a);
+  const species=safeText(req.body?.species,24).toLowerCase(), method=safeText(req.body?.method,16).toLowerCase();
+  const def=ACCOUNT_PET_UNLOCK[species]; if(!def)return res.status(404).json({ok:false,error:"unknown_species"});
+  if(accountOwnsPetStarter(a,species))return res.json({ok:true,alreadyOwned:true,account:publicAccount(a)});
+  if(method==="cards"){
+    const have=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)); if(have<def.cards)return res.status(409).json({ok:false,error:"not_enough_cards",cost:def.cards,have,account:publicAccount(a)});
+    a.speciesCards[species]=have-def.cards;
+  }else if(method==="cubits"){
+    if(ensureGoldCubits(a)<def.cubits)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:def.cubits,account:publicAccount(a)});
+    setGoldCubits(a,ensureGoldCubits(a)-def.cubits);
+  }else return res.status(400).json({ok:false,error:"bad_unlock_method"});
+  a.ownedStarters[`start_${species}`]=true; a.petStages[species]="baby"; a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,species,method,account:publicAccount(a)});
+});
+
+app.post("/api/pets/upgrade-stage", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=safeText(req.body?.species,24).toLowerCase();
+  if(!ACCOUNT_PET_TYPES.has(species))return res.status(404).json({ok:false,error:"unknown_species"});
+  if(!accountOwnsPetStarter(a,species))return res.status(403).json({ok:false,error:"pet_locked"});
+  const current=accountStarterStage(a,species), idx=ACCOUNT_PET_STAGE_ORDER.indexOf(current), next=idx>=0&&idx<ACCOUNT_PET_STAGE_ORDER.length-1?ACCOUNT_PET_STAGE_ORDER[idx+1]:null;
+  if(!next)return res.status(409).json({ok:false,error:"max_stage",account:publicAccount(a)}); const cost=ACCOUNT_PET_STAGE_COST[next]||0;
+  const have=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)); if(have<cost)return res.status(409).json({ok:false,error:"not_enough_cards",cost,have,account:publicAccount(a)});
+  a.speciesCards[species]=have-cost; a.petStages[species]=next; a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,species,stage:next,cost,account:publicAccount(a)});
+});
+
+app.post("/api/pets/upgrade-stat", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const species=safeText(req.body?.species,24).toLowerCase(),stat=safeText(req.body?.stat,16).toLowerCase();
+  if(!ACCOUNT_PET_TYPES.has(species)||!ACCOUNT_PET_STATS.has(stat))return res.status(404).json({ok:false,error:"unknown_upgrade"});
+  if(!accountOwnsPetStarter(a,species))return res.status(403).json({ok:false,error:"pet_locked"});
+  if(!a.petStatUpgrades[species])a.petStatUpgrades[species]={}; const level=Math.max(0,Math.min(ACCOUNT_PET_STAT_MAX,Math.floor(Number(a.petStatUpgrades[species][stat])||0)));
+  if(level>=ACCOUNT_PET_STAT_MAX)return res.status(409).json({ok:false,error:"max_stat",account:publicAccount(a)}); const cost=5+level*5;
+  const have=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)); if(have<cost)return res.status(409).json({ok:false,error:"not_enough_cards",cost,have,account:publicAccount(a)});
+  a.speciesCards[species]=have-cost; a.petStatUpgrades[species][stat]=level+1; a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,species,stat,level:level+1,cost,account:publicAccount(a)});
+});
+
+app.post("/api/starters/buy", requireAccount, async (req,res)=>{
+  const a=accountDb.byId[req.hostlUserId]; ensurePetProgressState(a); const id=safeText(req.body?.id,40),price=STARTER_SHOP_ITEMS[id];
+  if(!Number.isFinite(price))return res.status(404).json({ok:false,error:"unknown_starter"});
+  if(a.ownedStarters[id])return res.json({ok:true,alreadyOwned:true,account:publicAccount(a)});
+  if(ensureGoldCubits(a)<price)return res.status(409).json({ok:false,error:"not_enough_cubits",cost:price,account:publicAccount(a)});
+  setGoldCubits(a,ensureGoldCubits(a)-price); a.ownedStarters[id]=true; a.updatedAt=new Date().toISOString(); await saveAccounts();
+  res.json({ok:true,id,price,account:publicAccount(a)});
+});
 
 
 app.get("/api/time", (req,res)=>{
@@ -915,8 +1014,9 @@ app.post("/api/themes/buy", requireAccount, async (req,res)=>{
 app.post("/api/themes/ad-unlock", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const id=safeText(req.body?.themeId,40); if(!THEME_AD.has(id))return res.status(404).json({ok:false,error:"theme_not_ad_unlock"});
-  if(!a.unlockedThemes.includes(id))a.unlockedThemes.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();
-  // Rewarded-ad test hook: once an ad provider is connected, require a verified ad-completion token before granting.
+  if(a.unlockedThemes.includes(id))return res.json({ok:true,alreadyOwned:true,themeId:id,account:publicAccount(a)});
+  const proof=verifyRewardedAdProof(a,req.body?.adProof,"theme",id); if(!proof.ok)return res.status(proof.status).json({ok:false,error:proof.error,rewardedAdsConfigured:REWARDED_ADS_CONFIGURED});
+  consumeRewardedAdProof(a,proof); a.unlockedThemes.push(id); a.updatedAt=new Date().toISOString(); await saveAccounts();
   res.json({ok:true,themeId:id,account:publicAccount(a)});
 });
 
@@ -924,6 +1024,7 @@ app.post("/api/open-chest", requireAccount, async (req,res)=>{
   const a=accountDb.byId[req.hostlUserId]; ensureEconomyState(a); if(!a.speciesCards||typeof a.speciesCards!=="object")a.speciesCards={}; if(!Array.isArray(a.unlockedThemes))a.unlockedThemes=[];
   const kind=safeText(req.body?.kind,20).toLowerCase(); const daily=kind==="daily"; const forest=kind==="forest"; if(!daily&&!forest)return res.status(400).json({ok:false,error:"unknown_chest"});
   const day=new Date().toISOString().slice(0,10); const cost=forest?600:0; if(daily&&a.lastDailyChest===day)return res.status(409).json({ok:false,error:"already_claimed",account:publicAccount(a)});
+  let adProof=null; if(daily){ adProof=verifyRewardedAdProof(a,req.body?.adProof,"dailyChest",day); if(!adProof.ok)return res.status(adProof.status).json({ok:false,error:adProof.error,rewardedAdsConfigured:REWARDED_ADS_CONFIGURED,account:publicAccount(a)}); }
   if(ensureGoldCubits(a)<cost)return res.status(409).json({ok:false,error:"not_enough_cubits",cost,account:publicAccount(a)}); if(cost)setGoldCubits(a,ensureGoldCubits(a)-cost);
   const rewards=[]; const rand=(lo,hi)=>lo+Math.floor(Math.random()*(hi-lo+1));
   const goldCubits=daily?rand(18,45):rand(260,620); addGoldCubits(a,goldCubits); rewards.push(`+${goldCubits} Gold Cubits`);
@@ -932,7 +1033,7 @@ app.post("/api/open-chest", requireAccount, async (req,res)=>{
   for(const [id,qty] of Object.entries(matRewards))rewards.push(`+${qty} ${MATERIAL_CATALOG[id].name}`);
   const species=randomChestSpecies(); const cards=daily?rand(3,8):rand(8,20); a.speciesCards[species]=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)+cards); rewards.push(`+${cards} ${species.charAt(0).toUpperCase()+species.slice(1)} Cards`);
   const themeChance=daily?.10:.35; if(Math.random()<themeChance){const choices=CHEST_THEMES.filter(t=>!a.unlockedThemes.includes(t)); if(choices.length){const t=choices[rand(0,choices.length-1)];a.unlockedThemes.push(t);rewards.push(`${t} theme unlocked permanently`);}}
-  if(daily)a.lastDailyChest=day; a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,rewards,account:publicAccount(a)});
+  if(daily){consumeRewardedAdProof(a,adProof);a.lastDailyChest=day;} a.updatedAt=new Date().toISOString(); await saveAccounts(); res.json({ok:true,rewards,account:publicAccount(a)});
 });
 
 app.post("/api/presence", requireAccount, (req,res)=>{ markWebPresence(req.hostlUserId); res.json({ok:true}); });
@@ -1092,17 +1193,73 @@ async function rewardOwnerKill(accountId) {
   return { granted:true, rewardSummary, goldCubits, viperCards, account:publicAccount(a) };
 }
 
+function verifiedAchievementReward(id,context={}){
+  const species=safeText(context?.species,24).toLowerCase();
+  if(id==="first_tame")return {goldCubits:20,cards:2,species};
+  if(id==="first_death")return {goldCubits:8};
+  if(id==="moonmark_hunter")return {goldCubits:100};
+  if(id==="survive_5")return {goldCubits:35};
+  if(id==="survive_night")return {goldCubits:25};
+  if(id==="survive_10")return {goldCubits:60};
+  if(id==="tame_all")return {goldCubits:150};
+  if(id==="breed_three")return {goldCubits:50};
+  if(id.startsWith("tame_")&&ACCOUNT_PET_TYPES.has(id.slice(5)))return {goldCubits:10,cards:4,species:id.slice(5)};
+  if(id.startsWith("breed_")&&ACCOUNT_PET_TYPES.has(id.slice(6)))return {goldCubits:12,cards:6,species:id.slice(6)};
+  return null;
+}
+function applyVerifiedAchievement(a,id,context={}){
+  if(!a.achievements||typeof a.achievements!=="object"||Array.isArray(a.achievements))a.achievements={};
+  if(a.achievements[id])return null;
+  const reward=verifiedAchievementReward(id,context); if(!reward)return null;
+  if(reward.goldCubits)addGoldCubits(a,reward.goldCubits);
+  if(reward.cards&&reward.species){ensurePetProgressState(a);a.speciesCards[reward.species]=Math.max(0,Math.floor(Number(a.speciesCards[reward.species])||0)+reward.cards);}
+  const bits=[];if(reward.goldCubits)bits.push(`+${reward.goldCubits} Gold Cubits`);if(reward.cards&&reward.species)bits.push(`+${reward.cards} ${reward.species} Cards`);
+  const record={at:Date.now(),species:safeText(context?.species||reward.species||"",24).toLowerCase(),rewardSummary:bits.join(" · ")||"Achievement unlocked",serverVerified:true};
+  a.achievements[id]=record;return {id,rewardSummary:record.rewardSummary,species:record.species};
+}
+async function recordVerifiedAchievement(userId,id,context={}){
+  const a=accountDb.byId[String(userId||"")];if(!a)return {granted:false};
+  ensurePetProgressState(a);const granted=[];const primary=applyVerifiedAchievement(a,safeText(id,64),context);if(primary)granted.push(primary);
+  const sid=safeText(id,64);
+  if(sid.startsWith("tame_")&&sid!=="tame_all"){
+    const all=[...ACCOUNT_PET_TYPES].every(sp=>!!a.achievements[`tame_${sp}`]);if(all){const bonus=applyVerifiedAchievement(a,"tame_all",{});if(bonus)granted.push(bonus);}
+  }
+  if(sid.startsWith("breed_")&&sid!=="breed_three"){
+    const n=[...ACCOUNT_PET_TYPES].filter(sp=>!!a.achievements[`breed_${sp}`]).length;if(n>=3){const bonus=applyVerifiedAchievement(a,"breed_three",{});if(bonus)granted.push(bonus);}
+  }
+  if(!granted.length)return {granted:false,account:publicAccount(a)};
+  a.updatedAt=new Date().toISOString();await saveAccounts();return {granted:true,achievements:granted,account:publicAccount(a)};
+}
+
+async function grantWorldAccountReward(userId,reward,source={}){
+  const a=accountDb.byId[String(userId||"")]; if(!a||!reward||typeof reward!=="object")return {granted:false};
+  ensurePetProgressState(a); let changed=false;
+  if(reward.kind==="goldCubits"){
+    const amount=Math.max(0,Math.min(10000,Math.floor(Number(reward.amount)||0))); if(amount>0){addGoldCubits(a,amount);changed=true;}
+  }else if(reward.kind==="cards"){
+    const species=safeText(reward.species,24).toLowerCase(),amount=Math.max(0,Math.min(500,Math.floor(Number(reward.amount)||0)));
+    if(ACCOUNT_PET_TYPES.has(species)&&amount>0){a.speciesCards[species]=Math.max(0,Math.floor(Number(a.speciesCards[species])||0)+amount);changed=true;}
+  }
+  if(!changed)return {granted:false}; a.updatedAt=new Date().toISOString(); await saveAccounts();
+  return {granted:true,reward:{...reward},source,account:publicAccount(a)};
+}
+
 configureHostlAccountHooks({
   resolveSession(token) {
     const uid = verifySession(token);
     if (!uid) return null;
     const a = accountDb.byId[uid];
     if (!a) return null;
-    return { userId:uid, title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)) };
+    ensurePetProgressState(a); ensureStarterPetEntitlements(a);
+    return { userId:uid, username:a.username||"", title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)),
+      petStatUpgrades:JSON.parse(JSON.stringify(a.petStatUpgrades||{})), petStages:{...(a.petStages||{})}, ownedStarters:{...(a.ownedStarters||{})},
+      starterPetEntitlements:(a.starterPetEntitlements||[]).map(x=>({...x})), starterPetType:a.starterPetType||"", starterPetName:a.starterPetName||"", starterPetGender:a.starterPetGender||"Male" };
   },
   rewardTesterKill,
   rewardOwnerKill,
   rewardGameplayMaterial,
+  grantWorldReward:grantWorldAccountReward,
+  recordAchievement:recordVerifiedAchievement,
   onPresenceJoin(userId,key,worldId){ markGamePresence(userId,key,worldId); },
   onPresenceLeave(userId,key){ clearGamePresence(userId,key); }
 });

@@ -1,18 +1,31 @@
 HOSTL PERMANENT ACCOUNT STORAGE
 
-HOSTL account/player progression is stored server-side in accounts.json. The game now saves species cards, pet unlocks, pet starting stages, pet stat upgrades, starter preference, Gold Cubits, themes, achievements, materials, titles, codes, and friends to the account.
+HOSTL stores account/player progression server-side in accounts.json. This includes Gold Cubits,
+species cards, pet unlocks and stages, pet stat upgrades, starter purchases/preferences, themes,
+achievements, materials, titles, codes, friends, and related permanent progression.
 
-IMPORTANT FOR RENDER:
-A normal web-service filesystem can be replaced during deploy/restart. For deploy-safe permanent accounts, mount a Render persistent disk and set this environment variable to the mounted directory:
+REQUIRED FOR PRODUCTION DURABILITY
+A normal web-service filesystem can be replaced during deploys/restarts. Render Free web services
+cannot attach persistent disks. Use a paid Render web-service compute plan with a disk (an optional
+render-persistent-example.yaml is included), or move account storage to a durable database.
 
-HOSTL_DATA_DIR=/var/data/hostl
+For a Render persistent disk:
+1. Mount the disk at a path such as /var/data.
+2. Set:
+   HOSTL_DATA_DIR=/var/data/hostl
+3. Keep HOSTL_SESSION_SECRET private and stable.
+4. Redeploy and check /healthz.
 
-Keep HOSTL_SESSION_SECRET set to the same private value as well.
+When the path is truly backed by mounted durable storage, /healthz should report:
+  accountStoragePersistent:true
 
-After the disk is mounted and HOSTL_DATA_DIR is set, /healthz reports accountStoragePersistent:true.
+Do not set HOSTL_DATA_DIR to a path that only looks persistent without actually mounting durable
+storage. That would hide the warning while leaving accounts vulnerable to deploy loss.
 
+SESSION + RECOVERY
+HOSTL stores an HMAC-signed recovery snapshot in the player's browser. If accounts.json is missing,
+signing in with the same Google account on that browser can restore the signed snapshot. The browser
+cannot edit the snapshot without invalidating its signature.
 
-DEPLOY-LOSS RECOVERY FALLBACK
-HOSTL also stores an HMAC-signed account recovery snapshot in the player's browser. If accounts.json is missing after a deploy, signing in with the same Google account on that browser can restore the signed snapshot automatically. The snapshot cannot be edited without invalidating its server signature.
-
-This is a safety net, not a replacement for a persistent disk/database: cross-device recovery still needs durable server storage.
+This is a recovery safety net, not a replacement for durable server storage. Cross-device recovery
+and reliable production accounts still require a persistent disk/database.

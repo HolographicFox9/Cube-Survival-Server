@@ -231,23 +231,39 @@
   #tameBtn svg{width:32px;height:32px;pointer-events:none;}
 
   #bottomDock{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:flex-start;gap:7px;
-    pointer-events:none;background:rgba(255,255,255,0.16);border:1px solid rgba(255,255,255,0.34);
-    border-radius:16px;backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,0.28);padding:8px 10px;min-width:438px;max-width:min(90vw,690px);}
+    pointer-events:none;background:linear-gradient(180deg,#9aaa79 0%,#7f9167 100%);border:3px solid #1b2119;
+    border-radius:15px;box-shadow:0 5px 0 #39472f,0 10px 22px rgba(0,0,0,0.30),inset 0 2px 0 rgba(239,244,204,.30);padding:8px 10px;min-width:438px;max-width:min(90vw,690px);}
   #resourceStrip{display:flex;flex-wrap:nowrap;align-items:center;gap:10px;pointer-events:none;max-width:100%;overflow:hidden;white-space:nowrap;padding-left:2px;}
-  .dock-res{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#1e2e24;background:linear-gradient(180deg, rgba(241,247,242,0.70), rgba(220,233,223,0.54));border:1px solid rgba(255,255,255,0.35);border-radius:999px;padding:4px 8px;min-width:0;box-shadow:0 6px 12px rgba(0,0,0,0.12);}
+  .dock-res{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:800;color:#20251d;background:#e2d7ad;border:2px solid #25291f;border-radius:9px;padding:3px 8px;min-width:0;box-shadow:inset 0 2px 0 rgba(255,250,218,.46),0 2px 0 rgba(43,55,36,.55);}
   .dock-res .ico{font-size:12px;line-height:1;}
   .dock-res .val{font-variant-numeric:tabular-nums;}
   .dock-res.wood .val{color:#8d5524;} .dock-res.stone .val{color:#4d5b6b;} .dock-res.gold .val{color:#926b00;} .dock-res.servs .val{color:#9a6a00;} .dock-res.berries .val{color:#b13d69;}
   .cubit-token{display:inline-block;width:11px;height:11px;border-radius:2px;background:linear-gradient(135deg,#fff076,#f2b51d 58%,#b97800);border:1px solid rgba(111,72,0,0.65);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.28),0 1px 2px rgba(0,0,0,0.22);vertical-align:-1px;}
+  #skillHud{width:100%;min-width:0;pointer-events:none;padding:1px 2px 0;box-sizing:border-box;}
+  #skillHudTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;
+    color:#182018;font-size:10px;font-weight:900;letter-spacing:.06em;text-shadow:0 1px rgba(240,235,198,.48);}
+  #skillHudTop b{font-size:11px;color:#101610;}
+  #skillTrack{position:relative;width:100%;height:11px;border-radius:999px;overflow:hidden;
+    background:linear-gradient(180deg,#415646,#2b3c30);border:2px solid #1c2a20;
+    box-shadow:inset 0 2px 3px rgba(0,0,0,.35),0 2px 0 rgba(255,255,255,.18);}
+  #skillFill{position:absolute;left:0;top:0;bottom:0;width:0%;
+    background:linear-gradient(180deg,#eff8c5 0%,#bfe88d 42%,#86c969 100%);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.55),2px 0 8px rgba(196,240,151,.48);
+    transition:width .18s ease-out;}
+  #skillShine{position:absolute;inset:1px auto auto 4px;width:calc(100% - 8px);height:2px;border-radius:99px;background:rgba(255,255,255,.24);}
+  #skillHud.gain #skillTrack{animation:skillXpPop .24s ease-out;}
+  #skillHud.level-up #skillTrack{animation:skillLevelPop .52s ease-out;}
+  @keyframes skillXpPop{50%{transform:scaleY(1.22);filter:brightness(1.12);}100%{transform:scaleY(1);}}
+  @keyframes skillLevelPop{35%{transform:scale(1.025);filter:brightness(1.35);}100%{transform:scale(1);}}
   #hotbar{position:relative;left:auto;bottom:auto;transform:none;display:flex;gap:7px;padding:0;
     pointer-events:auto;background:transparent;border:none;border-radius:14px;backdrop-filter:none;box-shadow:none;}
   .slot{width:54px;height:54px;border-radius:10px;
-    background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.34);
+    background:#566b4b;border:3px solid #1b2119;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
-    position:relative;cursor:pointer;transition:border-color .12s, transform .12s, background .12s;}
-  .slot:hover{transform:translateY(-3px);background:rgba(255,255,255,0.28);}
-  .slot.active{border-color:var(--amber-bright);box-shadow:0 0 0 2px rgba(244,198,95,0.3) inset, 0 0 14px rgba(244,198,95,0.2);
-    background:rgba(255,245,208,0.34);}
+    position:relative;cursor:pointer;transition:border-color .12s, transform .12s, background .12s;box-shadow:inset 0 2px 0 rgba(231,239,198,.18),0 3px 0 #35412e;}
+  .slot:hover{transform:translateY(-3px);background:#657c57;}
+  .slot.active{border-color:#1b2119;box-shadow:inset 0 0 0 3px #e2bd55,inset 0 2px 0 rgba(255,247,192,.45),0 3px 0 #5b4620;
+    background:#8a7847;}
   .slot.locked{opacity:0.42;}
   .slot .key{position:absolute;top:2px;left:5px;font-size:10px;opacity:0.6;font-weight:600;}
   .slot .ico{width:26px;height:26px;}
@@ -547,8 +563,7 @@
 
   /* Crafting panel */
   #craftOverlay .card{max-width:560px;max-height:min(760px,90vh);overflow:hidden;display:flex;flex-direction:column;}
-  .craft-skill-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(242,201,76,.28);background:rgba(242,201,76,.07);border-radius:10px;font-size:12px;margin-top:6px;}
-  .craft-skill-row b{color:var(--amber-bright);}
+  .craft-skill-row{display:none !important;}
   .craft-list{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 0;text-align:left;max-height:min(510px,62vh);overflow-y:auto;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin;}
   .craft-item{padding:10px;border-radius:8px;background:rgba(0,0,0,0.28);border:1px solid rgba(240,230,200,0.12);
     cursor:pointer;font-size:12.5px;transition:border-color .12s;}
@@ -557,10 +572,27 @@
   .craft-item b{color:var(--amber-bright);}
 
   .skill-choice-grid{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px;text-align:left;}
-  .skill-choice{padding:13px;border:1px solid rgba(240,230,200,.16);border-radius:12px;background:rgba(0,0,0,.28);cursor:pointer;}
-  .skill-choice:hover{border-color:var(--amber);background:rgba(242,201,76,.08);}
-  .skill-choice b{color:var(--amber-bright);font-size:14px;}
-  .skill-choice small{display:block;margin-top:5px;opacity:.78;line-height:1.35;}
+  .skill-choice{padding:14px 15px;border:3px solid #18231b;border-radius:15px;background:linear-gradient(180deg,#3c4e3e,#29382d);cursor:pointer;box-shadow:0 5px 0 #172019,0 10px 20px rgba(0,0,0,.3);}
+  .skill-choice:hover{border-color:#d6b058;background:linear-gradient(180deg,#4a5e49,#314233);transform:translateY(-2px);}
+  .skill-choice b{color:#f5d47d;font-size:15px;text-shadow:0 2px #30210d;}
+  .skill-choice small{display:block;margin-top:6px;color:#e8e2cc;opacity:.92;line-height:1.4;}
+  .skill-choice .skill-choice-icon{font-size:26px;float:left;margin-right:10px;filter:drop-shadow(0 2px 0 rgba(0,0,0,.4));}
+
+  /* Gameplay menus use the same inked, flat-shaded language as the animal art. */
+  #craftOverlay .card,#invOverlay .card,#runShopOverlay .card{
+    background:linear-gradient(180deg,#34473a,#26352b);border:3px solid #171c16;
+    box-shadow:0 7px 0 #172019,0 20px 48px rgba(0,0,0,.42),inset 0 2px 0 rgba(231,235,199,.10);
+  }
+  #craftOverlay .card h1,#invOverlay .card h1,#runShopOverlay .card h1{color:#f1d17b;text-shadow:0 2px 0 #5b441c;}
+  .craft-item,.inv-slot,.run-shop-col,.run-shop-item{
+    background:#465a47;border:2px solid #1a2019;box-shadow:inset 0 2px 0 rgba(232,238,204,.10),0 2px 0 #263226;
+  }
+  .craft-item:hover,.run-shop-item:hover{border-color:#d0aa54;background:#50664f;}
+  .run-shop-col{background:#314132;}
+  #invBtn,#craftBtn,#runShopBtn{
+    background:#425642;border:2px solid #191e18;color:#f0e7cb;box-shadow:0 3px 0 #263326,inset 0 1px 0 rgba(239,241,207,.14);
+  }
+  #invBtn:hover,#craftBtn:hover,#runShopBtn:hover{background:#516751;border-color:#191e18;box-shadow:0 3px 0 #2c392c,inset 0 0 0 2px #c7a653;}
   /* Inventory */
   #invOverlay .card{max-width:400px;}
   #runShopOverlay .card{max-width:760px;width:min(760px,94vw);}
@@ -691,6 +723,10 @@
   body.mobile-performance .dock-res{gap:2px;font-size:9px;padding:2px 5px;}
   body.mobile-performance .dock-res .ico{font-size:10px;}
   body.mobile-performance .cubit-token{width:9px;height:9px;}
+  body.mobile-performance #skillHud{padding:0 1px;}
+  body.mobile-performance #skillHudTop{font-size:8px;margin-bottom:2px;}
+  body.mobile-performance #skillHudTop b{font-size:9px;}
+  body.mobile-performance #skillTrack{height:8px;border-width:1px;}
   body.mobile-performance #hotbar{width:100%;max-width:100%;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}
   body.mobile-performance #hotbar::-webkit-scrollbar{display:none;}
   body.mobile-performance .slot{flex:0 0 44px;width:44px;height:44px;border-radius:8px;border-width:1px;}
@@ -4885,6 +4921,10 @@
       <div class="dock-res servs" title="Gold Cubits"><span class="cubit-token"></span><span class="val" id="dockServs">0</span></div>
       <div class="dock-res berries"><span class="ico">🍓</span><span class="val" id="dockBerries">0</span></div>
     </div>
+    <div id="skillHud" aria-label="Player skill progress">
+      <div id="skillHudTop"><b>SKILL <span id="skillLevelHud">0</span></b><span id="skillXpHud">0 / 25 XP</span></div>
+      <div id="skillTrack"><div id="skillFill"></div><div id="skillShine"></div></div>
+    </div>
     <div id="hotbar"></div>
   </div>
   <div id="banner"></div>
@@ -4921,7 +4961,6 @@
     <button class="btn secondary modal-close" id="closeCraft">Close (C)</button>
     <h1 class="modal-title-clear">Crafting</h1>
     <p class="lead">Build tools, walls, towers & gear for your pets.</p>
-    <div class="craft-skill-row"><span><b id="craftSkillLabel">Skill 0</b> <span id="craftSkillXp">0 / 25 XP</span></span><span id="craftUnlockHint">Gather & craft to improve.</span></div>
     <div class="craft-list" id="craftList"></div>
   </div>
 </div>
@@ -4929,8 +4968,8 @@
 
 <div id="skillChoiceOverlay" class="overlay-fixed" style="position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,8,6,.82);z-index:1300;">
   <div class="card" style="width:min(520px,92vw);">
-    <h1 class="modal-title-clear" id="skillChoiceTitle">Skill Up!</h1>
-    <p class="lead" id="skillChoiceLead">Choose one crafting upgrade. The other two stay locked for this run.</p>
+    <h1 class="modal-title-clear" id="skillChoiceTitle">Milestone!</h1>
+    <p class="lead" id="skillChoiceLead">Choose how your survivor gets stronger. You get another choice every 10 Skill levels.</p>
     <div class="skill-choice-grid" id="skillChoiceGrid"></div>
   </div>
 </div>
@@ -5581,7 +5620,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "598";
+const CUBE_SHARED_RULES_VERSION = "600";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -5601,53 +5640,48 @@ const BASE_CRAFTABLES = [
   { id: "Saddle", name: "Saddle", cost: { wood: 10, stone: 4 }, desc: "Ride adult/boss pets." },
   { id: "HealPack", name: "Heal Pack", cost: { wood: 3, gold: 2 }, desc: "Restore 40 HP." },
 ];
-const SKILL_THRESHOLDS = [25,70,140,240,370];
-const SKILL_CHOICES = {
-  1: [
-    {id:"stoneWall",name:"Stone Wall",desc:"Unlock a tougher stone wall that replaces your wood wall recipe."},
-    {id:"stoneAxe",name:"Stone Axe",desc:"Unlock a stronger stone axe that replaces the wood axe."},
-    {id:"stoneSword",name:"Stone Sword",desc:"Unlock a stronger stone sword that replaces the wood sword."}
-  ],
-  2: [
-    {id:"stonePickaxe",name:"Stone Pickaxe",desc:"Upgrade your pickaxe for faster mining and better stone-wall damage."},
-    {id:"stoneTower",name:"Stone Tower",desc:"Upgrade towers with tougher stone construction, faster shots and heavier rocks."},
-    {id:"fieldKit",name:"Field Kit",desc:"Unlock a 70 HP field kit as an improved healing craft."}
-  ],
-  3: [
-    {id:"ironWall",name:"Iron Wall",desc:"Upgrade your wall recipe again into a very durable iron wall."},
-    {id:"ironAxe",name:"Iron Axe",desc:"Upgrade the axe again for heavy chopping and combat."},
-    {id:"ironSword",name:"Iron Sword",desc:"Upgrade the sword again for much stronger melee damage."}
-  ],
-  4: [
-    {id:"ironPickaxe",name:"Iron Pickaxe",desc:"Upgrade the pickaxe again for serious mining power."},
-    {id:"ballistaTower",name:"Heavy Tower",desc:"Upgrade towers again for faster, harder projectiles and longer range."},
-    {id:"reinforcedBow",name:"Reinforced Bow",desc:"Upgrade your bow for stronger ranged shots."}
-  ],
-  5: [
-    {id:"masterGatherer",name:"Master Gatherer Kit",desc:"Unlock a final workbench craft that boosts all gathering for the rest of the run."},
-    {id:"fortressBuilder",name:"Fortress Builder Kit",desc:"Unlock a final workbench craft that reduces wall and tower placement costs."},
-    {id:"combatCrafter",name:"Combat Crafter Kit",desc:"Unlock a final workbench craft that boosts crafted weapon damage."}
-  ]
-};
+function skillXpNeededForLevel(level){
+  level=Math.max(0,Math.floor(Number(level)||0));
+  return Math.round(25 + level*8 + Math.floor(level/10)*6);
+}
+const SKILL_MILESTONE_CHOICES = [
+  {id:"speed",icon:"💨",name:"Move Faster",desc:"+8% survivor movement speed. Stacks every time you choose it."},
+  {id:"strength",icon:"⚔️",name:"Stronger Hit",desc:"+8% damage from your survivor's melee attacks and bow shots. Stacks."},
+  {id:"defense",icon:"🛡️",name:"Better Defense",desc:"Take 8% less damage. Stacks with armor and other defense bonuses."}
+];
+
 function currentCraftables(){
   const a=BASE_CRAFTABLES.map(x=>({...x,cost:{...x.cost}}));
-  const chosen=player.skillChoices||{};
+  const lv=Math.max(0,Math.floor(Number(player.skillLevel)||0));
   const add=(x)=>a.push(x);
-  if(chosen[1]==="stoneAxe") add({id:"UpgradeStoneAxe",name:"Upgrade → Stone Axe",cost:{wood:6,stone:10},desc:"Replaces your Wood Axe with a stronger Stone Axe."});
-  if(chosen[1]==="stoneSword") add({id:"UpgradeStoneSword",name:"Upgrade → Stone Sword",cost:{wood:5,stone:12},desc:"Replaces your Wood Sword with a stronger Stone Sword."});
-  if(chosen[1]==="stoneWall") add({id:"UpgradeStoneWall",name:"Upgrade → Stone Wall",cost:{wood:4,stone:12},desc:"Replaces Wood Wall placement with tougher Stone Walls."});
-  if(chosen[2]==="stonePickaxe") add({id:"UpgradeStonePickaxe",name:"Upgrade → Stone Pickaxe",cost:{wood:5,stone:14},desc:"Replaces your basic Pickaxe with a stronger Stone Pickaxe."});
-  if(chosen[2]==="stoneTower") add({id:"UpgradeStoneTower",name:"Upgrade → Stone Tower",cost:{wood:8,stone:18},desc:"Replaces Rock Watch Towers with faster, stronger Stone Towers."});
-  if(chosen[2]==="fieldKit") add({id:"FieldKit",name:"Field Kit",cost:{wood:5,berries:4,gold:2},desc:"Restore 70 HP."});
-  if(chosen[3]==="ironAxe") add({id:"UpgradeIronAxe",name:"Upgrade → Iron Axe",cost:{wood:6,stone:8,gold:8},desc:"Replaces your current Axe with an Iron Axe."});
-  if(chosen[3]==="ironSword") add({id:"UpgradeIronSword",name:"Upgrade → Iron Sword",cost:{wood:5,stone:8,gold:10},desc:"Replaces your current Sword with an Iron Sword."});
-  if(chosen[3]==="ironWall") add({id:"UpgradeIronWall",name:"Upgrade → Iron Wall",cost:{stone:16,gold:8},desc:"Replaces your current wall with a durable Iron Wall."});
-  if(chosen[4]==="ironPickaxe") add({id:"UpgradeIronPickaxe",name:"Upgrade → Iron Pickaxe",cost:{wood:5,stone:10,gold:9},desc:"Replaces your current Pickaxe with an Iron Pickaxe."});
-  if(chosen[4]==="ballistaTower") add({id:"UpgradeHeavyTower",name:"Upgrade → Heavy Tower",cost:{stone:18,gold:10},desc:"Replaces your tower with a long-range Heavy Tower."});
-  if(chosen[4]==="reinforcedBow") add({id:"UpgradeBow",name:"Upgrade → Reinforced Bow",cost:{wood:12,stone:6,gold:8},desc:"Replaces your basic Bow with a stronger one."});
-  if(chosen[5]==="masterGatherer") add({id:"MasterGathererKit",name:"Master Gatherer Kit",cost:{wood:18,stone:18,gold:12},desc:"Craft once: +18% gathering for the rest of this run."});
-  if(chosen[5]==="fortressBuilder") add({id:"FortressBuilderKit",name:"Fortress Builder Kit",cost:{wood:20,stone:22,gold:10},desc:"Craft once: walls and towers cost about 22% less this run."});
-  if(chosen[5]==="combatCrafter") add({id:"CombatCrafterKit",name:"Combat Crafter Kit",cost:{wood:14,stone:16,gold:14},desc:"Craft once: crafted weapons deal +12% damage this run."});
+
+  // Crafting progression now follows the visible survivor Skill level instead
+  // of using a second hidden five-level XP track inside the crafting menu.
+  if(lv>=2){
+    add({id:"UpgradeStoneAxe",name:"Upgrade → Stone Axe",cost:{wood:6,stone:10},desc:"Skill 2: replace your Wood Axe with a stronger Stone Axe."});
+    add({id:"UpgradeStoneSword",name:"Upgrade → Stone Sword",cost:{wood:5,stone:12},desc:"Skill 2: replace your Wood Sword with a stronger Stone Sword."});
+    add({id:"UpgradeStoneWall",name:"Upgrade → Stone Wall",cost:{wood:4,stone:12},desc:"Skill 2: replace Wood Wall placement with tougher Stone Walls."});
+  }
+  if(lv>=4){
+    add({id:"UpgradeStonePickaxe",name:"Upgrade → Stone Pickaxe",cost:{wood:5,stone:14},desc:"Skill 4: replace your basic Pickaxe with a stronger Stone Pickaxe."});
+    add({id:"UpgradeStoneTower",name:"Upgrade → Stone Tower",cost:{wood:8,stone:18},desc:"Skill 4: replace Rock Watch Towers with faster, stronger Stone Towers."});
+    add({id:"FieldKit",name:"Field Kit",cost:{wood:5,berries:4,gold:2},desc:"Skill 4: restore 70 HP."});
+  }
+  if(lv>=6){
+    add({id:"UpgradeIronAxe",name:"Upgrade → Iron Axe",cost:{wood:6,stone:8,gold:8},desc:"Skill 6: replace your current Axe with an Iron Axe."});
+    add({id:"UpgradeIronSword",name:"Upgrade → Iron Sword",cost:{wood:5,stone:8,gold:10},desc:"Skill 6: replace your current Sword with an Iron Sword."});
+    add({id:"UpgradeIronWall",name:"Upgrade → Iron Wall",cost:{stone:16,gold:8},desc:"Skill 6: replace your current wall with a durable Iron Wall."});
+  }
+  if(lv>=8){
+    add({id:"UpgradeIronPickaxe",name:"Upgrade → Iron Pickaxe",cost:{wood:5,stone:10,gold:9},desc:"Skill 8: replace your current Pickaxe with an Iron Pickaxe."});
+    add({id:"UpgradeHeavyTower",name:"Upgrade → Heavy Tower",cost:{stone:18,gold:10},desc:"Skill 8: replace your tower with a long-range Heavy Tower."});
+    add({id:"UpgradeBow",name:"Upgrade → Reinforced Bow",cost:{wood:12,stone:6,gold:8},desc:"Skill 8: replace your basic Bow with a stronger one."});
+  }
+  if(lv>=10){
+    add({id:"MasterGathererKit",name:"Master Gatherer Kit",cost:{wood:18,stone:18,gold:12},desc:"Skill 10: craft once for +18% gathering this run."});
+    add({id:"FortressBuilderKit",name:"Fortress Builder Kit",cost:{wood:20,stone:22,gold:10},desc:"Skill 10: craft once so walls and towers cost about 22% less this run."});
+    add({id:"CombatCrafterKit",name:"Combat Crafter Kit",cost:{wood:14,stone:16,gold:14},desc:"Skill 10: craft once so crafted weapons deal +12% damage this run."});
+  }
   return a;
 }
 const CRAFTABLES = BASE_CRAFTABLES;
@@ -8363,17 +8397,15 @@ function unlockAchievement(id,context={}){
   const account=achievementAccountBridge();
   if(account){
     if(account.achievements[id])return false;
-    const rewardSummary=grantAchievementReward(def,context);
-    account.achievements[id]={at:Date.now(),species:context.species||"",rewardSummary};
-    if(typeof account.persist==="function") account.persist(account.achievements);
-    saveMeta();
-    try{buildCardInventory();}catch(_){}
-    try{syncHud();}catch(_){}
+    // Signed-in permanent rewards are server-verified. In an online world the
+    // authoritative room will send the achievement/account snapshot. Offline
+    // runs can preview the achievement for this session, but cannot mint account value.
+    if(net?.room)return false;
+    account.achievements[id]={at:Date.now(),species:context.species||"",rewardSummary:"Offline session — permanent reward not banked",offlineUnverified:true};
     updateAchievementUI();
-    queueAchievementToast(def,rewardSummary);
+    queueAchievementToast(def,"Offline session · connect to an online HOSTL world to bank permanent achievement rewards");
     return true;
   }
-  // Guests can unlock achievements for this play session, but nothing is saved and rewards wait for login.
   if(guestAchievementSession[id])return false;
   guestAchievementSession[id]={at:Date.now(),species:context.species||""};
   updateAchievementUI();
@@ -9717,6 +9749,18 @@ function syncNetworkFullWorld(force = false) {
     }
     const serverGold = Number(own.gold);
     if (Number.isFinite(serverGold)) applyServerGoldSnapshot(serverGold);
+    const schemaSkillLevel=Math.max(0,Math.floor(Number(own.skillLevel)||0));
+    const schemaSkillXp=Math.max(0,Number(own.skillXp)||0);
+    const schemaSkillSpeed=Math.max(0,Math.floor(Number(own.skillSpeed)||0));
+    const schemaSkillStrength=Math.max(0,Math.floor(Number(own.skillStrength)||0));
+    const schemaSkillDefense=Math.max(0,Math.floor(Number(own.skillDefense)||0));
+    const schemaPending=Math.max(0,Math.floor(Number(own.skillPendingMilestone)||0));
+    if(schemaSkillLevel!==player.skillLevel||Math.abs(schemaSkillXp-(Number(player.skillXp)||0))>.001||schemaSkillSpeed!==skillRank("speed")||schemaSkillStrength!==skillRank("strength")||schemaSkillDefense!==skillRank("defense")||schemaPending!==Math.max(0,Number(player.pendingSkillMilestone)||0)){
+      player.skillLevel=schemaSkillLevel;player.skillXp=schemaSkillXp;
+      player.skillRanks={speed:schemaSkillSpeed,strength:schemaSkillStrength,defense:schemaSkillDefense};
+      player.pendingSkillMilestone=schemaPending;updateSkillHud();
+      if(schemaPending&&game.started&&!game.over)showSkillChoice(schemaPending);
+    }
     if (!!own.dead && !player.dead) { player.dead = true; player.splitT = 0; unlockAchievement("first_death"); if (!game.deathCamTarget && game.deathCamTargetId) game.deathCamTarget = resolveNetworkDeathCamTarget(game.deathCamTargetKind, game.deathCamTargetId); sfx.die(); }
     if (!own.dead && player.dead && !game.over) { player.dead = false; player.splitT = 0; }
   }
@@ -9820,21 +9864,23 @@ function syncNetworkFullWorld(force = false) {
 function applyWorldReward(data={}) {
   const reward = { kind:data.kind, resource:data.resource, species:data.species, amount:Math.max(0,Number(data.amount)||0) };
   if (!reward.amount) return;
+  const verifiedAccount=!!(data.account&&typeof data.account==="object"&&data.serverVerified);
+  if(verifiedAccount){ try{window.__hostlAcceptAccountSnapshot?.(data.account);}catch(_){} }
   if (reward.kind === "resource" && ["wood","stone","gold","berries"].includes(reward.resource)) {
     gainSkillXp(Math.max(1,reward.amount)*0.6,"gather");
-    if (reward.resource === "gold") {
-      applyConfirmedNetworkGold(data.balance, reward.amount);
-    } else {
-      player[reward.resource] = (player[reward.resource]||0) + reward.amount;
-    }
+    if (reward.resource === "gold") applyConfirmedNetworkGold(data.balance, reward.amount);
+    else player[reward.resource] = (player[reward.resource]||0) + reward.amount;
     if (data.x != null) floatText(Number(data.x), Number(data.y)||player.y, `+${reward.amount} ${reward.resource}`, "#efe6d2");
   } else if (reward.kind === "cards" && PET_TYPES[reward.species]) {
-    if (!meta.speciesCards) meta.speciesCards = {};
-    meta.speciesCards[reward.species] = (meta.speciesCards[reward.species]||0) + reward.amount;
-    saveMeta(); buildCardInventory();
+    if(!verifiedAccount){
+      if (!meta.speciesCards) meta.speciesCards = {};
+      meta.speciesCards[reward.species] = (meta.speciesCards[reward.species]||0) + reward.amount;
+      saveMeta(); buildCardInventory();
+    }
     banner(`+${reward.amount} ${PET_TYPES[reward.species].name} Card${reward.amount===1?"":"s"}!`);
   } else if (reward.kind === "goldCubits") {
-    meta.servs = (meta.servs||0) + reward.amount; saveMeta();
+    if(!verifiedAccount){meta.servs = (meta.servs||0) + reward.amount; saveMeta();}
+    banner(`+${reward.amount} Gold Cubit${reward.amount===1?"":"s"}!`);
   }
   if (data.kill) { game.kills++; gainSkillXp(5,"combat"); }
   syncHud(); syncHotbar();
@@ -9842,7 +9888,10 @@ function applyWorldReward(data={}) {
 function applyChestNetworkReward(data={}) {
   const reward = data.reward;
   if (!reward) return;
-  awardChestReward(reward); saveMeta(); syncHud(); syncHotbar(); buildCardInventory(); showLootPopup([reward]);
+  const verifiedAccount=!!(data.account&&typeof data.account==="object"&&data.serverVerified);
+  if(verifiedAccount){try{window.__hostlAcceptAccountSnapshot?.(data.account);}catch(_){}}
+  else { awardChestReward(reward); saveMeta(); }
+  syncHud(); syncHotbar(); buildCardInventory(); showLootPopup([reward]);
   const c=net.chestVisuals.get(data.id); if(c){spark(c.x,c.y-6,"#ffd85f",18,130);sfx.chestOpen();}
 }
 function applyTameNetworkResult(data={}) {
@@ -10036,6 +10085,16 @@ async function connectMultiplayer() {
       try{renderMaterialsAndRecipes();}catch(_){}
     });
 
+    room.onMessage("achievementReward", (data={}) => {
+      if(data?.account) setAccountFromServer(data.account);
+      saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
+      if(data?.granted && Array.isArray(data.achievements)){
+        for(const item of data.achievements){
+          const def=ACHIEVEMENT_BY_ID.get(String(item?.id||""));
+          if(def) queueAchievementToast(def,String(item?.rewardSummary||def.rewardText||"Achievement unlocked"));
+        }
+      }
+    });
     room.onMessage("testerKillReward", (data={}) => {
       if(data?.account) setAccountFromServer(data.account);
       saveAccountSession();syncAchievementAccountBridge();syncAccountUi();
@@ -10070,6 +10129,10 @@ async function connectMultiplayer() {
       banner("Multiplayer server is running different gameplay rules. Update the server.", true);
       try { room.leave(); } catch (_) {}
     });
+    room.onMessage("starterPetDenied", (data={}) => {
+      banner("That starter pet is not unlocked on your verified HOSTL account.",true);
+      if(accountState?.loggedIn){try{restoreAccountSession();}catch(_){}}
+    });
     room.onMessage("serverReady", (data={}) => {
       const sv = String(data.rulesVersion || "");
       if (sv && sv !== CUBE_SHARED_RULES_VERSION) {
@@ -10086,6 +10149,7 @@ async function connectMultiplayer() {
     room.onMessage("worldReward", applyWorldReward);
     room.onMessage("chestReward", applyChestNetworkReward);
     room.onMessage("tameResult", applyTameNetworkResult);
+    room.onMessage("skillState", applySkillNetworkState);
     room.onMessage("petBreedResult", applyPetBreedNetworkResult);
     room.onMessage("runShopResult", (data={})=>{
       if(!data.success){banner(data.reason==="gold"?"Not enough gold":"Shop purchase failed",true);return;}
@@ -14271,10 +14335,14 @@ function runGatherMul(){
   return hatMul * starterMul * (player.craftBonuses?.gather||1);
 }
 function runRegenPerSec(){return runShop.hat==="healerHood"?0.7:0;}
+function skillRank(type){return Math.max(0,Math.floor(Number(player.skillRanks?.[type])||0));}
+function skillMoveMul(){return 1 + skillRank("speed") * 0.08;}
+function skillStrengthMul(){return 1 + skillRank("strength") * 0.08;}
+function skillDefenseMul(){return Math.pow(0.92, skillRank("defense"));}
 function runDamageMul(){
   const hatMul = runShop.hat==="warriorHelm"?1.18:1;
   const starterMul = meta?.ownedStarters?.hunterWrap ? 1.10 : 1;
-  return hatMul * starterMul;
+  return hatMul * starterMul * skillStrengthMul();
 }
 function runTameBonus(){return runShop.cape==="tamerCape"?0.10:0;}
 function runCardChanceMul(){
@@ -14282,10 +14350,10 @@ function runCardChanceMul(){
   const starterMul = (meta?.ownedStarters?.animalWhisperer || meta?.ownedStarters?.luckyCharm) ? 1.30 : 1;
   return capeMul * starterMul;
 }
-function starterMoveMul(){return meta?.ownedStarters?.speedyBoots ? 1.18 : 1;}
+function starterMoveMul(){return (meta?.ownedStarters?.speedyBoots ? 1.18 : 1) * skillMoveMul();}
 function starterShellMax(){return meta?.ownedStarters?.ironShell ? 250 : 0;}
 function runPetXpMul(){return runShop.cape==="mentorCape"?1.50:1;}
-function runDefenseMul(){return runShop.armor==="guardianArmor"?.66:runShop.armor==="ironArmor"?.78:runShop.armor==="leatherArmor"?.88:1;}
+function runDefenseMul(){return (runShop.armor==="guardianArmor"?.66:runShop.armor==="ironArmor"?.78:runShop.armor==="leatherArmor"?.88:1) * skillDefenseMul();}
 
 const TAME_BASE_CHANCE = Object.fromEntries(Object.keys(PET_TYPES).map(type => [type, PET_RARITY_TAME_CHANCE[petRarity(type)] ?? .38]));
 function tameChanceFor(type){return clamp((TAME_BASE_CHANCE[type] ?? .38)+runTameBonus(),.08,.80);}
@@ -14354,7 +14422,9 @@ const player = {
   inventory: [], // {id, qty}
   hotbarOrder: ["Fist"],
   hasSaddle: false,
-  skillLevel: 0, skillXp: 0, skillChoices: {}, pendingSkillChoice: 0, toolTiers: {Axe:0,Pickaxe:0,Sword:0,Bow:0}, wallTier:0, towerTier:0, craftBonuses:{gather:1,buildCost:1,combat:1},
+  skillLevel: 0, skillXp: 0, skillMilestones: {}, pendingSkillMilestone: 0,
+  skillRanks: {speed:0,strength:0,defense:0},
+  toolTiers: {Axe:0,Pickaxe:0,Sword:0,Bow:0}, wallTier:0, towerTier:0, craftBonuses:{gather:1,buildCost:1,combat:1},
   pets: [], // max 4
   riding: null,
 };
@@ -15631,6 +15701,7 @@ function breakChest(chest) {
   chest.opened = true;
   chest.hp = 0;
   chest.pulse = 1;
+  gainSkillXp(12,"chest");
   const reward = chest.reward || makeChestReward();
   awardChestReward(reward);
   saveMeta();
@@ -15737,6 +15808,7 @@ function meleeAttack() {
       if (crit) dmg *= 2;
       dmg = animalDamageTaken(a.type, a.stage, dmg);
       a.hp -= dmg;
+      if(!net.room)gainSkillXp(1,"combat-hit");
       a.flash = 0.12;
       markCreatureHit(a, 4.2);
       a.sleeping = false;
@@ -15775,6 +15847,7 @@ function meleeAttack() {
           floatText(a.x, a.y - a.r - 24, "DEFEATED", "#efe6d2");
         }
         game.kills++;
+        if(!net.room)gainSkillXp(a.stage==="bigmomma"?24:a.stage==="superboss"?18:a.stage==="boss"?14:10,"kill");
         const drop = pickWeighted([{ v: "wood", w: 2 }, { v: "stone", w: 2 }, { v: "gold", w: 1 }]);
         player[drop] += drop === "gold" ? 1 : 2;
         floatText(a.x, a.y - 20, "+" + (drop === "gold" ? 1 : 2) + " " + drop, "#efe6d2");
@@ -15865,6 +15938,7 @@ function meleeAttack() {
         materialHit = true;
         continue;
       }
+      gainSkillXp(1,"resource-hit");
       let take = 0;
       if ((player.tool || "Fist") === "Fist") {
         // Bare hands only chip tiny flakes off gold. About 9 punches per gold.
@@ -15904,6 +15978,7 @@ function meleeAttack() {
 
 function gatherResource(r, t) {
   const toolName = player.tool || "Fist";
+  if(!net.room)gainSkillXp(1,"resource-hit");
   const isWood = r.type === "tree" || r.type === "log";
 
   if (net.room && r.netId) {
@@ -15973,6 +16048,7 @@ function gatherResource(r, t) {
 
 function eatBush(r) {
   if (!r.alive) return;
+  if(!net.room)gainSkillXp(1,"resource-hit");
   if (net.room && r.netId) {
     r.pulse = 1;
     try { net.room.send("resourceHit", { id: r.netId, tool: player.tool || "Fist", tier: player.toolTiers?.[player.tool]||0 }); } catch (e) {}
@@ -16089,6 +16165,7 @@ function grantMoonmarkRewardsOffline(en) {
 
 function damageEnemy(en, dmg, crit, attacker = player) {
   if (attacker && attacker.owned && dmg > 0) markPetXpContribution(en, attacker, dmg);
+  if(attacker===player&&!net.room&&dmg>0)gainSkillXp(1,"combat-hit");
   en.hp -= dmg; en.flash = 0.12;
   en.revengeTarget = (attacker && combatTargetAlive(attacker)) ? attacker : player;
   const knock = 7;
@@ -16100,6 +16177,7 @@ function damageEnemy(en, dmg, crit, attacker = player) {
     setKilledBy(en, attacker || player);
     en.dead = true;
     game.kills++;
+    if(attacker===player&&!net.room)gainSkillXp(en.moonMarked?35:10,"kill");
     if (en.moonMarked) {
       game.firstLightReady = true;
       banner("Forest Moonmark claimed — survive until Morning for First Light!");
@@ -17047,7 +17125,7 @@ function updateProjectiles(dt) {
       else if(best.type==="wild"){
         const wa=best.obj;
         if(p.hostile) damageCreatureFromEnemy(wa,p.source,p.dmg||8);
-        else {const dealt=animalDamageTaken(wa.type,wa.stage,p.dmg||TOOLS.Bow.dmg);wa.hp-=dealt;wa.flash=.12;markCreatureHit(wa,4);wa.sleeping=false;wa.enraged=true;wa.hostileTarget=player;if(wa.hp<=0){setKilledBy(wa,player);wa.dead=true;game.kills++;awardPetXpContributors(wa,null);}}
+        else {const dealt=animalDamageTaken(wa.type,wa.stage,p.dmg||TOOLS.Bow.dmg);wa.hp-=dealt;gainSkillXp(1,"combat-hit");wa.flash=.12;markCreatureHit(wa,4);wa.sleeping=false;wa.enraged=true;wa.hostileTarget=player;if(wa.hp<=0){setKilledBy(wa,player);wa.dead=true;game.kills++;gainSkillXp(wa.stage==="bigmomma"?24:wa.stage==="superboss"?18:wa.stage==="boss"?14:10,"kill");awardPetXpContributors(wa,null);}}
       }
       spark(p.x,p.y,p.kind==="arcaneBolt"?"#c77dff":"#9fdfff",5,65);
       p.dead=true;
@@ -17318,6 +17396,7 @@ function tryTameNearby() {
       meta.speciesCards[best.type] = (meta.speciesCards[best.type] || 0) + 1;
       saveMeta();
       achievementTamedSpecies(best.type);
+      gainSkillXp(25,"tame");
       banner(`Tamed ${PET_TYPES[best.type].name}! +1 Card (${meta.speciesCards[best.type]}/${cardsNeeded(best.type)})`);
     } else {
       // fail — sad sound + attacks you
@@ -19504,6 +19583,7 @@ function syncHud() {
   if (el("dockServs")) el("dockServs").textContent = goldCubits;
   if (el("dockBerries")) el("dockBerries").textContent = player.berries || 0;
   syncHotbar();
+  updateSkillHud();
   updatePetCardCooldowns();
   if (bannerTimer > 0) {
     bannerTimer -= 1 / 60;
@@ -19762,6 +19842,7 @@ function createOfflineBredPet(mother, father) {
   meta.speciesCards[type] = (meta.speciesCards[type] || 0) + 1;
   saveMeta();
   familyBirthCelebration(baby.x,baby.y);
+  gainSkillXp(20,"breed");
   spark(baby.x,baby.y,info.color||"#ffd9e6",14,100);
   floatText(baby.x,baby.y-r-12,`Baby ${info.name}!`,"#ffd9e6");
   banner(`Baby ${info.name} born! ${genderSymbol(gender)} +1 Card`);
@@ -20067,38 +20148,102 @@ function updatePetCardCooldowns() {
   });
 }
 
-function skillNextThreshold(){ return SKILL_THRESHOLDS[player.skillLevel] ?? null; }
-function updateCraftSkillUi(){
-  const n=skillNextThreshold();
-  if(el("craftSkillLabel")) el("craftSkillLabel").textContent=`Skill ${player.skillLevel}`;
-  if(el("craftSkillXp")) el("craftSkillXp").textContent=n==null?"MAX":`${Math.floor(player.skillXp)} / ${n} XP`;
-  if(el("craftUnlockHint")) el("craftUnlockHint").textContent=player.pendingSkillChoice?"Choose your new crafting path!":"Gather & craft to improve.";
+function skillNextThreshold(){ return skillXpNeededForLevel(player.skillLevel); }
+function pendingSkillMilestone(){
+  const lv=Math.max(0,Math.floor(Number(player.skillLevel)||0));
+  for(let m=10;m<=lv;m+=10) if(!player.skillMilestones?.[m]) return m;
+  return 0;
+}
+function animateSkillHud(kind="gain"){
+  const hud=el("skillHud"); if(!hud)return;
+  hud.classList.remove("gain","level-up"); void hud.offsetWidth; hud.classList.add(kind);
+  clearTimeout(animateSkillHud._t); animateSkillHud._t=setTimeout(()=>hud.classList.remove("gain","level-up"),520);
+}
+function updateSkillHud(){
+  const need=skillNextThreshold(),xp=Math.max(0,Number(player.skillXp)||0);
+  if(el("skillLevelHud"))el("skillLevelHud").textContent=Math.max(0,Math.floor(Number(player.skillLevel)||0));
+  if(el("skillXpHud"))el("skillXpHud").textContent=`${Math.floor(xp)} / ${need} XP`;
+  if(el("skillFill"))el("skillFill").style.width=`${clamp(xp/Math.max(1,need),0,1)*100}%`;
+}
+function updateCraftSkillUi(){ updateSkillHud(); }
+function syncSkillMilestonePrompt(){
+  const pending=Math.max(0,Math.floor(Number(player.pendingSkillMilestone)||0))||pendingSkillMilestone();
+  player.pendingSkillMilestone=pending;
+  if(pending && game.started && !game.over) showSkillChoice(pending);
 }
 function gainSkillXp(amount,reason=""){
-  amount=Math.max(0,Number(amount)||0); if(!game.started||game.over||!amount)return;
-  player.skillXp+=amount;
-  while(player.skillLevel<SKILL_THRESHOLDS.length && player.skillXp>=SKILL_THRESHOLDS[player.skillLevel]){
+  amount=Math.max(0,Number(amount)||0);
+  if(!game.started||game.over||!amount)return;
+  // Online Skill XP is awarded by the authoritative room for validated hits,
+  // kills, taming and harvesting. This prevents a modified browser from simply
+  // granting itself levels and movement/combat bonuses.
+  if(net.room)return;
+  const before=Math.floor(player.skillLevel||0);
+  player.skillXp=(Number(player.skillXp)||0)+amount;
+  while(player.skillXp>=skillXpNeededForLevel(player.skillLevel)){
+    player.skillXp-=skillXpNeededForLevel(player.skillLevel);
     player.skillLevel++;
-    if(!player.skillChoices[player.skillLevel]){player.pendingSkillChoice=player.skillLevel; showSkillChoice(player.skillLevel);}
   }
-  updateCraftSkillUi();
+  const leveled=Math.floor(player.skillLevel||0)>before;
+  updateSkillHud();
+  animateSkillHud(leveled?"level-up":"gain");
+  if(leveled){
+    banner(`Skill ${player.skillLevel}!`);
+    buildCraftList();
+    syncSkillMilestonePrompt();
+  }
 }
-function showSkillChoice(level){
-  const choices=SKILL_CHOICES[level]; if(!choices||!choices.length)return;
-  const ov=el("skillChoiceOverlay"), grid=el("skillChoiceGrid");
+function showSkillChoice(milestone){
+  milestone=Math.max(10,Math.floor(Number(milestone)||0));
+  if(player.skillMilestones?.[milestone])return;
+  const ov=el("skillChoiceOverlay"),grid=el("skillChoiceGrid");
   if(!ov||!grid)return;
-  el("skillChoiceTitle").textContent=`Skill ${level} — Choose an Upgrade`;
+  el("skillChoiceTitle").textContent=`Skill ${milestone} — Choose a Boost`;
+  const r=player.skillRanks||{speed:0,strength:0,defense:0};
+  el("skillChoiceLead").textContent=`Every 10 Skill levels you get one lasting boost for this run. Current picks — Speed ${r.speed||0}, Strength ${r.strength||0}, Defense ${r.defense||0}.`;
   grid.innerHTML="";
-  choices.forEach(c=>{const d=document.createElement("div");d.className="skill-choice";d.innerHTML=`<b>${c.name}</b><small>${c.desc}</small>`;d.onclick=()=>chooseSkillUpgrade(level,c.id,c.name);grid.appendChild(d);});
+  SKILL_MILESTONE_CHOICES.forEach(c=>{
+    const d=document.createElement("div");d.className="skill-choice";
+    d.innerHTML=`<span class="skill-choice-icon">${c.icon}</span><b>${c.name}</b><small>${c.desc}</small>`;
+    d.onclick=()=>chooseSkillUpgrade(milestone,c.id,c.name);
+    grid.appendChild(d);
+  });
   ov.style.display="flex";
 }
-function chooseSkillUpgrade(level,id,name){
-  if(player.skillChoices[level])return;
-  player.skillChoices[level]=id; player.pendingSkillChoice=0;
+function chooseSkillUpgrade(milestone,id,name){
+  milestone=Math.max(10,Math.floor(Number(milestone)||0));
+  if(!["speed","strength","defense"].includes(id)||player.skillMilestones?.[milestone])return;
+  if(net.room){
+    try{net.room.send("skillChoice",{milestone,choice:id});}catch(_){}
+    el("skillChoiceOverlay").style.display="none";
+    return;
+  }
+  player.skillMilestones=player.skillMilestones||{};
+  player.skillRanks=player.skillRanks||{speed:0,strength:0,defense:0};
+  player.skillMilestones[milestone]=id;
+  player.skillRanks[id]=(player.skillRanks[id]||0)+1;
+  player.pendingSkillMilestone=pendingSkillMilestone();
   el("skillChoiceOverlay").style.display="none";
-  banner(`${name} path unlocked — craft it at your table!`);
-  buildCraftList();
+  banner(`${name} upgraded!`);
+  if(player.pendingSkillMilestone)showSkillChoice(player.pendingSkillMilestone);
 }
+function applySkillNetworkState(data={}){
+  const oldLevel=Math.floor(Number(player.skillLevel)||0);
+  player.skillLevel=Math.max(0,Math.floor(Number(data.level)||0));
+  player.skillXp=Math.max(0,Number(data.xp)||0);
+  player.skillRanks={
+    speed:Math.max(0,Math.floor(Number(data.speed)||0)),
+    strength:Math.max(0,Math.floor(Number(data.strength)||0)),
+    defense:Math.max(0,Math.floor(Number(data.defense)||0))
+  };
+  if(data.milestones&&typeof data.milestones==="object")player.skillMilestones={...data.milestones};
+  player.pendingSkillMilestone=Math.max(0,Math.floor(Number(data.pendingMilestone)||0));
+  updateSkillHud();
+  if(player.skillLevel>oldLevel){animateSkillHud("level-up");banner(`Skill ${player.skillLevel}!`);buildCraftList();}
+  else animateSkillHud("gain");
+  if(player.pendingSkillMilestone)showSkillChoice(player.pendingSkillMilestone);
+}
+
 function toolDisplayName(id){
   const t=player.toolTiers?.[id]||0;
   if(id==="Axe")return t>=2?"Iron Axe":t>=1?"Stone Axe":"Wood Axe";
@@ -20274,20 +20419,25 @@ function drawBackground() {
   ctx.translate(-game.camX, -game.camY);
   ctx.fillStyle = bgPattern;
   ctx.fillRect(game.camX, game.camY, W, H);
-  // Soft forest shade so the ground feels richer without hurting readability.
-  ctx.fillStyle = "rgba(24,38,24,0.06)";
+  // Flat ground patches and tiny inked grass marks use the same simple cel-shaded language as the pets.
   const startX = Math.floor(game.camX / 220) * 220;
   const startY = Math.floor(game.camY / 220) * 220;
   for (let y = startY; y < game.camY + H + 220; y += 220) {
     for (let x = startX; x < game.camX + W + 220; x += 220) {
       const ox = ((x * 13 + y * 7) % 37) - 18;
       const oy = ((x * 5 + y * 11) % 29) - 14;
+      ctx.fillStyle = "rgba(55,83,50,0.09)";
       ctx.beginPath();
-      ctx.ellipse(x + 110 + ox, y + 110 + oy, 52, 34, ((x + y) % 9) * 0.07, 0, TAU);
+      ctx.ellipse(x + 110 + ox, y + 110 + oy, 48, 29, ((x + y) % 9) * 0.07, 0, TAU);
       ctx.fill();
+      if ((((x / 220) | 0) + ((y / 220) | 0)) % 2 === 0) {
+        const gx=x+57+ox*.4, gy=y+63+oy*.4;
+        ctx.strokeStyle="rgba(35,55,33,.28)"; ctx.lineWidth=2; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(gx,gy+5);ctx.lineTo(gx-5,gy-3);ctx.moveTo(gx,gy+5);ctx.lineTo(gx+1,gy-6);ctx.moveTo(gx,gy+5);ctx.lineTo(gx+6,gy-1);ctx.stroke();
+      }
     }
   }
-  ctx.strokeStyle = "rgba(20,30,20,0.5)";
+  ctx.strokeStyle = "rgba(19,25,18,0.62)";
   ctx.lineWidth = 10;
   ctx.strokeRect(5, 5, WORLD_W - 10, WORLD_H - 10);
   ctx.restore();
@@ -20323,8 +20473,8 @@ function drawResource(r) {
     ctx.beginPath(); ctx.ellipse(0, 20, 26, 10, 0, 0, TAU); ctx.fill();
     const spikeR1 = [38,32,37,31,36,32,37,31,36,33,37,31,38,32];
     ctx.fillStyle = "#1e5d2d";
-    ctx.strokeStyle = "#133b1f";
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = "#181b16";
+    ctx.lineWidth = 3.4;
     ctx.beginPath();
     spikeR1.forEach((rad, i) => {
       const a = i / spikeR1.length * TAU - Math.PI / 2;
@@ -20344,6 +20494,7 @@ function drawResource(r) {
       i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     });
     ctx.closePath(); ctx.fill();
+    ctx.strokeStyle="#20251c";ctx.lineWidth=1.7;ctx.stroke();
 
     ctx.fillStyle = "#49a35a";
     circ(-11, -14, 10); circ(12, -10, 9); circ(13, 10, 8); circ(-14, 9, 8); circ(0, 2, 12);
@@ -20351,7 +20502,7 @@ function drawResource(r) {
     ctx.beginPath(); ctx.ellipse(-10, -16, 12, 5.4, -0.32, 0, TAU); ctx.fill();
     ctx.beginPath(); ctx.ellipse(10, -9, 9, 4.2, 0.24, 0, TAU); ctx.fill();
   } else if (r.type === "rock") {
-    poly([[-25,10],[-19,-16],[2,-27],[24,-16],[29,6],[15,23],[-13,22]], "#8f979f", "#596169");
+    poly([[-25,10],[-19,-16],[2,-27],[24,-16],[29,6],[15,23],[-13,22]], "#8f979f", "#191b1b");
     ctx.fillStyle = "#aab1b8";
     poly([[-12,4],[-8,-11],[3,-19],[15,-10],[12,3],[0,13]], "#b9c0c8", "rgba(0,0,0,0)");
     ctx.fillStyle = "#727981";
@@ -20364,8 +20515,8 @@ function drawResource(r) {
     ctx.fillStyle = "rgba(0,0,0,0.14)";
     ctx.beginPath(); ctx.ellipse(2, 9, 35, 10.5, 0, 0, TAU); ctx.fill();
     ctx.fillStyle = "#6a4326";
-    ctx.strokeStyle = "#3f2414";
-    ctx.lineWidth = 2.7;
+    ctx.strokeStyle = "#1a1714";
+    ctx.lineWidth = 3.2;
     roundRect(-32, -10, 64, 20, 8); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#835334";
     roundRect(-29, -7, 58, 7, 4); ctx.fill();
@@ -20414,8 +20565,8 @@ function drawResource(r) {
     ctx.beginPath(); ctx.ellipse(0, 12, 18, 7, 0, 0, TAU); ctx.fill();
     const bushSpikes = [22,18,21,17,21,18,22,17,21,18,22,17];
     ctx.fillStyle = "#286e34";
-    ctx.strokeStyle = "#184621";
-    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = "#181b16";
+    ctx.lineWidth = 3;
     ctx.beginPath();
     bushSpikes.forEach((rad, i) => {
       const a = i / bushSpikes.length * TAU - Math.PI / 2 + 0.04;
@@ -20472,11 +20623,11 @@ function drawGoldChunk(g) {
   ctx.scale(s, s);
   const r = g.r;
   if (g.pure) {
-    ctx.shadowColor = "rgba(255,214,79,0.62)";
-    ctx.shadowBlur = 28;
+    ctx.shadowColor = "rgba(255,214,79,0.38)";
+    ctx.shadowBlur = 16;
     ctx.fillStyle = "#efc34f";
-    ctx.strokeStyle = "#7f6218";
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = "#1a1a16";
+    ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.moveTo(-r * 0.96, r * 0.36);
     ctx.lineTo(-r * 0.82, -r * 0.22);
@@ -20536,7 +20687,7 @@ function drawGoldChunk(g) {
   ctx.closePath();
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = "#8b6510"; ctx.lineWidth = Math.max(1.5, r * 0.06); ctx.stroke();
+  ctx.strokeStyle = "#1a1a16"; ctx.lineWidth = Math.max(2.2, r * 0.075); ctx.stroke();
 
   // Gold facets across the whole chunk.
   ctx.fillStyle = "#f2c94c";
@@ -20591,7 +20742,7 @@ function drawWall(w) {
   if (w.flash > 0) ctx.filter = "brightness(1.55)";
 
   if (w.kind === "stoneSpike") {
-    ctx.fillStyle = "#858f98"; ctx.strokeStyle = "#3f4850"; ctx.lineWidth = 4;
+    ctx.fillStyle = "#858f98"; ctx.strokeStyle = "#191b1b"; ctx.lineWidth = 4;
     roundRect(-w.r, -w.r, w.r * 2, w.r * 2, 6); ctx.fill(); ctx.stroke();
     ctx.strokeStyle = "#5b6670"; ctx.lineWidth = 2;
     ctx.beginPath();
@@ -20605,15 +20756,16 @@ function drawWall(w) {
     const spike = (rot) => { ctx.save(); ctx.rotate(rot); ctx.beginPath(); ctx.moveTo(w.r - 2, -6); ctx.lineTo(w.r + 14, 0); ctx.lineTo(w.r - 2, 6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); };
     spike(0); spike(Math.PI/2); spike(Math.PI); spike(-Math.PI/2);
   } else if (w.kind === "stone") {
-    ctx.fillStyle="#8d959a";ctx.strokeStyle="#454c51";ctx.lineWidth=4;roundRect(-w.r,-w.r,w.r*2,w.r*2,5);ctx.fill();ctx.stroke();
+    ctx.fillStyle="#8d959a";ctx.strokeStyle="#191b1b";ctx.lineWidth=4;roundRect(-w.r,-w.r,w.r*2,w.r*2,5);ctx.fill();ctx.stroke();
     ctx.strokeStyle="#667078";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-w.r,0);ctx.lineTo(w.r,0);ctx.moveTo(-w.r*.35,-w.r);ctx.lineTo(-w.r*.35,0);ctx.moveTo(w.r*.35,0);ctx.lineTo(w.r*.35,w.r);ctx.stroke();
   } else if (w.kind === "iron") {
-    ctx.fillStyle="#707b83";ctx.strokeStyle="#30383d";ctx.lineWidth=4;roundRect(-w.r,-w.r,w.r*2,w.r*2,4);ctx.fill();ctx.stroke();
+    ctx.fillStyle="#707b83";ctx.strokeStyle="#191b1b";ctx.lineWidth=4;roundRect(-w.r,-w.r,w.r*2,w.r*2,4);ctx.fill();ctx.stroke();
     ctx.fillStyle="#b7c0c6";for(const [x,y] of [[-13,-13],[13,-13],[-13,13],[13,13]])circ(x,y,2.5);
     ctx.strokeStyle="#4b555c";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(-w.r+5,0);ctx.lineTo(w.r-5,0);ctx.stroke();
   } else {
-    ctx.fillStyle = "#a9744f"; ctx.strokeStyle = "#5c3a22"; ctx.lineWidth = 4;
+    ctx.fillStyle = "#a9744f"; ctx.strokeStyle = "#1b1815"; ctx.lineWidth = 4;
     roundRect(-w.r, -w.r, w.r * 2, w.r * 2, 5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle="rgba(236,196,145,.26)";roundRect(-w.r+5,-w.r+5,w.r*1.05,5,2);ctx.fill();
     ctx.strokeStyle = "#5c3a22"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(-w.r, 0); ctx.lineTo(w.r, 0); ctx.moveTo(0, -w.r); ctx.lineTo(0, w.r); ctx.stroke();
   }
@@ -20627,25 +20779,27 @@ function drawWall(w) {
 
 function drawTower(t) {
   const tier=Number(t.tier)||0;
+  const ink="#191a17";
   ctx.save(); ctx.translate(t.x,t.y);
-  // shadow + stone footings
-  ctx.fillStyle="rgba(0,0,0,.25)";ctx.beginPath();ctx.ellipse(0,19,24,9,0,0,TAU);ctx.fill();
-  ctx.fillStyle=tier>=1?"#7f8a92":"#66584d";ctx.strokeStyle="#3a3029";ctx.lineWidth=3;
-  for(const x of[-12,12]){ctx.beginPath();ctx.roundRect?ctx.roundRect(x-6,7,12,18,3):ctx.fillRect(x-6,7,12,18);ctx.fill();ctx.stroke();}
-  // wooden crossed frame
-  ctx.strokeStyle=tier>=2?"#aeb7bf":"#7d5637";ctx.lineWidth=6;ctx.lineCap="round";
+  ctx.fillStyle="rgba(0,0,0,.18)";ctx.beginPath();ctx.ellipse(0,19,24,9,0,0,TAU);ctx.fill();
+  // Stone/iron feet.
+  ctx.fillStyle=tier>=1?"#7f8a92":"#69594b";ctx.strokeStyle=ink;ctx.lineWidth=3.2;
+  for(const x of[-12,12]){roundRect(x-6,7,12,18,3);ctx.fill();ctx.stroke();ctx.fillStyle=tier>=1?"#a6afb5":"#8d735d";roundRect(x-3,9,5,5,2);ctx.fill();ctx.fillStyle=tier>=1?"#7f8a92":"#69594b";}
+  // Crossed frame.
+  ctx.strokeStyle=ink;ctx.lineWidth=8;ctx.lineCap="round";
   ctx.beginPath();ctx.moveTo(-15,17);ctx.lineTo(-8,-15);ctx.moveTo(15,17);ctx.lineTo(8,-15);ctx.moveTo(-13,5);ctx.lineTo(13,-5);ctx.moveTo(13,5);ctx.lineTo(-13,-5);ctx.stroke();
-  // platform
-  ctx.fillStyle=tier>=2?"#69747c":tier>=1?"#8d959a":"#8a6a50";ctx.strokeStyle="#443529";ctx.lineWidth=3;roundRect(-22,-21,44,11,4);ctx.fill();ctx.stroke();
-  // rock basket / launcher
-  ctx.fillStyle="#34302c";roundRect(-10,-30,20,10,4);ctx.fill();
-  ctx.fillStyle=tier>=2?"#d6dde1":"#a7a39e";for(const [x,y,r] of [[-5,-27,4],[2,-28,5],[7,-26,3]]){circ(x,y,r);}
-  // banner
-  ctx.strokeStyle="#563a27";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(18,-20);ctx.lineTo(18,-43);ctx.stroke();
-  ctx.fillStyle=tier>=2?"#c94b4b":tier>=1?"#7b9aa7":"#d4aa3a";ctx.beginPath();ctx.moveTo(18,-42);ctx.lineTo(34,-37);ctx.lineTo(18,-32);ctx.closePath();ctx.fill();
+  ctx.strokeStyle=tier>=2?"#aeb7bf":"#8b6141";ctx.lineWidth=4.6;
+  ctx.beginPath();ctx.moveTo(-15,17);ctx.lineTo(-8,-15);ctx.moveTo(15,17);ctx.lineTo(8,-15);ctx.moveTo(-13,5);ctx.lineTo(13,-5);ctx.moveTo(13,5);ctx.lineTo(-13,-5);ctx.stroke();
+  // Platform and launcher.
+  ctx.fillStyle=tier>=2?"#69747c":tier>=1?"#8d959a":"#8a6a50";ctx.strokeStyle=ink;ctx.lineWidth=3.2;roundRect(-22,-21,44,11,4);ctx.fill();ctx.stroke();
+  ctx.fillStyle="rgba(238,232,203,.24)";roundRect(-17,-18,24,3,1.5);ctx.fill();
+  ctx.fillStyle="#3d3933";ctx.strokeStyle=ink;ctx.lineWidth=2.5;roundRect(-10,-30,20,10,4);ctx.fill();ctx.stroke();
+  ctx.fillStyle=tier>=2?"#d6dde1":"#aaa59e";for(const [x,y,r] of [[-5,-27,4],[2,-28,5],[7,-26,3]]){circ(x,y,r);ctx.strokeStyle=ink;ctx.lineWidth=1.4;ctx.stroke();}
+  // Banner.
+  ctx.strokeStyle=ink;ctx.lineWidth=3.5;ctx.beginPath();ctx.moveTo(18,-20);ctx.lineTo(18,-43);ctx.stroke();
+  ctx.fillStyle=tier>=2?"#b94a48":tier>=1?"#7692a0":"#c9a245";ctx.strokeStyle=ink;ctx.lineWidth=2.4;ctx.beginPath();ctx.moveTo(18,-42);ctx.lineTo(34,-37);ctx.lineTo(18,-32);ctx.closePath();ctx.fill();ctx.stroke();
   ctx.restore();
 }
-
 function drawEnemy(en) {
   ctx.save();
   ctx.translate(en.x, en.y);
@@ -20655,7 +20809,7 @@ function drawEnemy(en) {
 
   const r = en.r;
   const body = en.hue;
-  const outline = "#2a1414";
+  const outline = "#191817";
   const dark = shadeColor(body, -38);
   const light = shadeColor(body, 28);
   const weapon = en.weapon || (en.armed ? "Sword" : "Fist");
@@ -20755,6 +20909,9 @@ function drawEnemy(en) {
   ctx.lineWidth = 3.2;
   roundRect(-bodyHalf, -bodyHalf, bodyHalf * 2, bodyHalf * 2, r * 0.24);
   ctx.fill(); ctx.stroke();
+  ctx.fillStyle = light; ctx.globalAlpha = 0.34;
+  roundRect(-bodyHalf * 0.68, -bodyHalf * 0.70, bodyHalf * 0.88, bodyHalf * 0.22, r * 0.09); ctx.fill();
+  ctx.globalAlpha = 1;
 
   // Outfit details.
   ctx.fillStyle = dark;
@@ -22067,7 +22224,7 @@ function drawPlayer() {
   if (p.dead) {
     const t = p.splitT, ease = 1 - Math.pow(1 - t, 3);
     const deadFill = p.color;
-    const deadOutline = shadeColor(p.color, -50);
+    const deadOutline = "#191817";
     ctx.globalAlpha = 1 - t * 0.9;
 
     // Draw the same rounded player cube, but clip it into two diagonal halves.
@@ -22153,8 +22310,10 @@ function drawPlayer() {
     drawTwoHandWeapon(holding, armFill, swingEase, armWalk);
   }
 
-  ctx.fillStyle = bodyFill; ctx.strokeStyle = shadeColor(p.color, -50); ctx.lineWidth = 3.5;
+  ctx.fillStyle = bodyFill; ctx.strokeStyle = "#191817"; ctx.lineWidth = 3.5;
   roundRect(-16, -16, 32, 32, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = p.hurtFlash > 0 ? "rgba(255,210,198,.30)" : shadeColor(p.color, 34);
+  ctx.globalAlpha = 0.34; roundRect(-11, -11, 15, 4.5, 2.2); ctx.fill(); ctx.globalAlpha = 1;
 
   ctx.fillStyle = "#12202b";
   circ(9, -6, 3.6); circ(9, 6, 3.6);
@@ -22971,8 +23130,8 @@ function drawChest(chest) {
   ctx.beginPath(); ctx.ellipse(0, -7, 22, 12, 0, 0, TAU); ctx.fill();
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#8c5a2b";
-  ctx.strokeStyle = "#4f2d12";
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#191714";
+  ctx.lineWidth = 3.2;
   roundRect(-20, -6, 40, 24, 7); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#a46a32";
   roundRect(-20, -16, 40, 16, 7); ctx.fill(); ctx.stroke();
@@ -22985,12 +23144,12 @@ function drawChest(chest) {
     if (dmg > 0.45) { ctx.moveTo(-1, -4); ctx.lineTo(3, 2); ctx.lineTo(-1, 8); }
     ctx.stroke();
   }
-  ctx.fillStyle = "#d4aa3a";
+  ctx.fillStyle = "#d4aa3a"; ctx.strokeStyle="#191714"; ctx.lineWidth=2.4;
   roundRect(-23, -8, 6, 28, 3); ctx.fill(); ctx.stroke();
   roundRect(17, -8, 6, 28, 3); ctx.fill(); ctx.stroke();
   roundRect(-5, -20, 10, 38, 3); ctx.fill(); ctx.stroke();
   roundRect(-6, -2, 12, 9, 3); ctx.fillStyle = "#f4d86b"; ctx.fill(); ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.26)";
+  ctx.fillStyle = "rgba(255,244,194,0.30)";
   ctx.beginPath(); ctx.ellipse(-7, -9, 10, 3.5, -0.35, 0, TAU); ctx.fill();
   ctx.restore();
 }
@@ -23529,7 +23688,7 @@ function resetGame() {
   player.username = meta.username || "Cube";
   player.inventory = [];
   player.hasSaddle = !!meta.ownedStarters.saddle;
-  player.skillLevel=0;player.skillXp=0;player.skillChoices={};player.pendingSkillChoice=0;player.toolTiers={Axe:0,Pickaxe:0,Sword:0,Bow:0};player.wallTier=0;player.towerTier=0;player.craftBonuses={gather:1,buildCost:1,combat:1};player._craftedUpgrades={};applyToolTierStats();
+  player.skillLevel=0;player.skillXp=0;player.skillMilestones={};player.pendingSkillMilestone=0;player.skillRanks={speed:0,strength:0,defense:0};player.toolTiers={Axe:0,Pickaxe:0,Sword:0,Bow:0};player.wallTier=0;player.towerTier=0;player.craftBonuses={gather:1,buildCost:1,combat:1};player._craftedUpgrades={};applyToolTierStats();updateSkillHud();
   if (player.hasSaddle) registerHotbarItem("Saddle");
   player.pets = [];
   player.riding = null;
@@ -23882,6 +24041,20 @@ function buildPetShop() {
       unlockBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const currentCards = meta.speciesCards[type] || 0;
+        if(accountState?.loggedIn){
+          let method="";
+          if(currentCards>=unlock.cards) method="cards";
+          else if(meta.servs>=unlock.servs){
+            if (!(await showGameConfirm("Unlock Pet", `Unlock ${info.name} for ${unlock.servs} Gold Cubits?`, "Unlock"))) return;
+            method="cubits";
+          } else {
+            showGameMessage("Not Enough", `Need ${unlock.cards} cards (have ${currentCards}) or ${unlock.servs} Gold Cubits (have ${meta.servs}).`);return;
+          }
+          const result=await accountAction("/api/pets/unlock",{species:type,method});
+          if(!result?.ok){showGameMessage("Unlock Failed",result?.data?.error==="not_enough_cards"?"Your server card balance changed. Reopen the pet page and try again.":result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That pet could not be unlocked.");return;}
+          banner(`Unlocked ${info.name}${method==="cards"?" with cards":""}!`);
+          buildPetShop();buildCardInventory();setupHome();return;
+        }
         if (currentCards >= unlock.cards) {
           meta.speciesCards[type] -= unlock.cards;
           meta.ownedStarters["start_" + type] = true;
@@ -24033,12 +24206,20 @@ function buildPetUpgradePage(type) {
     box.appendChild(b);grid.appendChild(box);
   }
 }
-function upgradePetStat(type, stat) {
+async function upgradePetStat(type, stat) {
   if (!PET_TYPES[type] || !PET_STAT_UPGRADE_INFO[stat] || !isPetUnlocked(type)) return;
   const levels=ensurePetStatUpgrades(type), level=Number(levels[stat])||0;
   if(level>=PET_STAT_UPGRADE_MAX)return;
   const cost=petStatUpgradeCost(type,stat), cards=meta.speciesCards[type]||0;
   if(cards<cost){showGameMessage("Not Enough Cards", `Need ${cost} ${PET_TYPES[type].name} cards. You have ${cards}.`);return;}
+  if(accountState?.loggedIn){
+    const result=await accountAction("/api/pets/upgrade-stat",{species:type,stat});
+    if(!result?.ok){showGameMessage("Upgrade Failed",result?.data?.error==="not_enough_cards"?"Your server card balance changed. Reopen this page and try again.":"That stat could not be upgraded.");return;}
+    const nextLevel=Math.max(0,Math.floor(Number(result.data?.level)||level+1));
+    for(const p of player.pets||[])if(p&&p.type===type&&p.owned)applyOwnedPetCardStats(p,false);
+    banner(`${PET_TYPES[type].name} ${PET_STAT_UPGRADE_INFO[stat].name} upgraded to Lv ${nextLevel}!`);
+    buildCardInventory(); buildPetShop(); setupHome(); return;
+  }
   meta.speciesCards[type]=cards-cost; levels[stat]=level+1; saveMeta();
   for(const p of player.pets||[])if(p&&p.type===type&&p.owned)applyOwnedPetCardStats(p,false);
   banner(`${PET_TYPES[type].name} ${PET_STAT_UPGRADE_INFO[stat].name} upgraded to Lv ${level+1}!`);
@@ -24052,30 +24233,23 @@ function openCardInventory(type = null) {
   buildCardInventory();
   el("cardInventoryOverlay").classList.add("show");
 }
-function upgradePetCardStage(type) {
+async function upgradePetCardStage(type) {
   if (!PET_TYPES[type] || !isPetUnlocked(type)) return;
   if (!meta.petStages) meta.petStages = {};
   if (!meta.speciesCards) meta.speciesCards = {};
-
-  const current = starterStageFor(type);
-  const nextStage = nextPetCardStage(current);
+  const current = starterStageFor(type), nextStage = nextPetCardStage(current);
   if (!nextStage) return;
-
-  const cost = petStageUpgradeCost(nextStage);
-  const cards = meta.speciesCards[type] || 0;
-  if (cards < cost) {
-    showGameMessage("Not Enough Cards", `Need ${cost} ${PET_TYPES[type].name} cards. You have ${cards}.`);
-    return;
+  const cost = petStageUpgradeCost(nextStage), cards = meta.speciesCards[type] || 0;
+  if (cards < cost) { showGameMessage("Not Enough Cards", `Need ${cost} ${PET_TYPES[type].name} cards. You have ${cards}.`); return; }
+  if(accountState?.loggedIn){
+    const result=await accountAction("/api/pets/upgrade-stage",{species:type});
+    if(!result?.ok){showGameMessage("Upgrade Failed",result?.data?.error==="not_enough_cards"?"Your server card balance changed. Reopen this page and try again.":"That starting stage could not be upgraded.");return;}
+    banner(`${PET_TYPES[type].name} card stage upgraded to ${stageDisplayName(result.data?.stage||nextStage)}!`);
+    buildCardInventory(); buildPetShop(); setupHome(); return;
   }
-
-  meta.speciesCards[type] = cards - cost;
-  meta.petStages[type] = nextStage;
-  saveMeta();
-
+  meta.speciesCards[type] = cards - cost; meta.petStages[type] = nextStage; saveMeta();
   banner(`${PET_TYPES[type].name} card stage upgraded to ${stageDisplayName(nextStage)}!`);
-  buildCardInventory();
-  buildPetShop();
-  setupHome();
+  buildCardInventory(); buildPetShop(); setupHome();
 }
 function closeCardInventory() {
   cardInventoryFocus = null;
@@ -24214,9 +24388,14 @@ function setupHome() {
     const div = document.createElement("div");
     div.className = "shop-item" + (owned ? " owned" : "");
     div.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px;"><b>${item.name}</b><span style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border:1px solid rgba(189,233,242,.42);border-radius:999px;background:rgba(189,233,242,.08);white-space:nowrap;">${item.category || "Starter"}</span></div><div style="font-size:11px;opacity:.72;line-height:1.35;margin:5px 0 7px;">${item.desc || "Permanent starter unlock."}</div><div class="price">${owned ? "Owned" : item.price.toLocaleString() + " Gold Cubits"}</div>`;
-    div.addEventListener("click", () => {
+    div.addEventListener("click", async () => {
       if (owned) return;
       if (meta.servs < item.price) { showGameMessage("Not Enough Gold Cubits", `You need ${item.price.toLocaleString()} Gold Cubits for ${item.name}. You have ${Number(meta.servs||0).toLocaleString()}.`); return; }
+      if(accountState?.loggedIn){
+        const result=await accountAction("/api/starters/buy",{id:item.id});
+        if(!result?.ok){showGameMessage("Purchase Failed",result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That starter unlock could not be purchased.");return;}
+        setupHome(); showGameMessage("Purchased", `${item.name} is now a permanent starter unlock.`); return;
+      }
       meta.servs -= item.price;
       meta.ownedStarters[item.id] = true;
       saveMeta();
@@ -24685,48 +24864,52 @@ window.__hostlSetGameGoldCubits = function(value) {
 
 window.__hostlApplyAccountEntitlements = function(payload={}) {
   try {
-    if(!meta.speciesCards) meta.speciesCards={};
-    if(!meta.ownedStarters) meta.ownedStarters={};
-    if(!meta.petStages) meta.petStages={};
-    if(!meta.petStatUpgrades) meta.petStatUpgrades={};
+    // While signed in, the server snapshot is the source of truth. Replace account
+    // progression instead of merging with browser values so edited localStorage cannot
+    // create fake cards, starter unlocks, stages or pet stat levels.
+    meta.speciesCards={};
+    meta.ownedStarters={};
+    meta.petStages={};
+    meta.petStatUpgrades={};
+
+    const cards=(payload.speciesCards && typeof payload.speciesCards==="object") ? payload.speciesCards : {};
+    for(const type of Object.keys(PET_TYPES||{})) meta.speciesCards[type]=Math.max(0,Math.floor(Number(cards[type])||0));
+
     const serverOwned=(payload.ownedStarters&&typeof payload.ownedStarters==="object")?payload.ownedStarters:{};
     for(const [k,v] of Object.entries(serverOwned)) if(v) meta.ownedStarters[k]=true;
+
     const serverStages=(payload.petStages&&typeof payload.petStages==="object")?payload.petStages:{};
-    const stageRank={baby:0,adult:1,boss:2,superboss:3,bigmomma:4};
-    for(const [species,stage] of Object.entries(serverStages)){
-      const old=String(meta.petStages[species]||"baby"), neu=String(stage||"baby");
-      if((stageRank[neu]??0)>(stageRank[old]??0))meta.petStages[species]=neu;
-    }
+    for(const type of Object.keys(PET_TYPES||{})) meta.petStages[type]=normalizePetCardStage(String(serverStages[type]||"baby"));
+
     const serverUp=(payload.petStatUpgrades&&typeof payload.petStatUpgrades==="object")?payload.petStatUpgrades:{};
-    for(const [species,stats] of Object.entries(serverUp)){
-      if(!meta.petStatUpgrades[species])meta.petStatUpgrades[species]={};
-      for(const stat of ["health","defense","attack","weight","regen","speed"]) meta.petStatUpgrades[species][stat]=Math.max(Number(meta.petStatUpgrades[species][stat])||0,Number(stats?.[stat])||0);
+    for(const type of Object.keys(PET_TYPES||{})){
+      meta.petStatUpgrades[type]={};
+      const stats=(serverUp[type]&&typeof serverUp[type]==="object")?serverUp[type]:{};
+      for(const stat of Object.keys(PET_STAT_UPGRADE_INFO)) meta.petStatUpgrades[type][stat]=clamp(Math.floor(Number(stats[stat])||0),0,PET_STAT_UPGRADE_MAX);
     }
-    if(!meta.starterPetType && payload.starterPetType)meta.starterPetType=String(payload.starterPetType);
-    if(!meta.starterPetName && payload.starterPetName)meta.starterPetName=String(payload.starterPetName);
-    if(payload.starterPetGender==="Female")meta.starterPetGender="Female";
-    const cards=(payload.speciesCards && typeof payload.speciesCards==="object") ? payload.speciesCards : {};
-    for(const [species,raw] of Object.entries(cards)){
-      const n=Math.max(0,Math.floor(Number(raw)||0));
-      meta.speciesCards[species]=Math.max(Number(meta.speciesCards[species])||0,n);
-    }
+
     for(const id of (Array.isArray(payload.craftedStarters)?payload.craftedStarters:[])) meta.ownedStarters[String(id)]=true;
     for(const id of (Array.isArray(payload.learnedSkills)?payload.learnedSkills:[])) meta.ownedStarters[String(id)]=true;
+
     const entitlements=[];
     if(Array.isArray(payload.starterPetEntitlements)) entitlements.push(...payload.starterPetEntitlements);
     if(payload.starterPetEntitlement && typeof payload.starterPetEntitlement==="object") entitlements.push(payload.starterPetEntitlement);
-    const ranks=stageRank;
-    const seenEnt=new Set();
+    const ranks={baby:0,adult:1,boss:2,superboss:3};
     for(const ent of entitlements){
-      if(!ent || !PET_TYPES?.[ent.type] || seenEnt.has(ent.type)) continue;
-      seenEnt.add(ent.type);
+      if(!ent || !PET_TYPES?.[ent.type]) continue;
       meta.ownedStarters["start_"+ent.type]=true;
-      const newRank=ranks[String(ent.stage||"baby")] ?? 0;
-      const oldRank=ranks[String(meta.petStages[ent.type]||"baby")] ?? 0;
-      if(newRank>oldRank) meta.petStages[ent.type]=String(ent.stage||"baby");
-      if(!meta.starterPetType) meta.starterPetType=ent.type;
-      if(!game.startPet) game.startPet=ent.type;
+      const st=ent.stage==="bigmomma"?"superboss":normalizePetCardStage(String(ent.stage||"baby"));
+      const old=normalizePetCardStage(meta.petStages[ent.type]||"baby");
+      if((ranks[st]??0)>(ranks[old]??0)) meta.petStages[ent.type]=st;
     }
+
+    meta.starterPetType=String(payload.starterPetType||"");
+    meta.starterPetName=String(payload.starterPetName||"");
+    meta.starterPetGender=payload.starterPetGender==="Female"?"Female":"Male";
+    if(meta.starterPetType && !isPetUnlocked(meta.starterPetType)){
+      meta.starterPetType="";meta.starterPetName="";meta.starterPetGender="Male";
+    }
+
     if(payload.username){
       const nm=String(payload.username).trim().slice(0,20);
       if(nm){ meta.username=nm; player.username=nm; }
@@ -24738,6 +24921,7 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
     player.testerRank=Math.max(0,Math.floor(Number(payload.testerRank)||0));
     player.ownerRank=Math.max(0,Math.floor(Number(payload.ownerRank)||0));
     saveMeta();
+    try{ restoreStarterPetPreference(); }catch(_){}
     try{ setupHome(); }catch(_){}
     try{buildPetShop();buildCardInventory();updateSelectedStarterPetLabel();}catch(_){}
     return {ok:true};
@@ -24783,6 +24967,7 @@ const GUEST_THEME_LIMIT = 10;
 let hostlSessionToken = "";
 let accountSaveTimer = 0;
 let googleAuthReady = false;
+let rewardedAdsConfigured = false;
 let hostlServerDayKey = "";
 let accountState = { loggedIn:false, userId:"", username:"", displayName:"", email:"", picture:"", goldCubits:0, unlockedThemes:[], selectedTheme:"", achievements:{}, speciesCards:{}, ownedStarters:{}, petStages:{}, petStatUpgrades:{}, starterPetType:"", starterPetName:"", starterPetGender:"Male", materials:{}, craftedStarters:[], learnedSkills:[], title:"", unlockedTitles:[], testerRank:0, ownerRank:0, starterPetEntitlements:[], starterPetEntitlement:null, lastDailyCubits:"", lastDailyChest:"", createdAt:"", friendCount:0 };
 
@@ -24866,6 +25051,8 @@ function setAccountFromServer(p={}) {
   } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
   setTimeout(()=>{ if(accountState.loggedIn){ sendPresence(); refreshFriends(false); } },0);
 }
+window.__hostlAcceptAccountSnapshot = function(account){ if(account&&typeof account==="object"){ setAccountFromServer(account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); } };
+
 function saveAccountSession() {
   try {
     if (accountState.loggedIn && hostlSessionToken) localStorage.setItem(ACCOUNT_STORAGE_KEY, hostlSessionToken);
@@ -24897,13 +25084,27 @@ window.__hostlBuyTheme = async function(themeId, shownPrice){
     showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
   }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
 };
+async function requestRewardedAdProof(kind,subject){
+  if(!rewardedAdsConfigured)return "";
+  // Provider integration point: the rewarded-ad SDK must return a short-lived,
+  // server-signed proof after it confirms completion. Never mint proofs in browser code.
+  try{
+    if(typeof window.__hostlRewardedAdProvider === "function"){
+      const proof=await window.__hostlRewardedAdProvider(String(kind||""),String(subject||""));
+      return typeof proof==="string"?proof:"";
+    }
+  }catch(_){}
+  return "";
+}
 window.__hostlUnlockAdTheme = async function(themeId){
   if(!accountState.loggedIn){ window.__hostlOpenAccountForTheme(); return; }
-  // Test hook: when the ad provider is connected, call this endpoint only after the rewarded ad completes.
+  if(!rewardedAdsConfigured){ showGameMessage?.("Rewarded Ads", "Rewarded ads are not connected on this server yet, so ad-only themes cannot be granted for free."); return; }
+  const adProof=await requestRewardedAdProof("theme",themeId);
+  if(!adProof){ showGameMessage?.("Rewarded Ads", "The ad was not completed or the ad provider did not return a verified completion proof."); return; }
   try{
-    const r=await fetch("/api/themes/ad-unlock",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId})});
+    const r=await fetch("/api/themes/ad-unlock",{method:"POST",headers:{"Content-Type":"application/json",...accountAuthHeaders()},body:JSON.stringify({themeId,adProof})});
     const d=await r.json().catch(()=>({}));
-    if(!r.ok){ showGameMessage?.("Theme", "That ad theme could not be unlocked."); return; }
+    if(!r.ok){ showGameMessage?.("Theme", d?.error==="ad_proof_already_used"?"That ad reward was already claimed.":"The server could not verify that rewarded ad."); return; }
     if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
     showGameMessage?.("Theme Unlocked", `${HOME_THEMES?.[themeId]?.name||"Theme"} is now permanently unlocked.`);
   }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
@@ -24914,16 +25115,15 @@ async function pushAccountProfileNow() {
     const r = await fetch("/api/account", {
       method:"PUT",
       headers:{ "Content-Type":"application/json", ...accountAuthHeaders() },
+      credentials:"same-origin",
       body:JSON.stringify({
-        // Username and Display Name are saved only by their dedicated profile editors.
-        // Background Cubit/theme saves must never overwrite a name the player just chose.
-        title:accountState.title||"", selectedTheme:accountState.selectedTheme||currentHomeTheme||"forestGold", goldCubits:Math.max(0,Math.floor(Number(accountState.goldCubits)||0)),
-        unlockedThemes:Array.isArray(accountState.unlockedThemes)?accountState.unlockedThemes:[],
-        achievements:(accountState.achievements && typeof accountState.achievements==="object") ? accountState.achievements : {},
-        lastDailyCubits:accountState.lastDailyCubits||"", lastDailyChest:accountState.lastDailyChest||"",
-        speciesCards:(meta.speciesCards && typeof meta.speciesCards==="object") ? meta.speciesCards : (accountState.speciesCards||{}),
-        ownedStarters:(meta.ownedStarters&&typeof meta.ownedStarters==="object")?meta.ownedStarters:{}, petStages:(meta.petStages&&typeof meta.petStages==="object")?meta.petStages:{},
-        petStatUpgrades:(meta.petStatUpgrades&&typeof meta.petStatUpgrades==="object")?meta.petStatUpgrades:{}, starterPetType:meta.starterPetType||"", starterPetName:meta.starterPetName||"", starterPetGender:meta.starterPetGender||"Male"
+        // Only profile/preferences are writable through this generic route.
+        // Economy and progression are changed through dedicated server-validated actions.
+        title:accountState.title||"",
+        selectedTheme:accountState.selectedTheme||currentHomeTheme||"forestGold",
+        starterPetType:meta.starterPetType||"",
+        starterPetName:meta.starterPetName||"",
+        starterPetGender:meta.starterPetGender||"Male"
       })
     });
     if (r.status===401) { logoutAccount(false); return false; }
@@ -24938,28 +25138,16 @@ function persistAccountProfile() {
   clearTimeout(accountSaveTimer);
   accountSaveTimer = setTimeout(pushAccountProfileNow, 250);
 }
-window.__hostlAccountGoldCubitsChanged = function(value){
+window.__hostlAccountGoldCubitsChanged = function(_value){
   if(!accountState.loggedIn) return;
-  const next=Math.max(0,Math.floor(Number(value)||0));
-  if(next===Math.floor(Number(accountState.goldCubits)||0)) return;
-  accountState.goldCubits=next;
-  try { window.__hostlSetGameGoldCubits?.(next); } catch(_) {}
-  const hs=document.getElementById("homeServs"); if(hs) hs.textContent=next;
-  const ds=document.getElementById("dockServs"); if(ds) ds.textContent=next;
-  const ss=document.getElementById("shopCubits"); if(ss) ss.textContent=next;
-  const as=document.getElementById("settingsCubits"); if(as) as.textContent=next;
-  persistAccountProfile();
+  // Signed-in Gold Cubits are server-authoritative. Local gameplay/UI code may
+  // request a change, but it cannot write the account balance directly.
+  try { window.__hostlSetGameGoldCubits?.(accountState.goldCubits); } catch(_) {}
 };
-window.__hostlAccountProgressChanged = function(progress={}){
+window.__hostlAccountProgressChanged = function(_progress={}){
   if(!accountState.loggedIn) return;
-  if(progress.speciesCards&&typeof progress.speciesCards==="object") accountState.speciesCards={...progress.speciesCards};
-  if(progress.ownedStarters&&typeof progress.ownedStarters==="object") accountState.ownedStarters={...progress.ownedStarters};
-  if(progress.petStages&&typeof progress.petStages==="object") accountState.petStages={...progress.petStages};
-  if(progress.petStatUpgrades&&typeof progress.petStatUpgrades==="object") accountState.petStatUpgrades=JSON.parse(JSON.stringify(progress.petStatUpgrades));
-  accountState.starterPetType=String(progress.starterPetType||accountState.starterPetType||"");
-  accountState.starterPetName=String(progress.starterPetName||accountState.starterPetName||"");
-  accountState.starterPetGender=progress.starterPetGender==="Female"?"Female":"Male";
-  persistAccountProfile();
+  // Account cards, permanent unlocks, stages and stat upgrades are server-owned.
+  // Dedicated API actions refresh these values after a validated purchase/reward.
 };
 function syncAchievementAccountBridge(){
   if(accountState.loggedIn && accountState.userId){
@@ -25278,11 +25466,11 @@ function syncChestUi() {
     status.textContent = "Log in or create an account to use chests.";
   } else {
     const freeReady = accountState.lastDailyChest !== utcDayKey();
-    btn.disabled = !freeReady;
-    btn.textContent = freeReady ? "Watch Ad to Open Wooden Chest" : "Wooden Chest Claimed Today";
-    status.textContent = freeReady
-      ? "Your daily Wooden Chest is ready."
-      : "Come back tomorrow for another Wooden Chest.";
+    btn.disabled = !freeReady || !rewardedAdsConfigured;
+    btn.textContent = !rewardedAdsConfigured ? "Rewarded Ads Not Connected" : (freeReady ? "Watch Ad to Open Wooden Chest" : "Wooden Chest Claimed Today");
+    status.textContent = !rewardedAdsConfigured
+      ? "The server has rewarded-ad grants locked until a verified ad provider is configured."
+      : (freeReady ? "Your daily Wooden Chest is ready." : "Come back tomorrow for another Wooden Chest.");
   }
 
   document.querySelectorAll(".cubitChestBtn").forEach(b=>{
@@ -25316,25 +25504,26 @@ function showChestResult(name, parts) {
     {duration:300,easing:"ease-out"}
   );
 }
-async function openAccountChest(name,cost,kind="forest",isFreeDaily=false) {
+async function openAccountChest(name,cost,kind="forest",isFreeDaily=false,adProof="") {
   if (!accountState.loggedIn) { openAccountModal(); syncAccountUi("Log in or create an account before opening chests."); return; }
-  const result=await accountAction("/api/open-chest",{kind:isFreeDaily?"daily":kind});
+  const result=await accountAction("/api/open-chest",{kind:isFreeDaily?"daily":kind,adProof});
   if(!result)return;
   if(!result.ok){
-    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:"That chest could not be opened.";
+    const msg=result.data?.error==="already_claimed"?"Already claimed today. Come back tomorrow.":result.data?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(result.data?.cost||cost||0).toLocaleString()}.`:String(result.data?.error||"").includes("ad_")||result.data?.error==="rewarded_ads_not_configured"?"The server could not verify a completed rewarded ad.":"That chest could not be opened.";
     showChestResult(name,[msg]); syncChestUi(); return;
   }
   const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
   showChestResult(name,rewards); syncChestUi(); renderMaterialsAndRecipes();
 }
 
-function openDailyChestNow() {
+async function openDailyChestNow() {
   if (!accountState.loggedIn) { openAccountModal(); return; }
   if (accountState.lastDailyChest === utcDayKey()) { showChestResult("Wooden Chest", ["Already claimed today. Come back tomorrow."]); syncChestUi(); return; }
-  // Test-build reward hook. When ads are connected, call this only after ad completion.
-  openAccountChest("Wooden Chest",0,"daily",true);
+  if(!rewardedAdsConfigured){ showChestResult("Wooden Chest", ["Rewarded ads are not connected on this server yet."]); syncChestUi(); return; }
+  const adProof=await requestRewardedAdProof("dailyChest",utcDayKey());
+  if(!adProof){ showChestResult("Wooden Chest", ["The rewarded ad was not completed or could not be verified."]); return; }
+  openAccountChest("Wooden Chest",0,"daily",true,adProof);
 }
-
 function buyCubitChest(button) {
   const cost = Number(button?.dataset?.cost)||0;
   const name = button?.dataset?.name || "Forest Chest";
@@ -25380,6 +25569,8 @@ async function initializeGoogleSignIn() {
   if (!holder) return;
   try {
     const cfg=await fetch("/auth/config", {cache:"no-store"}).then(r=>r.json());
+    rewardedAdsConfigured=!!cfg?.rewardedAdsConfigured;
+    try{syncChestUi();}catch(_){}
     if (!cfg?.googleClientId) {
       if(status) status.textContent="Google Sign-In needs GOOGLE_CLIENT_ID added in Render first.";
       return;
@@ -25861,7 +26052,7 @@ syncAchievementAccountBridge();
       </div>
 
       <div class="chest-card">
-        <div class="chest-title"><span>Forest Chest</span><span class="pill">1,200 Gold Cubits</span></div>
+        <div class="chest-title"><span>Forest Chest</span><span class="pill">600 Gold Cubits</span></div>
         <p class="muted">A Gold Cubit chest with Gold Cubits, species cards, crafting/learning materials, and a chance to unlock a permanent theme.</p>
         <button class="account-btn cubitChestBtn" data-cost="600" data-kind="forest" data-name="Forest Chest" type="button">Buy for 600</button>
       </div>
@@ -25870,7 +26061,7 @@ syncAchievementAccountBridge();
         <div class="chest-title"><span>Chest Opened!</span><span class="pill">Reward</span></div>
         <div id="chestResultText" style="margin-top:8px"></div>
       </div>
-      <p class="locked-note">The rewarded-ad provider is not connected yet, so the daily Wooden Chest uses the daily reward hook in this test build. Once ads are connected, the reward will only be granted after the ad completes.</p>
+      <p class="locked-note">Rewarded chests and ad-unlocked themes are granted only after the server verifies a completed rewarded ad. If rewarded ads are not configured on the server, those rewards stay locked.</p>
     </section>
 
     <section id="shopPageCodes" class="shop-page">

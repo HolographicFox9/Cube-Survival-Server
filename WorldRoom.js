@@ -12,13 +12,15 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "598";
-let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
+const CUBE_SHARED_RULES_VERSION = "600";
+let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
   if (typeof hooks.rewardTesterKill === "function") HOSTL_ACCOUNT_HOOKS.rewardTesterKill = hooks.rewardTesterKill;
   if (typeof hooks.rewardOwnerKill === "function") HOSTL_ACCOUNT_HOOKS.rewardOwnerKill = hooks.rewardOwnerKill;
   if (typeof hooks.rewardGameplayMaterial === "function") HOSTL_ACCOUNT_HOOKS.rewardGameplayMaterial = hooks.rewardGameplayMaterial;
+  if (typeof hooks.grantWorldReward === "function") HOSTL_ACCOUNT_HOOKS.grantWorldReward = hooks.grantWorldReward;
+  if (typeof hooks.recordAchievement === "function") HOSTL_ACCOUNT_HOOKS.recordAchievement = hooks.recordAchievement;
   if (typeof hooks.onPresenceJoin === "function") HOSTL_ACCOUNT_HOOKS.onPresenceJoin = hooks.onPresenceJoin;
   if (typeof hooks.onPresenceLeave === "function") HOSTL_ACCOUNT_HOOKS.onPresenceLeave = hooks.onPresenceLeave;
 }
@@ -519,6 +521,8 @@ const WILD_PREY = {
 function wildCanPreyOn(predatorType,preyType){return !!predatorType&&!!preyType&&predatorType!==preyType&&!!WILD_PREY[predatorType]?.has(preyType);}
 function randomAnimalGender(){return Math.random()<.5?"Male":"Female";}
 
+function skillXpNeededForLevel(level){level=Math.max(0,Math.floor(Number(level)||0));return Math.round(25+level*8+Math.floor(level/10)*6);}
+
 const TOOL = {
   Fist:    { dmg: 1.0, range: 42, cadence: 0.50, gather: 0.06, resourcePower: 0.08, woodWall:1.0, stoneWall:0.45 },
   Axe:     { dmg: 5.5, range: 50, cadence: 0.58, gather: 2.4,  resourcePower: 0.95, woodWall:9.0, stoneWall:2.0 },
@@ -536,12 +540,14 @@ class PlayerState extends Schema {
     this.color = "#3fa7ff"; this.tool = "Fist"; this.heldSpecial = ""; this.ridingPetId = "";
     this.moveX = 0; this.moveY = 0; this.moving = false; this.animalCarryT = 0;
     this.kills = 0; this.gold = 0; this.title = ""; this.testerRank = 0; this.ownerRank = 0;
+    this.skillLevel = 0; this.skillXp = 0; this.skillSpeed = 0; this.skillStrength = 0; this.skillDefense = 0; this.skillPendingMilestone = 0;
   }
 }
 defineTypes(PlayerState, {
   id:"string", username:"string", x:"number", y:"number", angle:"number",
   health:"number", maxHealth:"number", dead:"boolean", color:"string", tool:"string", heldSpecial:"string", ridingPetId:"string",
-  moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number", title:"string", testerRank:"number", ownerRank:"number"
+  moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number", title:"string", testerRank:"number", ownerRank:"number",
+  skillLevel:"number", skillXp:"number", skillSpeed:"number", skillStrength:"number", skillDefense:"number", skillPendingMilestone:"number"
 });
 
 class ResourceState extends Schema {
@@ -1137,13 +1143,13 @@ export class WorldRoom extends Room {
     // schema avoids sending wander targets and stuck timers over the network.
     this.petFollowState=new Map();
     this.petChaseState=new Map();
-    this.playerRunShop=new Map(); this.tamePendingPlayers=new Set();
+    this.playerRunShop=new Map(); this.playerSkillProgress=new Map(); this.tamePendingPlayers=new Set();
     this.playerCarryUntil=new Map(); this.playerCarryAnimal=new Map();
     this.wallSpikeNext=new Map(); this.wallEnemyNext=new Map();
     this.enemyPetByEnemy=new Map(); this.enemyOwnerByPet=new Map(); this.ownerThreat=new Map();
     this.firstLightReadyPlayers=new Set(); this.midnightMarkSpawned=false; this.petXpContrib=new Map();
     this.wildMateTargets=new Map(); this.wildLastBreedDay=new Map();
-    this.populationKeys=new Map();this.playerAccountIds=new Map();
+    this.populationKeys=new Map();this.playerAccountIds=new Map();this.playerAccountEntitlements=new Map();this.playerSurvivalSeconds=new Map();this.playerSurvivalAwards=new Map();this.playerNightSeen=new Set();
     // Track input timing/sequence so fast mounts can send a position after a lag
     // gap without the server clamping it back to an old fixed-distance limit.
     this.playerInputNetState=new Map();
@@ -1171,6 +1177,7 @@ export class WorldRoom extends Room {
     this.onMessage("shoot",(client,data={})=>this.handleShoot(client,data));
     this.onMessage("tame",(client,data={})=>this.handleTame(client,data));
     this.onMessage("runShopBuy",(client,data={})=>this.handleRunShopBuy(client,data));
+    this.onMessage("skillChoice",(client,data={})=>this.handleSkillChoice(client,data));
     this.onMessage("build",(client,data={})=>this.handleBuild(client,data));
     this.onMessage("heal",(client,data={})=>this.handleHeal(client,data));
     this.onMessage("respawn",(client)=>this.handleRespawn(client));
@@ -1685,13 +1692,27 @@ export class WorldRoom extends Room {
   toolStats(name,tier=0){const base=TOOL[this.validTool(name)],t={...base};tier=clamp(Math.floor(Number(tier)||0),0,2);if(name==="Axe"&&tier>=1)Object.assign(t,{dmg:8,gather:3.6,resourcePower:1.35,woodWall:14,cadence:.52});if(name==="Axe"&&tier>=2)Object.assign(t,{dmg:11,gather:4.6,resourcePower:1.65,woodWall:18,cadence:.48});if(name==="Sword"&&tier>=1)Object.assign(t,{dmg:13,range:56,cadence:.37});if(name==="Sword"&&tier>=2)Object.assign(t,{dmg:18,range:58,cadence:.34});if(name==="Pickaxe"&&tier>=1)Object.assign(t,{dmg:7,gather:3.4,resourcePower:1.45,stoneWall:18});if(name==="Pickaxe"&&tier>=2)Object.assign(t,{dmg:9,gather:4.5,resourcePower:1.8,stoneWall:23});if(name==="Bow"&&tier>=1)Object.assign(t,{dmg:13,cadence:.46});return t;}
   playerCanReach(client,x,y,extra=0){const p=this.state.players.get(client.sessionId);return !!p&&!p.dead&&dist(p.x,p.y,x,y)<=105+extra;}
   clientById(id){return this.clients.find(c=>c.sessionId===id)||null;}
+  recordAccountAchievement(ownerId,id,context={}){
+    const accountId=this.playerAccountIds.get(String(ownerId||"")),c=this.clientById(ownerId);if(!accountId||!c)return;
+    Promise.resolve(HOSTL_ACCOUNT_HOOKS.recordAchievement(String(accountId),String(id||""),context)).then(result=>{
+      if(result?.account)c.send("achievementReward",result);
+    }).catch(()=>{});
+  }
   sendReward(ownerId,reward,source={}){
     const p=this.state.players.get(ownerId);
     if(p&&reward&&reward.kind==="resource"&&reward.resource==="gold"&&!source?.kill){
       p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+Math.max(0,Number(reward.amount)||0)));
     }
-    const c=this.clientById(ownerId);
-    if(c)c.send("worldReward",{...reward,...source,balance:(reward?.kind==="resource"&&reward?.resource==="gold"&&p)?p.gold:undefined});
+    const c=this.clientById(ownerId); if(!c)return;
+    const payload={...reward,...source,balance:(reward?.kind==="resource"&&reward?.resource==="gold"&&p)?p.gold:undefined};
+    const accountId=this.playerAccountIds.get(String(ownerId||""));
+    if(accountId && (reward?.kind==="cards" || reward?.kind==="goldCubits")){
+      Promise.resolve(HOSTL_ACCOUNT_HOOKS.grantWorldReward(String(accountId),reward,source)).then(result=>{
+        if(result?.granted)c.send("worldReward",{...payload,account:result.account||null,serverVerified:true});
+      }).catch(()=>{});
+      return;
+    }
+    c.send("worldReward",payload);
   }
   broadcastFx(data){
     if(!data)return;
@@ -1810,7 +1831,7 @@ export class WorldRoom extends Room {
       // speed and actual packet gap, while still bounding impossible teleports.
       const slowMul=(Number(p._abilitySlowUntil)||0)>this.state.worldTime?(Number(p._abilitySlowMul)||.55):1;
       const inputMag=clamp(Math.hypot(p.moveX||0,p.moveY||0),0,1);
-      let expectedSpeed=148*inputMag;
+      let expectedSpeed=148*inputMag*this.runPerks(client.sessionId).moveMul;
       if(rideMount&&!rideMount.dead)expectedSpeed=Math.max(24,Number(rideMount.speed)||148)*2.30*inputMag;
       if(p.heldSpecial==="Wall")expectedSpeed*=.64;
       expectedSpeed*=slowMul;
@@ -1851,11 +1872,30 @@ export class WorldRoom extends Room {
     }
     p.health=clamp(p.health+amount,0,p.maxHealth);
   }
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.playerNightSeen.delete(client.sessionId);this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});this.sendSkillState(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+
+  verifiedAccountFor(ownerId){return this.playerAccountEntitlements.get(String(ownerId||""))||null;}
+  accountCanStartPet(ownerId,type){
+    const a=this.verifiedAccountFor(ownerId); if(!a)return true;
+    type=String(type||""); if(!PET_TYPES[type])return false;
+    if(type==="dog"||type==="cat"||type==="dragon")return true;
+    if(a.ownedStarters?.[`start_${type}`])return true;
+    return Array.isArray(a.starterPetEntitlements)&&a.starterPetEntitlements.some(x=>x&&x.type===type);
+  }
+  accountStarterStage(ownerId,type,requested="baby"){
+    const order=["baby","adult","boss","superboss"],a=this.verifiedAccountFor(ownerId);
+    if(!a)return order.includes(requested)?requested:"baby";
+    let stage=order.includes(a.petStages?.[type])?a.petStages[type]:"baby";
+    for(const ent of Array.isArray(a.starterPetEntitlements)?a.starterPetEntitlements:[]){
+      if(ent?.type!==type)continue;const st=ent.stage==="bigmomma"?"superboss":ent.stage;if(order.includes(st)&&order.indexOf(st)>order.indexOf(stage))stage=st;
+    }
+    return stage;
+  }
 
   ensureStarterPetFor(client,type,stage,opts={}){
     if(!client||!PET_TYPES[type])return null;
-    const validStage=["baby","adult","boss","superboss"].includes(stage)?stage:"baby";
+    if(!this.accountCanStartPet(client.sessionId,type)){client.send("starterPetDenied",{type,reason:"not_owned"});return null;}
+    const validStage=this.accountStarterStage(client.sessionId,type,stage);
     const defaultName=PET_TYPES[type].name||type;
     const petName=(String(opts.petName||"").trim().replace(/\s+/g," ").slice(0,14)||defaultName.slice(0,14));
     const gender=String(opts.gender||"")==="Female"?"Female":"Male";
@@ -1875,8 +1915,8 @@ export class WorldRoom extends Room {
     this.ensureStarterPetFor(client,type,stage,{petName:data.petName,gender:data.gender});
   }
 
-  handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;const toolName=this.validTool(String(data.tool||"Fist")),t=this.toolStats(toolName,data.tier);const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"resourceHit",tool:toolName,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"resource",targetId:id});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}this.broadcastEntityHealth("resource",id,r);if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",id,r);this.resourceRespawns.set(id,rand(12,22));}}
-  handleGoldHit(client,data){const id=String(data.id||""),g=this.state.gold.get(id);if(!g||(!g.infinite&&g.goldLeft<=0)||!this.playerCanReach(client,g.x,g.y,Math.min(150,g.r)))return;const tool=this.validTool(String(data.tool||"Fist"));const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"goldHit",tool,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"gold",targetId:id});this.broadcastFx({kind:"hit",x:g.x,y:g.y,text:"",color:g.pure?"#fff19a":"#ffd23f"});let take=0,tiny=false;if(tool==="Fist"){const key=`${client.sessionId}:${id}`;let c=(this.goldHandCredits.get(key)||0)+.12;if(c>=1){take=1;c-=1;}else tiny=true;this.goldHandCredits.set(key,c);}else take=g.pure?3:g.size==="huge"?randi(2,4):1;if(!g.infinite)take=Math.min(take,Math.max(0,g.goldLeft));if(take>0){if(!g.infinite)g.goldLeft=Math.max(0,g.goldLeft-take);take=Math.max(1,Math.round(take*this.runPerks(client.sessionId).gatherMul));const p=this.state.players.get(client.sessionId);if(p)p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+take));client.send("resourceReward",{id,kind:"gold",amount:take,pure:!!g.pure,balance:p?p.gold:undefined});}else client.send("resourceReward",{id,kind:"gold",amount:0,tiny});}
+  handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;this.addSkillXp(client.sessionId,1);const toolName=this.validTool(String(data.tool||"Fist")),t=this.toolStats(toolName,data.tier);const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"resourceHit",tool:toolName,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"resource",targetId:id});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b")});if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}this.broadcastEntityHealth("resource",id,r);if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",id,r);this.resourceRespawns.set(id,rand(12,22));}}
+  handleGoldHit(client,data){const id=String(data.id||""),g=this.state.gold.get(id);if(!g||(!g.infinite&&g.goldLeft<=0)||!this.playerCanReach(client,g.x,g.y,Math.min(150,g.r)))return;this.addSkillXp(client.sessionId,1);const tool=this.validTool(String(data.tool||"Fist"));const p=this.state.players.get(client.sessionId);this.broadcast("playerAction",{playerId:client.sessionId,action:"goldHit",tool,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"gold",targetId:id});this.broadcastFx({kind:"hit",x:g.x,y:g.y,text:"",color:g.pure?"#fff19a":"#ffd23f"});let take=0,tiny=false;if(tool==="Fist"){const key=`${client.sessionId}:${id}`;let c=(this.goldHandCredits.get(key)||0)+.12;if(c>=1){take=1;c-=1;}else tiny=true;this.goldHandCredits.set(key,c);}else take=g.pure?3:g.size==="huge"?randi(2,4):1;if(!g.infinite)take=Math.min(take,Math.max(0,g.goldLeft));if(take>0){if(!g.infinite)g.goldLeft=Math.max(0,g.goldLeft-take);take=Math.max(1,Math.round(take*this.runPerks(client.sessionId).gatherMul));const p=this.state.players.get(client.sessionId);if(p)p.gold=Math.max(0,Math.floor((Number(p.gold)||0)+take));client.send("resourceReward",{id,kind:"gold",amount:take,pure:!!g.pure,balance:p?p.gold:undefined});}else client.send("resourceReward",{id,kind:"gold",amount:0,tiny});}
 
   maybeRewardWildMaterial(attackerId,a){
     const userId=this.playerAccountIds?.get(String(attackerId||"")); if(!userId||!a)return;
@@ -1899,6 +1939,7 @@ export class WorldRoom extends Room {
     dmg=animalDamageTaken(a.type,a.stage,dmg);
     const ref=attackerRef||{kind:"player",id:attackerId};
     if(ref.kind==="pet"&&ref.id)this.markPetXpContribution("animal",id,ref.id,dmg);
+    if(ref.kind==="player"&&attackerId)this.addSkillXp(attackerId,1);
     a.hp=Math.max(0,a.hp-dmg);a.flash=.12;a.recentHit=4.2;a.sleeping=false;a.enraged=true;a.combat=8;this.broadcastEntityHealth("animal",id,a);
     const guardOwner=this.enemyOwnerByPet.get(id);
     if(guardOwner){a.fleeUntil=0;a.tameFailedAggro=true;this.animalFleeFrom.delete(id);this.animalAggro.set(id,ref);}
@@ -1910,6 +1951,7 @@ export class WorldRoom extends Room {
     if(!en||en.hp<=0)return;
     const ref=attackerRef||{kind:"player",id:attackerId};
     if(ref.kind==="pet"&&ref.id)this.markPetXpContribution("enemy",id,ref.id,dmg);
+    if(ref.kind==="player"&&attackerId)this.addSkillXp(attackerId,1);
     en.hp=Math.max(0,en.hp-dmg);en.flash=.12;this.broadcastEntityHealth("enemy",id,en);this.enemyAggro.set(id,ref.kind==="pet"?{kind:"pet",id:ref.id}:{kind:"player",id:attackerId});
     const guardId=this.enemyPetByEnemy.get(id),guard=guardId&&this.state.animals.get(guardId);
     if(guard){guard.sleeping=false;guard.enraged=true;guard.combat=10;guard.tameFailedAggro=true;this.animalAggro.set(guardId,{kind:"player",id:attackerId});}
@@ -1923,6 +1965,7 @@ export class WorldRoom extends Room {
   }
   rewardMoonmarkKill(ownerId,x,y){
     const owner=this.state.players.get(ownerId);if(!ownerId||!owner)return;
+    this.addSkillXp(ownerId,35);
     const goldReward=50,petXpReward=1200,cardReward=30,species=randomWildSpecies()||"dog";
     owner.kills=Math.max(0,(owner.kills||0)+1);
     owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+goldReward));
@@ -1930,8 +1973,9 @@ export class WorldRoom extends Room {
     this.sendReward(ownerId,{kind:"cards",species,amount:cardReward},{x,y});
     for(const[petId,p]of this.state.pets){if(p&&p.ownerId===ownerId&&!p.dead)this.givePetExp(petId,p,petXpReward);}
     const c=this.clientById(ownerId);if(c)c.send("moonmarkRewardSummary",{gold:goldReward,petXp:petXpReward,cards:cardReward,species,x,y});
+    this.recordAccountAchievement(ownerId,"moonmark_hunter",{species});
   }
-  rewardKill(ownerId,kind,x,y,species=""){const owner=this.state.players.get(ownerId);if(owner)owner.kills=Math.max(0,(owner.kills||0)+1);const drop=weighted([{v:"wood",w:3},{v:"stone",w:2},{v:"gold",w:1}]),amount=drop==="gold"?1:2;if(owner&&drop==="gold")owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+amount));this.sendReward(ownerId,{kind:"resource",resource:drop,amount},{x,y,kill:true});if(kind==="enemy"&&Math.random()<Math.min(.45,.1*this.runPerks(ownerId).cardMul)){const sp=weighted([{v:"dog",w:2},{v:"cat",w:2},{v:"rabbit",w:2},{v:"fox",w:2},{v:"dragon",w:1},{v:"wolf",w:1},{v:"bear",w:1}]);this.sendReward(ownerId,{kind:"cards",species:sp,amount:1},{x,y});}if(kind==="animal"&&species&&Math.random()<Math.min(.35,.08*this.runPerks(ownerId).cardMul)){this.sendReward(ownerId,{kind:"cards",species,amount:1},{x,y});}}
+  rewardKill(ownerId,kind,x,y,species=""){const owner=this.state.players.get(ownerId);if(owner)owner.kills=Math.max(0,(owner.kills||0)+1);this.addSkillXp(ownerId,10);const drop=weighted([{v:"wood",w:3},{v:"stone",w:2},{v:"gold",w:1}]),amount=drop==="gold"?1:2;if(owner&&drop==="gold")owner.gold=Math.max(0,Math.floor((Number(owner.gold)||0)+amount));this.sendReward(ownerId,{kind:"resource",resource:drop,amount},{x,y,kill:true});if(kind==="enemy"&&Math.random()<Math.min(.45,.1*this.runPerks(ownerId).cardMul)){const sp=weighted([{v:"dog",w:2},{v:"cat",w:2},{v:"rabbit",w:2},{v:"fox",w:2},{v:"dragon",w:1},{v:"wolf",w:1},{v:"bear",w:1}]);this.sendReward(ownerId,{kind:"cards",species:sp,amount:1},{x,y});}if(kind==="animal"&&species&&Math.random()<Math.min(.35,.08*this.runPerks(ownerId).cardMul)){this.sendReward(ownerId,{kind:"cards",species,amount:1},{x,y});}}
 
   handleAttack(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead||(Number(p._abilityStunUntil)||0)>this.state.worldTime)return;const now=this.state.worldTime,next=this.playerAttackCd.get(client.sessionId)||0;if(now<next)return;const tool=this.validTool(String(data.tool||p.tool||"Fist")),t=this.toolStats(tool,data.tier),runDmg=this.runPerks(client.sessionId).damageMul*((Number(p._abilityWeakUntil)||0)>this.state.worldTime?(Number(p._abilityWeakMul)||.68):1);this.playerAttackCd.set(client.sessionId,now+(t.cadence||.3));const angle=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=angle;this.broadcast("playerAction",{playerId:client.sessionId,action:"attack",tool,angle,heldSpecial:p.heldSpecial||""});this.mountedPetAttack(client.sessionId,p);
     // PvP is at most 11 targets, so keep it direct.
@@ -1952,10 +1996,41 @@ export class WorldRoom extends Room {
 
     let best=null,bestD=Infinity;for(const [id,c] of this.state.chests){if(c.opened)continue;const d=dist(p.x,p.y,c.x,c.y+8);if(d<t.range+c.r+8&&facing(p.x,p.y,angle,c.x,c.y+8,1.15)&&d<bestD){best={id,c};bestD=d;}}if(best)this.hitChest(client,best.id,best.c);
   }
-  hitChest(client,id,c){if(!c||c.opened)return;c.hp=Math.max(0,c.hp-1);c.pulse=1;this.broadcastEntityHealth("chest",id,c);if(c.hp<=0){c.opened=true;const reward=this.chestRewards.get(id)||this.makeChestReward();this.chestRewards.delete(id);client.send("chestReward",{id,reward});this.broadcastFx({kind:"chest",x:c.x,y:c.y});}else{const first=c.chipSide||"wood",second=first==="wood"?"stone":"wood",bonus=Math.random()<.45;c.chipSide=second;client.send("worldReward",{kind:"resource",resource:first,amount:1,x:c.x,y:c.y});if(bonus)client.send("worldReward",{kind:"resource",resource:second,amount:1,x:c.x,y:c.y});}}
+  hitChest(client,id,c){if(!c||c.opened)return;this.addSkillXp(client.sessionId,1);c.hp=Math.max(0,c.hp-1);c.pulse=1;this.broadcastEntityHealth("chest",id,c);if(c.hp<=0){c.opened=true;this.addSkillXp(client.sessionId,12);const reward=this.chestRewards.get(id)||this.makeChestReward();this.chestRewards.delete(id);const accountId=this.playerAccountIds.get(client.sessionId);if(accountId&&(reward?.kind==="cards"||reward?.kind==="goldCubits")){Promise.resolve(HOSTL_ACCOUNT_HOOKS.grantWorldReward(String(accountId),reward,{chest:true,id})).then(result=>{if(result?.granted)client.send("chestReward",{id,reward,account:result.account||null,serverVerified:true});}).catch(()=>{});}else client.send("chestReward",{id,reward});this.broadcastFx({kind:"chest",x:c.x,y:c.y});}else{const first=c.chipSide||"wood",second=first==="wood"?"stone":"wood",bonus=Math.random()<.45;c.chipSide=second;client.send("worldReward",{kind:"resource",resource:first,amount:1,x:c.x,y:c.y});if(bonus)client.send("worldReward",{kind:"resource",resource:second,amount:1,x:c.x,y:c.y});}}
   makeChestReward(){const roll=Math.random();if(roll<.34)return{kind:"goldCubits",amount:Math.random()<.1?randi(12,18):randi(5,10)};if(roll<.52)return{kind:"cards",species:weighted(WILD_SPECIES.map(v=>({v,w:RARITY_CARD_WEIGHT[animalRarity(v)]||1}))),amount:Math.random()<.14?25:10};const res=weighted([{v:"wood",w:2.8},{v:"stone",w:2.3},{v:"berries",w:1.8},{v:"gold",w:1.1}]);const amount=res==="wood"?randi(16,28):res==="stone"?randi(12,22):res==="berries"?randi(6,12):randi(3,6);return{kind:"resource",resource:res,amount};}
 
   handleShoot(client,data){const p=this.state.players.get(client.sessionId);if(!p||p.dead||(Number(p._abilityStunUntil)||0)>this.state.worldTime)return;const now=this.state.worldTime,next=this.playerShootCd.get(client.sessionId)||0;if(now<next)return;this.playerShootCd.set(client.sessionId,now+.45);const a=Number.isFinite(+data.angle)?+data.angle:p.angle;p.angle=a;this.broadcast("playerAction",{playerId:client.sessionId,action:"shoot",tool:"Bow",angle:a,heldSpecial:""});this.mountedPetAttack(client.sessionId,p);this.addProjectile({x:p.x+Math.cos(a)*26,y:p.y+Math.sin(a)*26,vx:Math.cos(a)*640,vy:Math.sin(a)*640,life:1.15,r:5,hostile:false,kind:"arrow",color:"#7ec0ee",dmg:this.toolStats("Bow",data.tier).dmg*this.runPerks(client.sessionId).damageMul*((Number(p._abilityWeakUntil)||0)>this.state.worldTime?(Number(p._abilityWeakMul)||.68):1),ownerId:client.sessionId,petBlast:false,knock:0});}
+
+  skillState(ownerId){
+    let s=this.playerSkillProgress.get(ownerId);
+    if(!s){s={level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}};this.playerSkillProgress.set(ownerId,s);}
+    return s;
+  }
+  pendingSkillMilestone(s){
+    for(let m=10;m<=Math.max(0,Math.floor(Number(s?.level)||0));m+=10)if(!s.milestones?.[m])return m;
+    return 0;
+  }
+  skillSnapshot(ownerId){
+    const s=this.skillState(ownerId),pending=this.pendingSkillMilestone(s),p=this.state.players.get(ownerId);
+    if(p){p.skillLevel=s.level;p.skillXp=s.xp;p.skillSpeed=s.speed;p.skillStrength=s.strength;p.skillDefense=s.defense;p.skillPendingMilestone=pending;}
+    return {level:s.level,xp:s.xp,next:skillXpNeededForLevel(s.level),speed:s.speed,strength:s.strength,defense:s.defense,pendingMilestone:pending,milestones:{...s.milestones}};
+  }
+  sendSkillState(ownerId){
+    const c=this.clientById(ownerId);if(c)c.send("skillState",this.skillSnapshot(ownerId));else this.skillSnapshot(ownerId);
+  }
+  addSkillXp(ownerId,amount){
+    if(!ownerId||!this.state.players.has(ownerId))return;
+    amount=Math.max(0,Number(amount)||0);if(!amount)return;
+    const s=this.skillState(ownerId);s.xp+=amount;
+    while(s.xp>=skillXpNeededForLevel(s.level)){s.xp-=skillXpNeededForLevel(s.level);s.level++;}
+    this.sendSkillState(ownerId);
+  }
+  handleSkillChoice(client,data={}){
+    const s=this.skillState(client.sessionId),pending=this.pendingSkillMilestone(s);
+    const milestone=Math.max(0,Math.floor(Number(data.milestone)||0)),choice=String(data.choice||"");
+    if(!pending||milestone!==pending||!["speed","strength","defense"].includes(choice)){this.sendSkillState(client.sessionId);return;}
+    s.milestones[milestone]=choice;s[choice]=Math.max(0,Math.floor(Number(s[choice])||0))+1;this.sendSkillState(client.sessionId);
+  }
 
   runShopState(ownerId){
     let s=this.playerRunShop.get(ownerId);
@@ -1963,15 +2038,16 @@ export class WorldRoom extends Room {
     return s;
   }
   runPerks(ownerId){
-    const s=this.runShopState(ownerId);
+    const s=this.runShopState(ownerId),skill=this.skillState(ownerId);
     return {
       gatherMul:s.hat==="minerHat"?1.25:1,
       regen:s.hat==="healerHood"?.7:0,
-      damageMul:s.hat==="warriorHelm"?1.18:1,
+      moveMul:1+Math.max(0,skill.speed||0)*.08,
+      damageMul:(s.hat==="warriorHelm"?1.18:1)*(1+Math.max(0,skill.strength||0)*.08),
       tameBonus:s.cape==="tamerCape"?.10:0,
       cardMul:s.cape==="cardCape"?1.75:1,
       petXpMul:s.cape==="mentorCape"?1.50:1,
-      defenseMul:s.armor==="guardianArmor"?.66:s.armor==="ironArmor"?.78:s.armor==="leatherArmor"?.88:1
+      defenseMul:(s.armor==="guardianArmor"?.66:s.armor==="ironArmor"?.78:s.armor==="leatherArmor"?.88:1)*Math.pow(.92,Math.max(0,skill.defense||0))
     };
   }
   handleRunShopBuy(client,data={}){
@@ -2003,7 +2079,9 @@ export class WorldRoom extends Room {
         this.state.animals.delete(id);this.animalAggro.delete(id);this.animalFleeFrom.delete(id);
         const petId=this.addPet(client.sessionId,current.type,current.stage,current.x,current.y,{hp:current.maxHp,coat:current.coat,spotCol:current.spotCol,spotsJson:current.spotsJson,petName:current.type,gender:current.gender});
         client.send("tameResult",{success:true,type:current.type,petId,chance});
+        this.addSkillXp(client.sessionId,25);
         this.sendReward(client.sessionId,{kind:"cards",species:current.type,amount:1},{x:current.x,y:current.y,tame:true});
+        this.recordAccountAchievement(client.sessionId,"first_tame",{species:current.type});this.recordAccountAchievement(client.sessionId,`tame_${current.type}`,{species:current.type});
       }else{
         current.sleeping=false;current.enraged=true;current.tameFailedAggro=true;current.desperateAggro=false;current.fleeUntil=0;current.combat=9999;
         this.animalAggro.set(id,{kind:"player",id:client.sessionId});
@@ -2058,6 +2136,8 @@ export class WorldRoom extends Room {
     const babyId=this.addPet(client.sessionId,type,"baby",x,y,{petName:`Baby ${info.name}`,gender:randomAnimalGender(),motherId,fatherId,bredChild:true,coat:Math.random()<.5?mother.coat:father.coat});
     const baby=this.state.pets.get(babyId);if(baby){baby.abilityCd=0;baby.orderMode="follow";}
     this.sendReward(client.sessionId,{kind:"cards",species:type,amount:1},{x,y,breed:true});
+    this.addSkillXp(client.sessionId,20);
+    this.recordAccountAchievement(client.sessionId,`breed_${type}`,{species:type});
     client.send("petBreedResult",{success:true,id:babyId,type,gender:baby?.gender||"",motherId,fatherId});
     this.broadcastFx({kind:"familyBirth",x,y});
     this.broadcastFx({kind:"hit",x,y,text:`Baby ${info.name}!`,color:"#ffd9e6"});
@@ -2737,6 +2817,7 @@ export class WorldRoom extends Room {
     if(ref.kind==="player"){
       if(obj.dead)return false;
       const raw=Math.max(0,Number(dmg)||0);if(raw<=0)return false;
+      if(attackerId&&attackerId!==ref.id&&["player","playerProjectile","projectile"].includes(String(attackerKind))&&this.state.players.has(String(attackerId)))this.addSkillXp(String(attackerId),1);
       // While riding, the mount is the rider's body and takes the entire hit first.
       // A killing blow can knock the rider off, but the same hit never spills into
       // rider health; only a later hit can hurt the now-dismounted player.
@@ -2758,7 +2839,7 @@ export class WorldRoom extends Room {
       }
       const amount=raw*this.runPerks(ref.id).defenseMul;if(amount<=0)return false;
       obj.health=Math.max(0,obj.health-amount);if(obj.health<=0){
-        obj.health=0;obj.dead=true;obj.ridingPetId="";this.firstLightReadyPlayers.delete(ref.id);this.broadcastSpectateKill("player",ref.id,attackerKind,attackerId);
+        obj.health=0;obj.dead=true;obj.ridingPetId="";this.firstLightReadyPlayers.delete(ref.id);this.playerSurvivalSeconds.set(ref.id,0);this.playerSurvivalAwards.set(ref.id,new Set());this.playerNightSeen.delete(ref.id);this.recordAccountAchievement(ref.id,"first_death",{});this.broadcastSpectateKill("player",ref.id,attackerKind,attackerId);
         let killerSessionId="";
         if (["player","playerProjectile","projectile"].includes(String(attackerKind)) && this.state.players.has(String(attackerId))) killerSessionId=String(attackerId);
         else if (String(attackerKind)==="pet") { const kp=this.state.pets.get(String(attackerId)); if(kp?.ownerId) killerSessionId=String(kp.ownerId); }
@@ -3556,7 +3637,7 @@ export class WorldRoom extends Room {
       if(phase.spawn)this.waveTimer=Math.min(this.waveTimer||0,.65);
       if(phase.name==="Dawn")this.midnightMarkSpawned=false;
       if(phase.name==="Midnight"&&!this.midnightMarkSpawned&&this.state.enemies.size<70){const mid=this.addEnemy(true,null,"Forest Warden",true);if(mid){this.midnightMarkSpawned=true;const boss=this.state.enemies.get(mid);if(boss)this.broadcast("moonmarkSpawned",{id:mid,x:boss.x,y:boss.y,biome:boss.moonBiome||CURRENT_BIOME_ID,boss:boss.role});}}
-      if(phase.name==="Morning"){this.startWildMorningBreeding();this.triggerFirstLight();}
+      if(phase.name==="Morning"){this.startWildMorningBreeding();this.triggerFirstLight();for(const[pid,pl]of this.state.players)if(pl&&!pl.dead&&this.playerNightSeen.has(pid))this.recordAccountAchievement(pid,"survive_night",{});this.playerNightSeen.clear();}
       this.broadcast("phaseEvent",{phase:this.state.dayPhase,dayCount:this.state.dayCount});
     }
     const phase=TIME_PHASES[this.state.dayPhase];
@@ -3583,6 +3664,7 @@ export class WorldRoom extends Room {
     for(const[id,p]of this.state.players){
       p.animalCarryT=0;const regen=this.runPerks(id).regen;
       if(regen>0&&!p.dead&&p.health<p.maxHealth)p.health=Math.min(p.maxHealth,p.health+regen*dt);
+      if(!p.dead){const activePhase=TIME_PHASES[this.state.dayPhase]?.name||"";if(activePhase==="Night"||activePhase==="Midnight")this.playerNightSeen.add(id);const t=(this.playerSurvivalSeconds.get(id)||0)+dt;this.playerSurvivalSeconds.set(id,t);let awards=this.playerSurvivalAwards.get(id);if(!awards){awards=new Set();this.playerSurvivalAwards.set(id,awards);}if(t>=300&&!awards.has("survive_5")){awards.add("survive_5");this.recordAccountAchievement(id,"survive_5",{});}if(t>=600&&!awards.has("survive_10")){awards.add("survive_10");this.recordAccountAchievement(id,"survive_10",{});}}
     }
     for(const[id,left]of this.resourceRespawns){
       const n=left-dt;
@@ -3600,15 +3682,15 @@ export class WorldRoom extends Room {
     this.populationKeys.set(client.sessionId,populationKey);ACTIVE_CUBE_PLAYER_KEYS.add(populationKey);
     const s=this.safeSpawn(),p=new PlayerState();p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
     let verifiedAccount=null;try{verifiedAccount=HOSTL_ACCOUNT_HOOKS.resolveSession(String(options.accountToken||""));}catch(_){verifiedAccount=null;}
-    if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));p.ownerRank=Math.max(0,Math.floor(Number(verifiedAccount.ownerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
-    let upgrades={};try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}
-    this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.state.players.set(client.sessionId,p);
+    if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));this.playerAccountEntitlements.set(client.sessionId,verifiedAccount);if(verifiedAccount.username)p.username=String(verifiedAccount.username).slice(0,14);p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));p.ownerRank=Math.max(0,Math.floor(Number(verifiedAccount.ownerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
+    let upgrades={};if(verifiedAccount?.userId)upgrades=(verifiedAccount.petStatUpgrades&&typeof verifiedAccount.petStatUpgrades==="object")?verifiedAccount.petStatUpgrades:{};else try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}
+    this.playerPetStatUpgrades.set(client.sessionId,upgrades);this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.state.players.set(client.sessionId,p);this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});
     const clientRules=String(options.rulesVersion||"");
     if(clientRules&&clientRules!==CUBE_SHARED_RULES_VERSION)client.send("rulesMismatch",{serverRulesVersion:CUBE_SHARED_RULES_VERSION,clientRulesVersion:clientRules});
-    const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});
+    const start=String(options.startPet||"");const requestedStage=String(options.startPetStage||"baby");const startStage=["baby","adult","boss","superboss"].includes(requestedStage)?requestedStage:"baby";if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});this.sendSkillState(client.sessionId);
   }
 
-  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerAccountEntitlements?.delete(client.sessionId);this.playerSurvivalSeconds?.delete(client.sessionId);this.playerSurvivalAwards?.delete(client.sessionId);this.playerNightSeen?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.playerSkillProgress.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
   onDispose(){for(const key of this.populationKeys.values())ACTIVE_CUBE_PLAYER_KEYS.delete(key);this.populationKeys.clear();}
 
 }
