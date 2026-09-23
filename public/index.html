@@ -5166,6 +5166,92 @@ body.mobile-home-layout #home.home-themed .home-main-panel{
   #materialShopGrid.rotating-material-grid{grid-template-columns:repeat(2,minmax(76px,1fr)) !important;}
 }
 </style>
+
+<style id="hostl-game645-shop-hover-reveal-fix">
+/* 645: Shop hover targets stay physically and visually stable. The Shop no longer
+   inherits the Home-wide brightness/press effects that could rapidly repaint and
+   look like the pointer was entering/leaving the same control. */
+#expandedShopModal button,
+#expandedShopModal .material-card,
+#expandedShopModal .shop-tab,
+#expandedShopModal .recipe-card button{
+  transform:none !important;
+  filter:none !important;
+  animation:none !important;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  touch-action:manipulation;
+}
+#expandedShopModal button *,
+#expandedShopModal .material-card *{pointer-events:none;}
+#expandedShopModal button{
+  transition:border-color .10s ease,background-color .10s ease,box-shadow .10s ease,color .10s ease !important;
+}
+#expandedShopModal .material-card{
+  transition:border-color .10s ease,background-color .10s ease,box-shadow .10s ease !important;
+}
+@media (hover:hover) and (pointer:fine){
+  #expandedShopModal button:hover:not(:disabled){
+    transform:none !important;
+    filter:none !important;
+    border-color:var(--ht-accent) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 22%,transparent),0 4px 0 rgba(10,15,11,.62) !important;
+  }
+  #expandedShopModal .material-card:hover{
+    transform:none !important;
+    filter:none !important;
+    border-color:var(--ht-accent) !important;
+    box-shadow:0 0 0 2px color-mix(in srgb,var(--ht-accent) 22%,transparent),0 4px 0 rgba(10,15,11,.62) !important;
+  }
+}
+#expandedShopModal button:active:not(:disabled),
+#expandedShopModal .material-card:active{
+  transform:none !important;
+  filter:none !important;
+}
+
+/* 645 purchase reveal: no screen tint, no card/panel, no visible words.
+   Only a transparent luminous circle and the purchased item's temporary art. */
+#purchaseReveal{
+  z-index:16000 !important;
+  background:transparent !important;
+  pointer-events:none !important;
+}
+#purchaseReveal .purchase-reveal-card{
+  min-width:0 !important;
+  max-width:none !important;
+  width:190px !important;
+  height:190px !important;
+  padding:0 !important;
+  display:grid !important;
+  place-items:center !important;
+  border:0 !important;
+  border-radius:50% !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:transparent !important;
+  animation:hostlPurchasePop .22s cubic-bezier(.2,.9,.25,1.25);
+}
+#purchaseReveal .purchase-reveal-icon-wrap{
+  width:190px !important;
+  height:190px !important;
+  margin:0 !important;
+}
+#purchaseReveal .purchase-reveal-glow{
+  width:156px !important;
+  height:156px !important;
+  background:radial-gradient(circle,rgba(255,250,199,.80) 0%,rgba(255,231,128,.45) 24%,color-mix(in srgb,var(--ht-accent) 40%,transparent) 48%,transparent 74%) !important;
+  box-shadow:0 0 24px rgba(255,244,176,.62),0 0 55px color-mix(in srgb,var(--ht-accent) 52%,transparent),0 0 92px color-mix(in srgb,var(--ht-special) 30%,transparent) !important;
+  animation:hostlPurchaseGlow .82s ease-in-out infinite alternate !important;
+}
+#purchaseReveal .purchase-reveal-icon{
+  font-size:76px !important;
+  filter:drop-shadow(0 5px 0 rgba(0,0,0,.22)) drop-shadow(0 0 9px rgba(255,255,255,.18)) !important;
+}
+#purchaseReveal .purchase-reveal-kicker,
+#purchaseReveal .purchase-reveal-name,
+#purchaseReveal .purchase-reveal-sub{display:none !important;}
+</style>
 </head>
 <body>
 <div id="bootLoadingScreen" role="status" aria-live="polite">
@@ -25673,14 +25759,15 @@ function closeMaterialDescription(){
 }
 function showPurchaseReveal(name, icon="📦", kicker="Purchased", sub="Added to your account", onDone=null){
   const root=document.getElementById("purchaseReveal"); if(!root){ if(typeof onDone==="function")onDone(); return; }
-  const ico=document.getElementById("purchaseRevealIcon"), k=document.getElementById("purchaseRevealKicker"), n=document.getElementById("purchaseRevealName"), small=document.getElementById("purchaseRevealSub");
-  if(ico)ico.textContent=icon||"📦"; if(k)k.textContent=kicker||"Purchased"; if(n)n.textContent=name||"Item"; if(small)small.textContent=sub||"Added to your account";
+  const ico=document.getElementById("purchaseRevealIcon");
+  if(ico)ico.textContent=icon||"📦";
+  root.setAttribute("aria-label",String(name||"Purchased item"));
   clearTimeout(purchaseRevealTimer);
   root.classList.remove("show"); void root.offsetWidth; root.classList.add("show"); root.setAttribute("aria-hidden","false");
   purchaseRevealTimer=setTimeout(()=>{
     root.classList.remove("show"); root.setAttribute("aria-hidden","true");
     if(typeof onDone==="function")onDone();
-  },2000);
+  },4000);
 }
 function selectMaterialListing(slotId){
   selectedMaterialSlotId=String(slotId||"");
@@ -26529,11 +26616,8 @@ syncAchievementAccountBridge();
 </div>
 
 <div id="purchaseReveal" role="status" aria-live="polite" aria-hidden="true">
-  <div class="purchase-reveal-card">
+  <div class="purchase-reveal-card" aria-hidden="true">
     <div class="purchase-reveal-icon-wrap"><div class="purchase-reveal-glow"></div><div id="purchaseRevealIcon" class="purchase-reveal-icon">📦</div></div>
-    <div id="purchaseRevealKicker" class="purchase-reveal-kicker">Purchased</div>
-    <div id="purchaseRevealName" class="purchase-reveal-name">Item</div>
-    <div id="purchaseRevealSub" class="purchase-reveal-sub">Added to your account</div>
   </div>
 </div>
 

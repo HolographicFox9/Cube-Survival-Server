@@ -1,0 +1,9 @@
+HOSTL SHOP HOVER + PURCHASE REVEAL FIX — SERVER 573 / GAME 645 / RULES 601
+
+- Stabilized Shop hit targets to stop hover in/out flicker and missed clicks.
+- Removed Shop-only brightness filter and moving active geometry.
+- Shop button/card children no longer become separate pointer targets.
+- Purchase reveal now lasts exactly 4 seconds.
+- Purchase reveal is only the transparent glow/shiny circle plus the item visual.
+- No reveal background tint, card, item name, Purchased label, or other visible words.
+- For material purchases, item details close while the reveal is visible and reopen after it ends.

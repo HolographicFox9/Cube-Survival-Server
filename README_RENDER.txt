@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 572 / GAME 644 / RULES 601
+HOSTL — FULL RENDER PROJECT — SERVER 573 / GAME 645 / RULES 601
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 644 browser client
-- WorldRoom.js          Server 572 Colyseus multiplayer room
+- public/index.html      Game 645 browser client
+- WorldRoom.js          Server 573 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -68,8 +68,8 @@ RENDER DEPLOYMENT
 
 BUILD CHECK
 /healthz should report:
-- serverBuild: 572
-- gameBuild: 644
+- serverBuild: 573
+- gameBuild: 645
 - rulesVersion: 600
 - rewardedAdsConfigured: true/false
 - accountStoragePersistent: true/false
@@ -92,3 +92,11 @@ SERVER 572 / GAME 644 — SHOP POPUP + HOME CLEANUP PASS
 - Purchased items use a short glowing-circle reward reveal with temporary placeholder item art.
 - Material purchasing immediately shows a Purchasing state and avoids one redundant UI rebuild.
 - Account JSON writes are compact rather than pretty-printed, reducing disk work on purchase/progression saves.
+
+
+SERVER 573 / GAME 645 — SHOP HOVER + 4 SECOND ICON-ONLY PURCHASE REVEAL
+- Shop controls use fixed hit geometry with no brightness-filter or press movement.
+- Child art/text cannot steal pointer targeting from a shop control.
+- Purchase reveal lasts 4 seconds.
+- Reveal has no dark/fullscreen background, panel, labels, or text: glow circle + purchased item art only.
+- Material description still closes for the reveal and returns after the four-second reveal finishes.
