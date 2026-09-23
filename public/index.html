@@ -5315,6 +5315,51 @@ button:focus-visible{
   filter:drop-shadow(0 5px 0 rgba(0,0,0,.22)) drop-shadow(0 0 9px rgba(255,255,255,.18));
 }
 </style>
+
+<style id="hostl-game647-shop-stable-pointer-fix">
+/* 647: the remaining Shop flicker came from live DOM replacement during account/friend
+   polling. These exact controls also use an invariant paint box so hover never changes
+   geometry or blur/filter state under the pointer. */
+#expandedShopModal .recipe-card button.account-btn,
+#expandedShopModal #materialShopGrid .material-card,
+#expandedShopModal .shop-tab{
+  transform:none !important;
+  filter:none !important;
+  animation:none !important;
+  transition:none !important;
+  will-change:auto !important;
+  box-sizing:border-box !important;
+}
+#expandedShopModal #materialShopGrid button.material-card{
+  appearance:none !important;
+  -webkit-appearance:none !important;
+  font:inherit !important;
+  color:inherit !important;
+  line-height:normal !important;
+}
+#expandedShopModal .recipe-card button.account-btn > *,
+#expandedShopModal #materialShopGrid .material-card > *,
+#expandedShopModal .shop-tab > *{pointer-events:none !important;}
+@media (hover:hover) and (pointer:fine){
+  #expandedShopModal .recipe-card button.account-btn:hover:not(:disabled),
+  #expandedShopModal #materialShopGrid .material-card:hover,
+  #expandedShopModal .shop-tab:hover:not(:disabled){
+    transform:none !important;
+    filter:none !important;
+    animation:none !important;
+    outline:3px solid color-mix(in srgb,var(--ht-accent) 72%,#fff 8%) !important;
+    outline-offset:-3px !important;
+  }
+}
+#expandedShopModal .recipe-card button.account-btn:active:not(:disabled),
+#expandedShopModal #materialShopGrid .material-card:active,
+#expandedShopModal .shop-tab:active:not(:disabled){
+  transform:none !important;
+  filter:none !important;
+  animation:none !important;
+}
+</style>
+
 </head>
 <body>
 <div id="bootLoadingScreen" role="status" aria-live="polite">
@@ -25543,7 +25588,9 @@ function setAccountFromServer(p={}) {
     if(homeUser && !window.__hostlUsernameDirty && document.activeElement!==homeUser) homeUser.value=meta.username;
     applyAccountGameEntitlements();
   } catch (err) { console.warn("HOSTL entitlement bridge error:", err); }
-  setTimeout(()=>{ if(accountState.loggedIn){ sendPresence(); refreshFriends(false); } },0);
+  // Account snapshots must not recursively trigger /api/friends. The friends loop
+  // already handles presence/polling after login. Recursing here repeatedly replaced
+  // live Shop DOM nodes under the mouse, causing hover/click flicker.
 }
 window.__hostlAcceptAccountSnapshot = function(account){ if(account&&typeof account==="object"){ setAccountFromServer(account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); } };
 
@@ -25691,9 +25738,14 @@ function claimDailyCubits() {
   // Daily Gold Cubits are granted by the HOSTL server when Google login succeeds.
   return false;
 }
+let __hostlLastThemeUiSig="";
+function hostlThemeUiSignature(){
+  return JSON.stringify([!!accountState.loggedIn,Math.floor(Number(accountState.goldCubits)||0),String(accountState.selectedTheme||""),[...(accountState.unlockedThemes||[])].map(String).sort()]);
+}
 function syncAccountUi(msg="") {
   window.__hostlThemeAccountState={loggedIn:!!accountState.loggedIn,unlockedThemes:[...(accountState.unlockedThemes||[])],goldCubits:accountState.goldCubits||0,selectedTheme:accountState.selectedTheme||""};
-  try{ buildHomeThemeGrid(); }catch(_){}
+  const themeSig=hostlThemeUiSignature();
+  if(themeSig!==__hostlLastThemeUiSig){ __hostlLastThemeUiSig=themeSig; try{ buildHomeThemeGrid(); }catch(_){} }
   syncAchievementAccountBridge();
   const btn = document.getElementById("accountBtn");
   if (btn) {
@@ -25737,7 +25789,9 @@ function syncAccountUi(msg="") {
   const am = document.getElementById("accountMsg"); if (am) am.textContent = msg;
   syncChestUi();
   syncPromoCodeUi();
-  renderMaterialsAndRecipes();
+  // IMPORTANT: never rebuild the Shop from generic account/friends heartbeats.
+  // Shop DOM refreshes only from explicit Shop actions/opening/stock changes, so a
+  // button or item card under the pointer remains the same element until the user acts.
 }
 function openAccountModal() {
   document.getElementById("expandedShopModal")?.classList.remove("on");
@@ -25870,7 +25924,7 @@ function showPurchaseReveal(name, visualId="", kicker="Purchased", sub="Added to
 function selectMaterialListing(slotId){
   selectedMaterialSlotId=String(slotId||"");
   document.querySelectorAll("#materialShopGrid .material-card[data-slot-id]").forEach(card=>{
-    const on=card.dataset.slotId===selectedMaterialSlotId; card.classList.toggle("selected",on); card.setAttribute("aria-selected",on?"true":"false");
+    const on=card.dataset.slotId===selectedMaterialSlotId; card.classList.toggle("selected",on); card.setAttribute("aria-pressed",on?"true":"false");
   });
   openMaterialDescription(selectedMaterialSlotId);
 }
@@ -25960,12 +26014,14 @@ function renderMaterialsAndRecipes(){
       if(!rotatingShopState.listings.some(x=>x.slotId===selectedMaterialSlotId)) selectedMaterialSlotId=(rotatingShopState.listings.find(x=>!x.purchased)||rotatingShopState.listings[0])?.slotId||"";
       for(const listing of rotatingShopState.listings){
         const item=HOSTL_MATERIALS[listing.materialId]||listing, price=Number(listing.price||item.price||0);
-        const d=document.createElement("div");
+        // Use a real button, like Theme choices, so pointer/click semantics are browser-native
+        // and no synthetic role/keyboard handler can fight hover state.
+        const d=document.createElement("button");
+        d.type="button";
         d.className="material-card"+(listing.purchased?" sold":"")+(listing.slotId===selectedMaterialSlotId?" selected":"");
-        d.dataset.slotId=listing.slotId; d.tabIndex=0; d.setAttribute("role","button"); d.setAttribute("aria-selected",listing.slotId===selectedMaterialSlotId?"true":"false");
+        d.dataset.slotId=listing.slotId; d.setAttribute("aria-pressed",listing.slotId===selectedMaterialSlotId?"true":"false");
         d.innerHTML=`<div class="material-card-icon-ring">${hostlItemVisual(listing.materialId)}</div><div class="material-card-name">${item.name}</div><div class="material-card-rarity rarity-${item.rarity}">${item.rarity}</div><div class="material-card-owned">Owned ${materialCount(listing.materialId)}</div><div class="material-card-price">${listing.purchased?"BOUGHT":price.toLocaleString()+" GC"}</div>`;
         d.addEventListener("click",()=>selectMaterialListing(listing.slotId));
-        d.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();selectMaterialListing(listing.slotId);}});
         shop.appendChild(d);
       }
     }
@@ -26021,6 +26077,8 @@ async function attemptBuild(id){
   const ok=await showGameConfirm("Build Attempt",`${r.name} has a ${Math.round(r.chance*100)}% success chance. If it fails, all ingredients are lost. Attempt the build?`,"Build");
   if(!ok)return;
   const result=await accountAction("/api/build-starter",{id}); if(!result)return;
+  // Intentional Shop state change: refresh once after the server reply.
+  renderMaterialsAndRecipes();
   if(!result.ok){ showGameMessage("Cannot Build",result.data?.error==="missing_materials"?"You do not have every required material.":"That build could not be attempted."); return; }
   if(result.data?.success) showGameMessage("Build Complete",`${r.name} was built successfully and is now a permanent starter unlock.`);
   else showGameMessage("Build Failed",`${r.name} failed during construction. The materials used in the attempt were lost.`);
@@ -26028,6 +26086,8 @@ async function attemptBuild(id){
 async function learnSkill(id){
   const r=HOSTL_LEARN_RECIPES[id]; if(!r)return;
   const result=await accountAction("/api/learn-skill",{id}); if(!result)return;
+  // Refresh once because materials/learned state changed; never on background polling.
+  renderMaterialsAndRecipes();
   if(!result.ok){ showGameMessage("Cannot Learn",result.data?.error==="missing_materials"?"You do not have every required study material.":"That skill could not be learned."); return; }
   showGameMessage("Skill Learned",`${r.name} is now permanently learned for this HOSTL account.`);
 }
@@ -26059,12 +26119,12 @@ async function redeemPromoCode() {
     const data=await r.json().catch(()=>({}));
     if(r.status===401){ logoutAccount(false); out.textContent="Your sign-in expired. Sign in again."; out.classList.add("error"); return; }
     if(!r.ok){
-      if(data?.account){ setAccountFromServer(data.account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); try{setupHome();buildPetShop();buildCardInventory();}catch(_){} }
+      if(data?.account){ setAccountFromServer(data.account); saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); renderMaterialsAndRecipes(); try{setupHome();buildPetShop();buildCardInventory();}catch(_){} }
       const messages={invalid_code:"That code is not valid.",already_redeemed:data?.repaired?"That code was already redeemed. Its missing special pet rewards were repaired.":"You already redeemed that code.",code_already_claimed:"That special code has already been claimed.",missing_code:"Type a code first."};
       out.textContent=messages[data?.error]||"That code could not be redeemed."; out.classList.add(data?.repaired?"success":"error"); return;
     }
     if(data?.account) setAccountFromServer(data.account);
-    saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); syncPromoCodeUi();
+    saveAccountSession(); syncAchievementAccountBridge(); syncAccountUi(); syncPromoCodeUi(); renderMaterialsAndRecipes();
     try{setupHome();buildPetShop();buildCardInventory();}catch(_){}
     input.value="";
     out.textContent=data?.message||"Code redeemed!"; out.classList.add("success");
@@ -26387,7 +26447,7 @@ function closeFriendsModal(){ document.getElementById("friendsModal")?.classList
 async function sendPresence(){ if(!accountState.loggedIn||!hostlSessionToken)return; try{await friendApi("/api/presence",{method:"POST"});}catch(_){}}
 function startFriendsLoops(){ clearInterval(friendsPollTimer);clearInterval(presenceTimer); sendPresence(); friendsPollTimer=setInterval(()=>{if(accountState.loggedIn)refreshFriends(false);},5000); presenceTimer=setInterval(sendPresence,20000); }
 function stopFriendsLoops(){ clearInterval(friendsPollTimer);clearInterval(presenceTimer);clearInterval(friendChatTimer);friendsPollTimer=presenceTimer=friendChatTimer=0; }
-async function refreshFriends(render=true){ if(!accountState.loggedIn)return; try{const r=await friendApi("/api/friends"); if(!r.ok)return; friendsData=await r.json(); if(friendsData?.account){ setAccountFromServer(friendsData.account); syncAccountUi(); } renderFriendsUi();}catch(_){}}
+async function refreshFriends(render=true){ if(!accountState.loggedIn)return; try{const r=await friendApi("/api/friends"); if(!r.ok)return; friendsData=await r.json(); if(friendsData?.account){ setAccountFromServer(friendsData.account); syncAccountUi(); } if(render)renderFriendsUi();}catch(_){}}
 function renderFriendsUi(){
   const req=document.getElementById("friendRequestsList"), list=document.getElementById("friendsList"); if(!req||!list)return;
   req.innerHTML=""; const incoming=friendsData.incoming||[], outgoing=friendsData.outgoing||[];

@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 574 / GAME 646 / RULES 601
+HOSTL — FULL RENDER PROJECT — SERVER 575 / GAME 647 / RULES 601
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 646 browser client
-- WorldRoom.js          Server 574 Colyseus multiplayer room
+- public/index.html      Game 647 browser client
+- WorldRoom.js          Server 575 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -68,7 +68,7 @@ RENDER DEPLOYMENT
 
 BUILD CHECK
 /healthz should report:
-- serverBuild: 574
+- serverBuild: 575
 - gameBuild: 645
 - rulesVersion: 600
 - rewardedAdsConfigured: true/false
@@ -94,7 +94,7 @@ SERVER 572 / GAME 644 — SHOP POPUP + HOME CLEANUP PASS
 - Account JSON writes are compact rather than pretty-printed, reducing disk work on purchase/progression saves.
 
 
-SERVER 574 / GAME 646 — ALL-BUTTON STABILITY + RELIABLE VECTOR PURCHASE ITEM REVEAL
+SERVER 575 / GAME 647 — ALL-BUTTON STABILITY + RELIABLE VECTOR PURCHASE ITEM REVEAL
 - Shop controls use fixed hit geometry with no brightness-filter or press movement.
 - Child art/text cannot steal pointer targeting from a shop control.
 - Purchase reveal lasts 4 seconds.

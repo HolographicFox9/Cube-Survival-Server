@@ -1,0 +1,9 @@
+HOSTL Game 647 / Server 575 / Rules 601
+
+Shop pointer stability fix
+- Fixed the real Learn / Build / material-card flicker: account/friends polling was rebuilding Shop DOM under the mouse.
+- Removed recursive account snapshot -> friends refresh -> account snapshot refresh behavior.
+- Background friend polls now respect render=false and do not rebuild the Friends UI.
+- Shop material/build/learn UI refreshes only when Shop-relevant account data changes or after an intentional Shop action.
+- Learn, Build, material cards and Shop tabs have fixed hitboxes and no transform/filter/animation/transition hover behavior.
+- Build/Learn/promo actions explicitly refresh Shop state once after completion so counts/unlocks still update correctly.
