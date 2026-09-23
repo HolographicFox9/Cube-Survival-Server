@@ -1,0 +1,9 @@
+HOSTL ALL BUTTONS + PURCHASE ITEM REVEAL FIX — SERVER 574 / GAME 646 / RULES 601
+
+- Purchase reveal now draws the bought item as inline SVG artwork rather than a text/emoji glyph, so transparent text styling cannot hide it.
+- Reveal remains exactly 4 seconds and still has no panel, words, or screen tint: only the glow plus item art.
+- All HTML buttons now keep a fixed hit rectangle on hover, press, and keyboard focus.
+- Child icons/text inside buttons cannot steal pointer targeting.
+- Global scale/translate/filter/animation button effects are neutralized to stop hover enter/leave flicker and missed clicks.
+- Material cards and starter-shop item cards get the same stable hit-target treatment.
+- Rules remain 601 because this is UI/input behavior only.

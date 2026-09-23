@@ -5252,6 +5252,69 @@ body.mobile-home-layout #home.home-themed .home-main-panel{
 #purchaseReveal .purchase-reveal-name,
 #purchaseReveal .purchase-reveal-sub{display:none !important;}
 </style>
+
+<style id="hostl-game646-all-button-stability">
+/* 646: every real button keeps one fixed hit rectangle. Visual feedback may
+   change border/background, but never position, scale, brightness, or geometry. */
+button{
+  box-sizing:border-box !important;
+  transform:none !important;
+  filter:none !important;
+  animation:none !important;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+button > *{pointer-events:none !important;}
+button:hover:not(:disabled),
+button:active:not(:disabled),
+button:focus-visible{
+  transform:none !important;
+  filter:none !important;
+}
+@media (hover:hover) and (pointer:fine){
+  button:hover:not(:disabled){
+    border-color:color-mix(in srgb,var(--ht-accent, #f4c65f) 72%,#fff 8%) !important;
+  }
+}
+/* Clickable stock/starter cards are also fixed hit targets. */
+#materialShopGrid .material-card,
+#starterShopOverlay .shop-item{
+  transform:none !important;
+  filter:none !important;
+  animation:none !important;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  touch-action:manipulation;
+}
+#materialShopGrid .material-card > *,
+#starterShopOverlay .shop-item > *{pointer-events:none !important;}
+#materialShopGrid .material-card:hover,
+#materialShopGrid .material-card:active,
+#starterShopOverlay .shop-item:hover,
+#starterShopOverlay .shop-item:active{
+  transform:none !important;
+  filter:none !important;
+}
+/* Purchase item art is its own SVG layer, independent of text color. */
+#purchaseReveal .purchase-reveal-card{color:inherit !important;}
+#purchaseReveal .purchase-reveal-icon{
+  width:112px !important;
+  height:112px !important;
+  display:grid !important;
+  place-items:center !important;
+  font-size:0 !important;
+  color:inherit !important;
+}
+#purchaseReveal .purchase-reveal-svg{
+  width:108px;
+  height:108px;
+  display:block;
+  overflow:visible;
+  filter:drop-shadow(0 5px 0 rgba(0,0,0,.22)) drop-shadow(0 0 9px rgba(255,255,255,.18));
+}
+</style>
 </head>
 <body>
 <div id="bootLoadingScreen" role="status" aria-live="polite">
@@ -24478,7 +24541,7 @@ function buildPetShop() {
           }
           const result=await accountAction("/api/pets/unlock",{species:type,method});
           if(!result?.ok){showGameMessage("Unlock Failed",result?.data?.error==="not_enough_cards"?"Your server card balance changed. Reopen the pet page and try again.":result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That pet could not be unlocked.");return;}
-          if(method==="cubits") showPurchaseReveal(info.name,hostlItemVisual(type,info.emoji),"Purchased","Pet permanently unlocked");
+          if(method==="cubits") showPurchaseReveal(info.name,type,"Purchased","Pet permanently unlocked");
           else banner(`Unlocked ${info.name} with cards!`);
           buildPetShop();buildCardInventory();setupHome();return;
         }
@@ -24821,13 +24884,13 @@ function setupHome() {
       if(accountState?.loggedIn){
         const result=await accountAction("/api/starters/buy",{id:item.id});
         if(!result?.ok){showGameMessage("Purchase Failed",result?.data?.error==="not_enough_cubits"?"Not enough Gold Cubits on your account.":"That starter unlock could not be purchased.");return;}
-        setupHome(); showPurchaseReveal(item.name,hostlItemVisual(item.id),"Purchased","Permanent starter unlock"); return;
+        setupHome(); showPurchaseReveal(item.name,item.id,"Purchased","Permanent starter unlock"); return;
       }
       meta.servs -= item.price;
       meta.ownedStarters[item.id] = true;
       saveMeta();
       setupHome();
-      showPurchaseReveal(item.name,hostlItemVisual(item.id),"Purchased","Permanent starter unlock");
+      showPurchaseReveal(item.name,item.id,"Purchased","Permanent starter unlock");
     });
     grid.appendChild(div);
   });
@@ -25512,7 +25575,7 @@ window.__hostlBuyTheme = async function(themeId, shownPrice){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){ showGameMessage?.("Theme", d?.error==="not_enough_cubits"?`Not enough Gold Cubits. You need ${Number(d.price||shownPrice||0).toLocaleString()}.`:"That theme could not be purchased."); return; }
     if(d.account) setAccountFromServer(d.account); saveAccountSession(); syncAccountUi(); buildHomeThemeGrid();
-    showPurchaseReveal(HOME_THEMES?.[themeId]?.name||"Theme","🎨","Purchased","Permanent Home theme unlocked");
+    showPurchaseReveal(HOME_THEMES?.[themeId]?.name||"Theme",`theme:${themeId}`,"Purchased","Permanent Home theme unlocked");
   }catch(_){ showGameMessage?.("Theme", "Could not reach the HOSTL server."); }
 };
 async function requestRewardedAdProof(kind,subject){
@@ -25743,6 +25806,41 @@ const HOSTL_ITEM_VISUALS = {
   dog:"🐶", cat:"🐱", dragon:"🦎", rabbit:"🐰", fox:"🦊", owl:"🦉", deer:"🦌", wolf:"🐺", snake:"🐍", boar:"🐗", bear:"🐻", saber:"🐯"
 };
 function hostlItemVisual(id,fallback="📦"){ return HOSTL_ITEM_VISUALS[String(id||"")] || fallback; }
+function hostlRevealArt(id){
+  const k=String(id||"");
+  const svg=(body)=>`<svg class="purchase-reveal-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${body}</svg>`;
+  const ink='#172019', hi='#f7edcf';
+  if(k==='leather') return svg(`<path d="M23 22 Q39 13 51 22 Q66 13 79 27 L73 45 Q82 62 66 79 Q50 87 34 78 Q18 65 27 48 Z" fill="#9b633d" stroke="${ink}" stroke-width="6"/><path d="M34 30 Q47 24 60 29" fill="none" stroke="#c98a58" stroke-width="5" stroke-linecap="round"/>`);
+  if(k==='resin') return svg(`<path d="M51 10 C67 31 78 43 78 60 C78 77 66 88 50 88 C34 88 22 77 22 60 C22 44 34 29 51 10Z" fill="#e99735" stroke="${ink}" stroke-width="6"/><path d="M38 49 Q43 34 54 28" fill="none" stroke="#ffd37a" stroke-width="6" stroke-linecap="round"/>`);
+  if(k==='swiftFiber') return svg(`<path d="M27 20 C45 34 39 52 24 77 M45 17 C63 35 59 55 41 82 M63 20 C78 39 74 59 58 79 M77 27 C86 45 82 61 72 72" fill="none" stroke="#d9c997" stroke-width="7" stroke-linecap="round"/><path d="M21 54 Q50 66 79 52" fill="none" stroke="${ink}" stroke-width="5"/>`);
+  if(k==='ironBuckle') return svg(`<rect x="20" y="25" width="60" height="50" rx="9" fill="#9da7a4" stroke="${ink}" stroke-width="7"/><rect x="34" y="37" width="32" height="26" rx="4" fill="#303a37" stroke="${ink}" stroke-width="5"/><path d="M50 25V75" stroke="#dce4e0" stroke-width="5"/>`);
+  if(k==='ironPlate'||k==='ironShell') return svg(`<path d="M19 24 L50 13 L81 24 V53 Q77 76 50 89 Q23 76 19 53Z" fill="#8e9a99" stroke="${ink}" stroke-width="6"/><path d="M32 32 L50 26 L68 32 V48" fill="none" stroke="#ced7d4" stroke-width="5" stroke-linecap="round"/>`);
+  if(k==='animalNotes'||k==='beastBook') return svg(`<path d="M23 17 H70 Q78 17 78 26 V83 H31 Q23 83 23 75Z" fill="${k==='beastBook'?'#9b403d':'#7f6c43'}" stroke="${ink}" stroke-width="6"/><path d="M31 17V83" stroke="${ink}" stroke-width="5"/><path d="M42 36 Q50 28 58 36 Q65 43 58 51 Q50 58 42 51 Q35 43 42 36Z" fill="#e5c56b" stroke="${ink}" stroke-width="4"/>`);
+  if(k==='toolKit') return svg(`<path d="M18 37 H82 V78 H18Z" fill="#a95b3e" stroke="${ink}" stroke-width="6"/><path d="M36 37 V27 Q36 20 43 20 H57 Q64 20 64 27 V37" fill="none" stroke="${ink}" stroke-width="6"/><path d="M18 52 H82" stroke="#d58b61" stroke-width="5"/><rect x="44" y="48" width="12" height="12" rx="2" fill="#e8d48e" stroke="${ink}" stroke-width="4"/>`);
+  if(k==='predatorStudy') return svg(`<circle cx="43" cy="43" r="24" fill="#c7d1c7" stroke="${ink}" stroke-width="6"/><path d="M60 61 L82 82" stroke="${ink}" stroke-width="9" stroke-linecap="round"/><circle cx="38" cy="38" r="5" fill="#81543d"/><circle cx="51" cy="48" r="4" fill="#81543d"/><circle cx="29" cy="50" r="4" fill="#81543d"/>`);
+  if(k==='sharpFang') return svg(`<path d="M28 15 Q48 32 74 21 Q67 67 42 87 Q39 59 28 15Z" fill="#f5ecd7" stroke="${ink}" stroke-width="6"/><path d="M42 31 Q51 38 61 34" fill="none" stroke="#d8c8a6" stroke-width="5"/>`);
+  if(k==='apexScale') return svg(`<path d="M50 10 Q78 36 72 62 Q68 81 50 90 Q32 81 28 62 Q22 36 50 10Z" fill="#5d8bb3" stroke="${ink}" stroke-width="6"/><path d="M50 23 Q61 40 58 58 Q56 69 50 77" fill="none" stroke="#a9d5dd" stroke-width="6" stroke-linecap="round"/>`);
+  if(k==='wood50'||k==='wood100') return svg(`<rect x="19" y="34" width="62" height="32" rx="14" fill="#8c5d36" stroke="${ink}" stroke-width="6"/><circle cx="23" cy="50" r="14" fill="#c38b51" stroke="${ink}" stroke-width="6"/><path d="M17 50 Q23 42 29 50 Q23 58 17 50Z" fill="none" stroke="#76502f" stroke-width="4"/>`);
+  if(k==='stone20'||k==='stone50') return svg(`<path d="M17 65 L26 33 L46 20 L72 27 L84 58 L68 80 L35 82Z" fill="#8f9999" stroke="${ink}" stroke-width="6"/><path d="M33 37 L48 29 L62 34" fill="none" stroke="#c9d0ce" stroke-width="5" stroke-linecap="round"/>`);
+  if(k==='gold5'||k==='gold15') return svg(`<circle cx="50" cy="50" r="34" fill="#e4b93e" stroke="${ink}" stroke-width="7"/><circle cx="50" cy="50" r="21" fill="#f5d969" stroke="#a77820" stroke-width="5"/><path d="M50 35V65 M40 43H57 Q64 43 64 49 Q64 55 56 55H40" fill="none" stroke="#a77820" stroke-width="5" stroke-linecap="round"/>`);
+  if(k==='berries10') return svg(`<circle cx="35" cy="57" r="15" fill="#5571aa" stroke="${ink}" stroke-width="5"/><circle cx="57" cy="58" r="15" fill="#6756a2" stroke="${ink}" stroke-width="5"/><circle cx="49" cy="39" r="14" fill="#5d80b5" stroke="${ink}" stroke-width="5"/><path d="M50 25 Q59 18 68 23" fill="none" stroke="#527a4b" stroke-width="6" stroke-linecap="round"/>`);
+  if(k==='startAxe') return svg(`<path d="M45 22 L58 80" stroke="#845b35" stroke-width="10" stroke-linecap="round"/><path d="M31 18 Q50 11 68 24 L62 43 Q47 35 35 39Z" fill="#a7b2b0" stroke="${ink}" stroke-width="6"/>`);
+  if(k==='startPickaxe') return svg(`<path d="M49 28 L47 83" stroke="#845b35" stroke-width="10" stroke-linecap="round"/><path d="M18 34 Q48 15 82 33" fill="none" stroke="#a7b2b0" stroke-width="10" stroke-linecap="round"/><path d="M18 34 L28 47 M82 33 L71 47" stroke="${ink}" stroke-width="5"/>`);
+  if(k==='startSword') return svg(`<path d="M54 13 L66 25 L45 63 L37 55Z" fill="#b9c7c8" stroke="${ink}" stroke-width="6"/><path d="M32 56 L48 72" stroke="#d6ad55" stroke-width="9" stroke-linecap="round"/><path d="M29 69 L41 81" stroke="#805537" stroke-width="9" stroke-linecap="round"/>`);
+  if(k==='startBow') return svg(`<path d="M31 16 Q70 50 31 84" fill="none" stroke="#8b5936" stroke-width="8"/><path d="M33 17 L33 83" stroke="#ded7b2" stroke-width="3"/><path d="M34 50 H78" stroke="${ink}" stroke-width="5"/><path d="M78 50 L68 44 M78 50 L68 56" stroke="${ink}" stroke-width="5"/>`);
+  if(k==='speedyBoots') return svg(`<path d="M25 24 H50 V56 Q55 65 69 68 Q79 70 78 82 H25Z" fill="#8b6848" stroke="${ink}" stroke-width="6"/><path d="M31 40 H47 M31 50 H47" stroke="#dbc98e" stroke-width="5"/>`);
+  if(k==='hunterWrap') return svg(`<path d="M20 27 Q50 12 80 27 L69 78 Q50 87 31 78Z" fill="#766044" stroke="${ink}" stroke-width="6"/><path d="M30 43 Q50 54 70 43" fill="none" stroke="#c8ae6c" stroke-width="6"/>`);
+  if(k==='gatherGloves') return svg(`<path d="M31 29 Q34 18 42 22 L47 37 L49 18 Q57 16 59 23 L58 39 L63 23 Q71 23 70 31 L67 48 Q79 42 81 51 Q72 71 54 82 Q35 79 28 62Z" fill="#8e6846" stroke="${ink}" stroke-width="6"/>`);
+  if(k==='animalWhisperer') return svg(`<circle cx="50" cy="58" r="20" fill="#d5b66a" stroke="${ink}" stroke-width="6"/><circle cx="31" cy="34" r="9" fill="#d5b66a" stroke="${ink}" stroke-width="5"/><circle cx="50" cy="27" r="9" fill="#d5b66a" stroke="${ink}" stroke-width="5"/><circle cx="69" cy="34" r="9" fill="#d5b66a" stroke="${ink}" stroke-width="5"/>`);
+  if(k==='saddle') return svg(`<path d="M23 38 Q48 23 73 37 L80 59 Q62 52 51 67 Q39 52 19 59Z" fill="#845635" stroke="${ink}" stroke-width="6"/><path d="M36 34 Q49 43 63 34" fill="none" stroke="#c38a50" stroke-width="5"/>`);
+  if(k==='chest'||k==='forestChest') return svg(`<path d="M18 38 Q50 18 82 38 V77 H18Z" fill="#98633c" stroke="${ink}" stroke-width="6"/><path d="M18 49 H82" stroke="#d6a251" stroke-width="7"/><rect x="44" y="49" width="13" height="18" rx="2" fill="#e2bd55" stroke="${ink}" stroke-width="4"/>`);
+  if(k.startsWith('theme:')) return svg(`<circle cx="50" cy="50" r="32" fill="#687cb0" stroke="${ink}" stroke-width="6"/><path d="M50 18 L57 39 L80 39 L61 53 L68 76 L50 62 L32 76 L39 53 L20 39 L43 39Z" fill="#f0cc67" stroke="${ink}" stroke-width="4"/>`);
+  if(['dog','cat','dragon','rabbit','fox','owl','deer','wolf','snake','boar','bear','saber'].includes(k)){
+    if(k==='snake') return svg(`<path d="M26 70 Q18 45 40 40 Q67 34 64 57 Q61 76 44 72 Q34 70 37 61 Q41 53 51 57" fill="none" stroke="#5f8758" stroke-width="13" stroke-linecap="round"/><circle cx="67" cy="43" r="15" fill="#709b64" stroke="${ink}" stroke-width="6"/><circle cx="72" cy="40" r="2.8" fill="#111"/>`);
+    return svg(`<path d="M27 37 L32 17 L45 32 Q50 29 55 32 L69 17 L74 39 Q82 48 77 65 Q71 82 50 84 Q29 82 23 65 Q18 49 27 37Z" fill="#9b7b58" stroke="${ink}" stroke-width="6"/><circle cx="39" cy="52" r="4" fill="#111"/><circle cx="61" cy="52" r="4" fill="#111"/><path d="M45 64 Q50 69 55 64" fill="none" stroke="#3d2a20" stroke-width="4" stroke-linecap="round"/>`);
+  }
+  return svg(`<path d="M25 28 H75 V76 H25Z" fill="#a27b4f" stroke="${ink}" stroke-width="6"/><path d="M25 28 L50 15 L75 28 L50 42Z" fill="#c69a62" stroke="${ink}" stroke-width="6"/><path d="M50 42V76" stroke="${ink}" stroke-width="5"/>`);
+}
 let selectedMaterialSlotId="";
 let shopPurchaseBusy="";
 let purchaseRevealTimer=0;
@@ -25757,10 +25855,10 @@ function closeMaterialDescription(){
   const popup=document.getElementById("materialDescriptionPopup");
   if(popup){ popup.classList.remove("show"); popup.setAttribute("aria-hidden","true"); }
 }
-function showPurchaseReveal(name, icon="📦", kicker="Purchased", sub="Added to your account", onDone=null){
+function showPurchaseReveal(name, visualId="", kicker="Purchased", sub="Added to your account", onDone=null){
   const root=document.getElementById("purchaseReveal"); if(!root){ if(typeof onDone==="function")onDone(); return; }
   const ico=document.getElementById("purchaseRevealIcon");
-  if(ico)ico.textContent=icon||"📦";
+  if(ico) ico.innerHTML=hostlRevealArt(visualId);
   root.setAttribute("aria-label",String(name||"Purchased item"));
   clearTimeout(purchaseRevealTimer);
   root.classList.remove("show"); void root.offsetWidth; root.classList.add("show"); root.setAttribute("aria-hidden","false");
@@ -25911,7 +26009,7 @@ async function buyShopListing(slotId){
   materialDescriptionRestoreSlot=slotId;
   closeMaterialDescription();
   renderMaterialsAndRecipes();
-  showPurchaseReveal(item.name,hostlItemVisual(listing.materialId),"Purchased","+1 material added to your account",()=>{
+  showPurchaseReveal(item.name,listing.materialId,"Purchased","+1 material added to your account",()=>{
     if(document.getElementById("expandedShopModal")?.classList.contains("on") && materialDescriptionRestoreSlot===slotId){
       openMaterialDescription(slotId);
     }
@@ -26033,7 +26131,7 @@ async function openAccountChest(name,cost,kind="forest",isFreeDaily=false,adProo
   }
   const rewards=Array.isArray(result.data?.rewards)?result.data.rewards:["Rewards added to your account."];
   showChestResult(name,rewards);
-  if(!isFreeDaily) showPurchaseReveal(name,"🧰","Purchased","Chest opened — rewards added");
+  if(!isFreeDaily) showPurchaseReveal(name,"chest","Purchased","Chest opened — rewards added");
   syncChestUi(); renderMaterialsAndRecipes();
 }
 
