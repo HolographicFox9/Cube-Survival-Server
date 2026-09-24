@@ -1,0 +1,16 @@
+HOSTL Game 648 / Server 576 / Rules 602
+
+WATER + HYDRATION PASS
+
+- Added 26 seeded ponds to every HOSTL world. Pond placement is shared between offline and multiplayer generation.
+- Ponds use the thick-outline, flat-color art style and reserve their footprint so normal scenery is not intentionally placed inside them.
+- Every run now starts with Fist + Bucket in the first two hotbar slots.
+- Bucket begins empty. Equip it and use it near a pond to fill it. Use a full bucket to drink.
+- A full bucket restores 70 hydration.
+- Added a permanent Hydration meter above the hotbar/Skill bar.
+- Hydration starts at 100 and drains at 0.22 per second while alive.
+- At 35 hydration and below, on-foot speed progressively falls; at 0 hydration the player moves at 60% normal on-foot speed.
+- Pet-mounted speed is not reduced by the rider's hydration.
+- Multiplayer hydration, bucket state, filling distance, drinking, and dehydration movement limits are authoritative on the server.
+- Ponds cannot be harvested/destroyed as normal resources.
+- Hydration and the empty bucket reset on a new run/respawn.

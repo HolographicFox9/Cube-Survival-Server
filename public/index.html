@@ -239,7 +239,12 @@
   .dock-res .val{font-variant-numeric:tabular-nums;}
   .dock-res.wood .val{color:#8d5524;} .dock-res.stone .val{color:#4d5b6b;} .dock-res.gold .val{color:#926b00;} .dock-res.servs .val{color:#9a6a00;} .dock-res.berries .val{color:#b13d69;}
   .cubit-token{display:inline-block;width:11px;height:11px;border-radius:2px;background:linear-gradient(135deg,#fff076,#f2b51d 58%,#b97800);border:1px solid rgba(111,72,0,0.65);box-shadow:inset 0 0 0 1px rgba(255,255,255,0.28),0 1px 2px rgba(0,0,0,0.22);vertical-align:-1px;}
-  #skillHud{width:100%;min-width:0;pointer-events:none;padding:1px 2px 0;box-sizing:border-box;}
+  #hydrationHud{width:100%;min-width:0;pointer-events:none;padding:1px 2px 0;box-sizing:border-box;}
+  #hydrationHudTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px;color:#17202a;font-size:10px;font-weight:900;letter-spacing:.05em;}
+  #hydrationTrack{position:relative;width:100%;height:9px;border-radius:999px;overflow:hidden;background:#2d4551;border:2px solid #172b34;box-shadow:inset 0 2px 3px rgba(0,0,0,.3),0 2px 0 rgba(255,255,255,.16);}
+  #hydrationFill{position:absolute;left:0;top:0;bottom:0;width:100%;background:linear-gradient(180deg,#d8fbff 0%,#79d9ef 45%,#3ca6cf 100%);box-shadow:inset 0 2px 0 rgba(255,255,255,.58),2px 0 8px rgba(100,211,244,.4);transition:width .18s ease-out;}
+  #hydrationHud.low #hydrationFill{filter:saturate(.72) brightness(.88);}
+#skillHud{width:100%;min-width:0;pointer-events:none;padding:1px 2px 0;box-sizing:border-box;}
   #skillHudTop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;
     color:#182018;font-size:10px;font-weight:900;letter-spacing:.06em;text-shadow:0 1px rgba(240,235,198,.48);}
   #skillHudTop b{font-size:11px;color:#101610;}
@@ -5436,6 +5441,10 @@ button:focus-visible{
       <div class="dock-res servs" title="Gold Cubits"><span class="cubit-token"></span><span class="val" id="dockServs">0</span></div>
       <div class="dock-res berries"><span class="ico">🍓</span><span class="val" id="dockBerries">0</span></div>
     </div>
+    <div id="hydrationHud" aria-label="Hydration">
+      <div id="hydrationHudTop"><b>💧 HYDRATION</b><span id="hydrationText">100%</span></div>
+      <div id="hydrationTrack"><div id="hydrationFill"></div></div>
+    </div>
     <div id="skillHud" aria-label="Player skill progress">
       <div id="skillHudTop"><b>SKILL <span id="skillLevelHud">0</span></b><span id="skillXpHud">0 / 25 XP</span></div>
       <div id="skillTrack"><div id="skillFill"></div><div id="skillShine"></div></div>
@@ -6135,7 +6144,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 14400, WORLD_H = 14400;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "601";
+const CUBE_SHARED_RULES_VERSION = "603";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -8097,7 +8106,7 @@ const PET_TYPES = {
            sizeMul: 1.05, flee: true, style: "gust",
            coats: ["#c4a882","#a89070","#e8d5b7","#8b7355"] },
   snake: { name: "Viper", emoji: "🐍", elem: "Poison", color: "#5cb85c", abilityCd: 14,
-           desc: "Forward poison blast — impact damage plus 5s venom DoT", baseSpeed: 68, friendly: false,
+           desc: "Forward poison blast — bigger hit plus 6.5s venom DoT", baseSpeed: 68, friendly: false,
            sizeMul: 1.1, flee: false, style: "venom",
            coats: ["#5cb85c","#3a8a40","#7ec850","#2d6a30"] },
   deer:  { name: "Deer", emoji: "🦌", elem: "Light", color: "#c9a06a", abilityCd: 15,
@@ -8112,6 +8121,10 @@ const PET_TYPES = {
            desc: "Power pounce — leaps onto a target for burst damage", baseSpeed: 100, friendly: false,
            sizeMul: 1.45, flee: false, style: "dash",
            coats: ["#d4a060","#c49050","#e8c080","#a07040","#f0d0a0"] },
+  clouded: { name: "Clouded Leopard", emoji: "🐆", elem: "Combat", color: "#c9ac7c", abilityCd: 11,
+           desc: "Fast pounce hunter — rainforest stalker with a shorter recovery", baseSpeed: 98, friendly: false,
+           sizeMul: 1.28, flee: false, style: "dash",
+           coats: ["#c9ac7c","#b99669","#d6bc8d","#aa8b60"] },
 };
 
 // Species are intentionally different instead of sharing one generic health pool.
@@ -8130,6 +8143,7 @@ const ANIMAL_BALANCE = {
   deer:   { hpMul:1.08, damageTaken:0.94, attack:6.0 },
   boar:   { hpMul:1.62, damageTaken:0.70, attack:9.0 },
   saber:  { hpMul:1.00, babyHpMul:1.78, damageTaken:0.98, attack:12.0 },
+  clouded:{ hpMul:0.98, babyHpMul:1.52, damageTaken:0.96, attack:11.1 },
 };
 
 const ANIMAL_STAGE_HP = { baby:28, adult:100, boss:320, superboss:900, bigmomma:1900 };
@@ -8229,7 +8243,10 @@ const PET_ABILITY_DAMAGE_TABLE = {
     baby:{damage:10,per:2,stun:2}, adult:{damage:16,per:2,stun:6}, boss:{damage:18,per:2,stun:6}, superboss:{damage:20,per:2,stun:6}, bigmomma:{damage:25,per:2,stun:6}
   },
   snake: {
-    baby:{damage:5,per:2}, adult:{damage:10,per:2}, boss:{damage:19,per:2}, superboss:{damage:28,per:2}, bigmomma:{damage:30,per:2}
+    baby:{damage:8,per:2}, adult:{damage:15,per:2}, boss:{damage:26,per:2}, superboss:{damage:36,per:2}, bigmomma:{damage:42,per:2}
+  },
+  clouded: {
+    baby:{damage:28,per:1}, adult:{damage:34,per:1}, boss:{damage:42,per:1}, superboss:{damage:48,per:1}, bigmomma:{damage:58,per:1}
   },
   deer: {
     baby:{damage:16,per:2}, adult:{damage:24,per:2}, boss:{damage:34,per:2}, superboss:{damage:40,per:2}, bigmomma:{damage:60,per:2}
@@ -8325,7 +8342,7 @@ const PET_RARITY = Object.freeze({
   dog:"Common", cat:"Common", rabbit:"Common",
   wolf:"Uncommon", bear:"Uncommon", fox:"Uncommon",
   boar:"Rare", deer:"Rare", owl:"Rare",
-  snake:"Legendary", saber:"Legendary",
+  snake:"Legendary", saber:"Legendary", clouded:"Rare",
   dragon:"Starter"
 });
 const PET_RARITY_CARD_WEIGHT = Object.freeze({Common:2.4,Uncommon:1.5,Rare:.82,Legendary:.28,Starter:.55});
@@ -8346,6 +8363,7 @@ const PET_UNLOCK = {
   boar:   { cards: 95, servs: 1400, rarity: PET_RARITY.boar },
   bear:   { cards: 110,servs: 1800, rarity: PET_RARITY.bear },
   saber:  { cards: 120,servs: 2200, rarity: PET_RARITY.saber },
+  clouded:{ cards: 100,servs: 1650, rarity: PET_RARITY.clouded },
 };
 const PET_CARD_STAGE_ORDER = ["baby", "adult", "boss", "superboss"];
 const PET_CARD_STAGE_COST = {
@@ -8402,7 +8420,7 @@ function animalRadius(type, stage) {
 
   let extra = 1;
   if (stage === "boss" || stage === "superboss" || stage === "bigmomma") {
-    extra = (type === "bear" || type === "saber") ? 1.28 : (type === "wolf" || type === "boar") ? 1.18 : 1.1;
+    extra = (type === "bear" || type === "saber" || type === "clouded") ? 1.28 : (type === "wolf" || type === "boar") ? 1.18 : 1.1;
   }
   return base * mul * extra;
 }
@@ -8462,6 +8480,7 @@ function animalWeight(aOrType, stageMaybe = null) {
     wolf: 1.28,
     boar: 1.42,
     saber: 1.38,
+    clouded: 1.30,
     bear: 1.75
   }[type] || 1;
 
@@ -8512,6 +8531,7 @@ function animalHitboxFit(type, stage) {
     boar:   { len: 1.03, body: 1.04, head: 1.06 },
     // Saber collision is intentionally tighter than its large-looking art.
     saber:  { len: 0.88, body: 0.88, head: 0.90 },
+    clouded:{ len: 0.92, body: 0.90, head: 0.93 },
     deer:   { len: 0.82, body: 0.74, head: 0.78 },
     owl:    { len: 1.00, body: 1.02, head: 1.05 }
   }[type] || { len: 1.02, body: 1.02, head: 1.05 };
@@ -8577,6 +8597,7 @@ const ANIMAL_SPECIES_SPEED_PROFILE = Object.freeze({
   deer:   { baby:1.14, adult:1.10, boss:1.07, superboss:1.04, bigmomma:1.00, massBlend:0.50 },
   boar:   { baby:1.03, adult:0.98, boss:0.93, superboss:0.88, bigmomma:0.84, massBlend:0.85 },
   saber:  { baby:1.15, adult:1.12, boss:1.08, superboss:1.04, bigmomma:1.00, massBlend:0.55 },
+  clouded:{ baby:1.18, adult:1.14, boss:1.10, superboss:1.06, bigmomma:1.02, massBlend:0.50 },
 });
 function animalSpeed(type, stage, owned = false, extraWeightMul = 1) {
   const base = (PET_TYPES[type] && PET_TYPES[type].baseSpeed) || 60;
@@ -8620,7 +8641,7 @@ function animalHeadHitbox(a) {
   else if (a.type === "owl") { forward = 1.05; radiusMul = 0.49; }
   else if (a.type === "deer") { forward = 1.12; radiusMul = 0.34; }
   else if (a.type === "boar") { forward = 1.18; radiusMul = 0.45; }
-  else if (a.type === "saber") { forward = 1.00; radiusMul = 0.34; }
+  else if (a.type === "saber" || a.type === "clouded") { forward = 1.00; radiusMul = 0.34; }
   else if (a.type === "snake") { forward = 1.26; radiusMul = 0.29; }
   else if (a.type === "dragon") { forward = 1.22; radiusMul = 0.40; }
 
@@ -10273,6 +10294,8 @@ function syncNetworkFullWorld(force = false) {
     }
     const serverGold = Number(own.gold);
     if (Number.isFinite(serverGold)) applyServerGoldSnapshot(serverGold);
+    if(Number.isFinite(Number(own.hydration)))player.hydration=clamp(Number(own.hydration),0,100);
+    player.bucketWater=!!own.bucketWater;updateHydrationHud();
     const schemaSkillLevel=Math.max(0,Math.floor(Number(own.skillLevel)||0));
     const schemaSkillXp=Math.max(0,Number(own.skillXp)||0);
     const schemaSkillSpeed=Math.max(0,Math.floor(Number(own.skillSpeed)||0));
@@ -10512,6 +10535,11 @@ function applyNetworkHarvestReward(data = {}) {
   const tx = target ? target.x : player.x;
   const ty = target ? target.y : player.y;
 
+  if (kind === "biomeMaterial") {
+    const material=String(data.material||""),metaInfo=BIOME_MATERIAL_META[material];
+    if(material&&amount>0){player.biomeMaterials=player.biomeMaterials||{};player.biomeMaterials[material]=(player.biomeMaterials[material]||0)+amount;floatText(tx,ty-24,`+${amount} ${metaInfo?.name||material}`,metaInfo?.color||"#d8e2c7");spark(tx,ty,metaInfo?.color||"#d8e2c7",5,65);syncHud();}
+    return;
+  }
   if (kind === "wood" || kind === "stone" || kind === "berries" || kind === "gold") {
     if (amount > 0) {
       if (kind === "gold") {
@@ -10674,6 +10702,11 @@ async function connectMultiplayer() {
         banner("Multiplayer server is out of date for this game build.", true);
         try { room.leave(); } catch (_) {}
       }
+    });
+    room.onMessage("waterResult", data=>{
+      if(Number.isFinite(Number(data?.hydration)))player.hydration=clamp(Number(data.hydration),0,100);
+      if(typeof data?.bucketWater==="boolean")player.bucketWater=data.bucketWater;updateHydrationHud();syncHotbar();
+      if(data?.message)banner(String(data.message),data.ok===false);
     });
     room.onMessage("resourceReward", applyNetworkHarvestReward);
     room.onMessage("goldBalance", data => {
@@ -11087,7 +11120,9 @@ function drawRemotePlayer(v) {
   const remoteSwing = v.attackTimer > 0 ? Math.sin((1 - clamp(v.attackTimer / remoteSwingMax, 0, 1)) * Math.PI) : 0;
 
   // Use the same held-item geometry and attack motion as the local player.
-  if (holding === "Berry") {
+  if (holding === "Bucket") {
+    drawHeldBucket(arm, false);
+  } else if (holding === "Berry") {
     drawHeldBerry(arm, remoteSwing);
   } else if (holding === "Wall" || holding === "Tower") {
     drawHeldWall(arm);
@@ -11238,7 +11273,7 @@ canvas.addEventListener("mousedown", e => {
       e.preventDefault();
       return;
     }
-    if (player.heldSpecial === "Berry" || player.heldSpecial === "Wall" || player.heldSpecial === "Tower") {
+    if (player.heldSpecial === "Bucket" || player.heldSpecial === "Berry" || player.heldSpecial === "Wall" || player.heldSpecial === "Tower") {
       mouse.down = false;
       meleeAttack();
     } else {
@@ -11281,9 +11316,9 @@ const mobileCraftBtn = document.getElementById("mCraft");
 function syncMobilePrimaryButton() {
   if (!mobileAttackBtn) return;
   const special = player?.heldSpecial || "";
-  const label = special === "Berry" ? "EAT" : (special === "Wall" || special === "Tower") ? "PLACE" : special === "Saddle" ? "USE" : "ATK";
+  const label = special === "Bucket" ? (player.bucketWater?"DRINK":"FILL") : special === "Berry" ? "EAT" : (special === "Wall" || special === "Tower") ? "PLACE" : special === "Saddle" ? "USE" : "ATK";
   mobileAttackBtn.textContent = label;
-  const actionText = special === "Berry" ? "Eat berry" : (special === "Wall" || special === "Tower") ? "Place item" : special === "Saddle" ? "Tap a pet to ride" : "Attack";
+  const actionText = special === "Bucket" ? (player.bucketWater?"Drink water":"Fill bucket at pond") : special === "Berry" ? "Eat berry" : (special === "Wall" || special === "Tower") ? "Place item" : special === "Saddle" ? "Tap a pet to ride" : "Attack";
   mobileAttackBtn.setAttribute("aria-label", actionText);
   mobileAttackBtn.title = actionText;
 }
@@ -11350,7 +11385,7 @@ mobileAttackBtn.addEventListener("pointerdown", e => {
   if (!mobileMode || attackPointerId != null) return;
   e.preventDefault();
   attackPointerId = e.pointerId;
-  if (player.heldSpecial === "Berry" || player.heldSpecial === "Wall" || player.heldSpecial === "Tower") {
+  if (player.heldSpecial === "Bucket" || player.heldSpecial === "Berry" || player.heldSpecial === "Wall" || player.heldSpecial === "Tower") {
     mouse.down = false;
     meleeAttack();
   } else if (player.heldSpecial === "Saddle") {
@@ -14182,7 +14217,73 @@ function drawReassembledOwlPartsSkin(a, stage, sleeping) {
   return true;
 }
 
+
+// ---------- Clouded Leopard separated vector skins ----------
+// Only the user-provided non-ref SVGs are rendered in-game. The matching ref SVGs
+// were used strictly to measure how the tail/body/head reconnect at each stage.
+const CLOUDED_SKIN_SPECS = {
+  baby:{
+    awake:{src:"assets/clouded/baby.svg",sourceW:187.35643,sourceH:52.65833,refW:127.45254,refH:52.65833,parts:{tail:{sx:0,sw:64.25,tx:0},body:{sx:75.25,sw:48,tx:50.25},head:{sx:137.5,sw:49.75,tx:77.75}}},
+    sleep:{src:"assets/clouded/baby-sleep.svg",sourceW:160.84388,sourceH:64.84523,refW:77.09047,refH:64.84523,parts:{tail:{sx:0,sw:40.75,tx:1},body:{sx:48.75,sw:48.75,tx:0},head:{sx:111,sw:49.75,tx:27.25}}}
+  },
+  adult:{
+    awake:{src:"assets/clouded/adult.svg",sourceW:222.27634,sourceH:52.65833,refW:127.42851,refH:52.65833,parts:{tail:{sx:0,sw:64.25,tx:0},body:{sx:100.25,sw:48.75,tx:50.25},head:{sx:172.5,sw:49.75,tx:77.75}}},
+    sleep:{src:"assets/clouded/adult-sleep.svg",sourceW:160.84388,sourceH:64.84523,refW:77.09047,refH:64.84523,parts:{tail:{sx:0,sw:40.75,tx:1},body:{sx:43.75,sw:48.25,tx:0},head:{sx:111,sw:49.75,tx:27.25}}}
+  },
+  boss:{
+    awake:{src:"assets/clouded/boss.svg",sourceW:197.31639,sourceH:63.23806,refW:127.42851,refH:63.23806,parts:{tail:{sx:0,sw:64.25,tx:0},body:{sx:80.25,sw:48,tx:50.25},head:{sx:147.5,sw:49.75,tx:77.75}}},
+    sleep:{src:"assets/clouded/boss-sleep.svg",sourceW:170.82786,sourceH:70.18502,refW:77.09048,refH:70.18502,parts:{tail:{sx:0,sw:40.75,tx:1},body:{sx:53.75,sw:48.75,tx:0},head:{sx:121,sw:49.75,tx:27.25}}}
+  },
+  superboss:{
+    awake:{src:"assets/clouded/superboss.svg",sourceW:187.33238,sourceH:63.23806,refW:127.0957,refH:63.23806,parts:{tail:{sx:0,sw:64.25,tx:0},body:{sx:80.25,sw:48.75,tx:50},head:{sx:137.5,sw:49.75,tx:77.25}}},
+    sleep:{src:"assets/clouded/superboss-sleep.svg",sourceW:160.84386,sourceH:70.18502,refW:77.09045,refH:70.18502,parts:{tail:{sx:0,sw:40.75,tx:1},body:{sx:43.75,sw:48.25,tx:0},head:{sx:111,sw:49.75,tx:27.25}}}
+  },
+  bigmomma:{
+    awake:{src:"assets/clouded/bigmomma.svg",sourceW:187.33238,sourceH:63.23807,refW:127.4285,refH:63.23807,parts:{tail:{sx:0,sw:64.25,tx:0},body:{sx:75.25,sw:48,tx:50.25},head:{sx:137.75,sw:49.5,tx:78}}},
+    sleep:{src:"assets/clouded/bigmomma-sleep.svg",sourceW:170.82784,sourceH:70.18503,refW:77.09045,refH:70.18503,parts:{tail:{sx:0,sw:40.75,tx:1},body:{sx:48.75,sw:48.25,tx:0},head:{sx:121.25,sw:49.5,tx:27.5}}}
+  }
+};
+for(const stage of Object.values(CLOUDED_SKIN_SPECS)) for(const state of Object.values(stage)){
+  const img=new Image(); img.decoding="async"; img.src=state.src; state.img=img;
+}
+function drawReassembledCloudedLeopardSkin(a, stage, sleeping){
+  const state=CLOUDED_SKIN_SPECS[stage]?.[sleeping?"sleep":"awake"];
+  const img=state?.img;
+  if(!state||!img||!img.complete||!img.naturalWidth||!img.naturalHeight)return false;
+  const r=Math.max(8,Number(a.r)||18),stageScale=UPLOADED_ANIMAL_STAGE_VISUAL_SCALE[stage]||1.45;
+  const drawH=r*1.02*stageScale,drawW=drawH*(state.refW/state.refH),sxMul=img.naturalWidth/state.sourceW,dxMul=drawW/state.refW;
+  const left=-drawW*.5,top=-drawH*.5;
+  const now=performance.now(),recent=(now-(a._visualMoveAt||0))<170;
+  const actual=(!sleeping&&recent)?Math.max(0,Number(a._visualMoveSpeed)||0):0;
+  const normal=Math.max(1,Number(a.speed)||animalSpeed("clouded",stage,!!a.owned)||1);
+  const moveRatio=(net.room&&Number.isFinite(a._netAnimMoveRatio))?clamp(a._netAnimMoveRatio,0,1.7):clamp(actual/normal,0,1.7);
+  const phase=(net.room&&Number.isFinite(a._netAnimPhase))?a._netAnimPhase:now*.001*(2.2+moveRatio*5.4)+(a.tailPhase||0);
+  const atk=Math.max(0,Math.min(1,Number(a.attackAnim)||0)),bite=sleeping?0:Math.sin(atk*Math.PI);
+  const tailAngle=sleeping?0:Math.sin(phase*1.15)*(.025+moveRatio*.12);
+  const headAngle=sleeping?0:Math.sin(phase*.72+.4)*(.018+moveRatio*.07)-bite*.09;
+  const headBob=sleeping?0:Math.sin(phase*.9)*drawH*(.003+moveRatio*.014);
+  const headLunge=sleeping?0:bite*r*.18;
+  const wholeBob=sleeping?Math.sin(game.time*1.8+(a.x||0)*.004)*r*.008:Math.sin(phase*.55)*drawH*.005*moveRatio;
+  ctx.save();
+  ctx.fillStyle="rgba(0,0,0,.15)";ctx.beginPath();ctx.ellipse(-drawW*.03,drawH*.31,Math.max(r*.58,drawW*.31),Math.max(r*.13,drawH*.12),0,0,TAU);ctx.fill();
+  const oldSmooth=ctx.imageSmoothingEnabled,oldQuality=ctx.imageSmoothingQuality;ctx.imageSmoothingEnabled=true;try{ctx.imageSmoothingQuality="high";}catch(_){}
+  ctx.translate(0,wholeBob);
+  const drawPart=(name,fn)=>{const q=state.parts[name];if(!q)return;const sx=q.sx*sxMul,sw=q.sw*sxMul,dx=left+q.tx*dxMul,dw=q.sw*dxMul;ctx.save();if(fn)fn(dx,dw);ctx.drawImage(img,sx,0,sw,img.naturalHeight,dx,top,dw,drawH);ctx.restore();};
+  drawPart("tail",()=>{if(sleeping)return;const px=left+Math.min(state.refW*.46,(state.parts.tail.tx+state.parts.tail.sw*.91))*dxMul,py=drawH*.02;ctx.translate(px,py);ctx.rotate(tailAngle);ctx.translate(-px,-py);});
+  drawPart("body",null);
+  drawPart("head",()=>{if(sleeping)return;const px=left+(state.parts.head.tx+state.parts.head.sw*.12)*dxMul,py=headBob;ctx.translate(headLunge,headBob);ctx.translate(px,py);ctx.rotate(headAngle);ctx.translate(-px,-py);});
+  if(player.riding===a){const saddleW=Math.min(drawW*.25,r*1.02),saddleH=Math.max(7,saddleW*.40);drawMountedSaddleOnCustom(drawW,drawH,-drawW*.03,-drawH*.10,saddleW,saddleH);}
+  ctx.imageSmoothingEnabled=oldSmooth;try{ctx.imageSmoothingQuality=oldQuality;}catch(_){}ctx.restore();return true;
+}
+
 function drawUploadedAnimalSkin(a) {
+  if (a.type === "clouded") {
+    const cloudedStage = uploadedAnimalStageKey(a.stage);
+    try { if (drawReassembledCloudedLeopardSkin(a, cloudedStage, !!a.sleeping)) return true; } catch (cloudedDrawErr) {
+      const t=performance.now(); if(!a._cloudedDrawWarnAt||t-a._cloudedDrawWarnAt>2500){a._cloudedDrawWarnAt=t;console.warn("Clouded Leopard separated draw fell back:",cloudedStage,cloudedDrawErr);}
+    }
+  }
+
   if (a.type === "saber") {
     const saberStage = uploadedAnimalStageKey(a.stage);
     try {
@@ -14896,8 +14997,81 @@ const CURRENT_BIOME_ID = "forest";
 const MOONMARK_BIOMES = {
   forest:{ id:"forest", name:"Forest Warden", element:"Forest", color:"#4fa35b", accent:"#d8ef8a", mapColor:"#0b542f", xp:320 }
 };
+const BIOME_ZONES = {
+  desert:{ id:"desert", name:"Desert", cx:WORLD_W*.24, cy:WORLD_H*.75, rx:WORLD_W*.18, ry:WORLD_H*.17 },
+  arctic:{ id:"arctic", name:"Arctic", cx:WORLD_W*.24, cy:WORLD_H*.24, rx:WORLD_W*.18, ry:WORLD_H*.17 },
+  mountains:{ id:"mountains", name:"Mountains", cx:WORLD_W*.76, cy:WORLD_H*.24, rx:WORLD_W*.18, ry:WORLD_H*.17 },
+  rainforest:{ id:"rainforest", name:"Rain Forest", cx:WORLD_W*.76, cy:WORLD_H*.76, rx:WORLD_W*.18, ry:WORLD_H*.17 }
+};
+const BIOME_PROFILES = {
+  forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0.00)", edge:"rgba(32,58,29,0.16)", minimap:"#5c7f4c", species:["fox","dog","cat","rabbit","deer","boar","owl"] },
+  desert:{ id:"desert", name:"Desert", tint:"rgba(216,188,104,0.28)", edge:"rgba(169,122,42,0.20)", minimap:"#c4ac67", species:["snake","dragon","owl","boar","saber"] },
+  arctic:{ id:"arctic", name:"Arctic", tint:"rgba(215,239,255,0.30)", edge:"rgba(118,162,190,0.22)", minimap:"#d8f1ff", species:["wolf","bear","rabbit","deer","owl"] },
+  mountains:{ id:"mountains", name:"Mountains", tint:"rgba(160,154,147,0.24)", edge:"rgba(98,92,86,0.22)", minimap:"#96908a", species:["wolf","bear","boar","deer","saber"] },
+  rainforest:{ id:"rainforest", name:"Rain Forest", tint:"rgba(42,112,70,0.26)", edge:"rgba(28,76,47,0.22)", minimap:"#2f7f53", species:["clouded","snake","rabbit","fox","bear"] }
+};
+const BIOME_RESOURCE_INFO = Object.freeze({
+  forestHerb:{biome:"forest",material:"wildHerb",name:"Wild Herb",color:"#8dcf68",category:"soft",hp:3},
+  forestResin:{biome:"forest",material:"treeResin",name:"Tree Resin",color:"#d69a45",category:"wood",hp:4},
+  desertCactus:{biome:"desert",material:"cactusFiber",name:"Cactus Fiber",color:"#67a84f",category:"soft",hp:4},
+  desertSandstone:{biome:"desert",material:"sandstone",name:"Sandstone",color:"#d6b66f",category:"stone",hp:5},
+  arcticIceCrystal:{biome:"arctic",material:"iceCrystal",name:"Ice Crystal",color:"#8ee7ff",category:"stone",hp:5},
+  arcticFrostBerry:{biome:"arctic",material:"frostBerry",name:"Frost Berry",color:"#b8d8ff",category:"soft",hp:3},
+  mountainIron:{biome:"mountains",material:"ironOre",name:"Iron Ore",color:"#8d979d",category:"stone",hp:6},
+  mountainQuartz:{biome:"mountains",material:"mountainQuartz",name:"Mountain Quartz",color:"#ddd8ee",category:"stone",hp:5},
+  rainforestVine:{biome:"rainforest",material:"jungleVine",name:"Jungle Vine",color:"#4f9f56",category:"wood",hp:4},
+  rainforestFruit:{biome:"rainforest",material:"jungleFruit",name:"Jungle Fruit",color:"#f06d55",category:"soft",hp:3}
+});
+const BIOME_MATERIAL_META = Object.fromEntries(Object.values(BIOME_RESOURCE_INFO).map(v=>[v.material,{name:v.name,color:v.color,biome:v.biome}]));
+function biomeDistanceNorm(x,y,zone){ const dx=(x-zone.cx)/zone.rx, dy=(y-zone.cy)/zone.ry; return Math.hypot(dx,dy); }
+function biomeBaseId(id){ return String(id||CURRENT_BIOME_ID).replace(/_edge$/,'') || CURRENT_BIOME_ID; }
+function biomeProfileAt(x,y){ return BIOME_PROFILES[biomeBaseId(worldBiomeAt(x,y))] || BIOME_PROFILES.forest; }
+function worldBiomeAt(x,y){
+  let best={ id:CURRENT_BIOME_ID, score:Infinity };
+  for(const zone of Object.values(BIOME_ZONES)){
+    const score=biomeDistanceNorm(x,y,zone);
+    if(score<best.score) best={ id:zone.id, score };
+  }
+  if(best.score<=0.90) return best.id;
+  if(best.score<=1.12) return `${best.id}_edge`;
+  return CURRENT_BIOME_ID;
+}
+function randomBiomeZoneId(){
+  const ids=[CURRENT_BIOME_ID,...Object.keys(BIOME_ZONES)];
+  return ids[randi(0,ids.length-1)];
+}
+function randomPointInBiome(biomeId,pad=120){
+  const base=biomeBaseId(biomeId),zone=BIOME_ZONES[base];
+  if(!zone){for(let i=0;i<60;i++){const x=rand(pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);if(worldBiomeAt(x,y)===CURRENT_BIOME_ID)return{x,y};}return{x:WORLD_W/2,y:WORLD_H/2};}
+  const a=rand(0,TAU), d=Math.sqrt(Math.random()) * 0.86;
+  return {
+    x:clamp(zone.cx + Math.cos(a) * zone.rx * d, pad, WORLD_W-pad),
+    y:clamp(zone.cy + Math.sin(a) * zone.ry * d, pad, WORLD_H-pad)
+  };
+}
+function chooseWildType(biomeId = null) {
+  const species = (BIOME_PROFILES[biomeBaseId(biomeId||CURRENT_BIOME_ID)]?.species || WILD_SPECIES).filter(type => WILD_SPECIES.includes(type));
+  const counts = Object.fromEntries(WILD_SPECIES.map(t => [t, 0]));
+  for (const a of animals) {
+    if (!a.dead && !a.owned && counts[a.type] != null) counts[a.type]++;
+  }
+  let best = [];
+  let bestScore = Infinity;
+  for (const type of species) {
+    const target = WILD_TYPE_TARGETS[type] || 1;
+    const score = counts[type] / target + Math.random() * 0.08;
+    if (score < bestScore - 1e-6) {
+      best = [type];
+      bestScore = score;
+    } else if (score <= bestScore + 0.04) {
+      best.push(type);
+    }
+  }
+  return best[randi(0, best.length - 1)] || species[0] || WILD_SPECIES[0];
+}
+function isHotDryBiome(id){ return String(id||"").startsWith("desert"); }
 const PET_KILL_STAGE_XP = {baby:3,adult:14,boss:38,superboss:86,bigmomma:155};
-const PET_KILL_SPECIES_XP = {rabbit:.65,dog:.85,cat:.90,fox:1.0,deer:1.05,dragon:1.15,wolf:1.25,bear:1.65,boar:1.30,snake:1.15,owl:1.10,saber:2.0};
+const PET_KILL_SPECIES_XP = {rabbit:.65,dog:.85,cat:.90,fox:1.0,deer:1.05,dragon:1.15,wolf:1.25,bear:1.65,boar:1.30,snake:1.15,owl:1.10,saber:2.0,clouded:1.55};
 const PET_KILL_HOSTL_XP = {Brawler:12,Swordsman:16,Rider:24,Tamer:26,Ranger:30,Chimest:34};
 function petKillXpForAnimal(a){
   if(!a)return 0;
@@ -14949,6 +15123,8 @@ const player = {
   health: 100, maxHealth: 100,
   shellHealth: 0, shellMaxHealth: 0,
   wood: 0, stone: 0, gold: 0, berries: 0,
+  biomeMaterials: {},
+  hydration: 100, bucketWater: false,
   tool: "Fist", lastWeaponTool: "Fist", heldSpecial: null, owned: { Fist: true, Axe: false, Pickaxe: false, Sword: false, Bow: false },
   attackCd: 0, shootCd: 0, punchTimer: 0, punchSide: 1, swingWeapon: "Fist",
   hurtFlash: 0, dead: false, splitT: 0,
@@ -15011,6 +15187,7 @@ function logSolidHitboxes(r) {
   }));
 }
 function resourceTouchingCircle(r, x, y, radius=0) {
+  if (r.type === "pond") return null;
   if (r.type === "log") {
     for (const h of logSolidHitboxes(r)) {
       if (dist(x, y, h.x, h.y) < radius + h.r) return h;
@@ -15087,7 +15264,7 @@ function animalBodyHitboxes(a) {
     parts = [[-1.00,0,0.31],[-0.76,0,0.41],[-0.24,0,0.49],[0.32,0,0.47],[0.80,0,0.41],[1.16,0,0.33],[1.42,0,0.24]];
   } else if (a.type === "boar") {
     parts = [[-0.74,0,0.53],[-0.48,0,0.73],[0.08,0,0.83],[0.68,0,0.68],[1.08,0,0.50],[1.42,0,0.39],[1.66,0,0.28]];
-  } else if (a.type === "saber") {
+  } else if (a.type === "saber" || a.type === "clouded") {
     parts = [[-0.58,0,0.42],[-0.34,0,0.56],[0.08,0,0.64],[0.48,0,0.53],[0.80,0,0.40],[1.04,0,0.30],[1.22,0,0.21]];
   } else if (a.type === "deer") {
     parts = [[-0.68,0,0.38],[-0.40,0,0.54],[0.06,0,0.61],[0.54,0,0.46],[0.90,0,0.34],[1.18,0,0.25],[1.38,0,0.18]];
@@ -15421,6 +15598,47 @@ function placeChests() {
   }
 }
 
+function placePonds() {
+  for (let i = 0; i < 26; i++) {
+    let x, y, tries = 0, radius = rand(70, 125), squish = rand(0.62, 0.82);
+    do {
+      x = rand(220, WORLD_W - 220); y = rand(220, WORLD_H - 220); tries++;
+    } while ((dist(x, y, WORLD_W / 2, WORLD_H / 2) < 520 || solidOverlaps(x, y, radius + 45)) && tries < 100);
+    if (tries >= 100) continue;
+    resources.push({type:"pond",x,y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
+  }
+}
+function placeBiomeFeatures() {
+  const desert = BIOME_ZONES.desert;
+  if (desert) {
+    for (let i = 0; i < 7; i++) {
+      let tries = 0;
+      const radius = rand(58, 98);
+      const squish = rand(0.60, 0.80);
+      while (tries++ < 90) {
+        const pos = randomPointInBiome(desert.id, radius + 60);
+        if (solidOverlaps(pos.x, pos.y, radius + 26)) continue;
+        resources.push({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU),oasis:true});
+        break;
+      }
+    }
+  }
+  for (const _ of Array.from({length: 70})) {
+    const pos = randomPointInBiome("mountains", 40);
+    if (!solidOverlaps(pos.x, pos.y, 22)) resources.push({type:"rock",x:pos.x,y:pos.y,hp:4,maxHp:4,alive:true,respawnAt:0,pulse:0,solidR:rand(18,30),canopyR:0,scale:rand(1.2,2.0),rot:0});
+  }
+  for (const _ of Array.from({length: 80})) {
+    const pos = randomPointInBiome("rainforest", 30);
+    if (!solidOverlaps(pos.x, pos.y, 14)) resources.push({type:"bush",x:pos.x,y:pos.y,hp:8,maxHp:8,alive:true,respawnAt:0,pulse:0,solidR:rand(11,18),canopyR:rand(20,34),scale:rand(1.05,1.7),rot:0});
+  }
+  const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<45;t++){const pos=randomPointInBiome(biome,42),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+8))continue;resources.push({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
+  placeUnique("forestHerb",20,"forest"); placeUnique("forestResin",18,"forest");
+  placeUnique("desertCactus",22,"desert"); placeUnique("desertSandstone",20,"desert");
+  placeUnique("arcticIceCrystal",22,"arctic"); placeUnique("arcticFrostBerry",20,"arctic");
+  placeUnique("mountainIron",22,"mountains"); placeUnique("mountainQuartz",20,"mountains");
+  placeUnique("rainforestVine",22,"rainforest"); placeUnique("rainforestFruit",20,"rainforest");
+}
+
 function scatter(type, count, hp, minDistFromCenter, rSolid) {
   for (let i = 0; i < count; i++) {
     let x, y, tries = 0, solid = rSolid, canopy = 0, scale = 1;
@@ -15483,7 +15701,7 @@ function placeGoldChunks() {
   }
 }
 
-const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber"];
+const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber","clouded"];
 // World population now follows the same rarity tiers shown in the pet/card UI.
 const WILD_RARITY_TARGET = Object.freeze({Common:1.45,Uncommon:.82,Rare:.44,Legendary:.16,Starter:.28});
 const WILD_TYPE_TARGETS = Object.fromEntries(WILD_SPECIES.map(type => [type, WILD_RARITY_TARGET[petRarity(type)] || .7]));
@@ -15502,6 +15720,7 @@ const WILD_PREY = {
   deer:   new Set(),
   boar:   new Set(),
   saber:  new Set(["rabbit","deer","boar","wolf"]),
+  clouded:new Set(["rabbit","deer","boar","fox"]),
   dragon: new Set(["rabbit","snake"]),
 };
 function wildCanPreyOn(predatorType, preyType) {
@@ -15534,25 +15753,6 @@ function drawGenderLabelWithDot(text, x, y, gender, colorName = false) {
   ctx.textAlign = oldAlign;
 }
 function grownForBreeding(a) { return !!a && !a.dead && a.stage !== "baby"; }
-function chooseWildType() {
-  const counts = Object.fromEntries(WILD_SPECIES.map(t => [t, 0]));
-  for (const a of animals) {
-    if (!a.dead && !a.owned && counts[a.type] != null) counts[a.type]++;
-  }
-  let best = [];
-  let bestScore = Infinity;
-  for (const type of WILD_SPECIES) {
-    const target = WILD_TYPE_TARGETS[type] || 1;
-    const score = counts[type] / target + Math.random() * 0.08;
-    if (score < bestScore - 1e-6) {
-      best = [type];
-      bestScore = score;
-    } else if (score <= bestScore + 0.04) {
-      best.push(type);
-    }
-  }
-  return best[randi(0, best.length - 1)];
-}
 function animalSpawnCrowded(x, y, spawnR, extraGap = 34) {
   for (const a of animals) {
     if (a.dead || a.owned) continue;
@@ -15571,7 +15771,10 @@ function randomWildStageForGroup() {
 }
 
 function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, groupAnchor = null) {
-  const type = forcedType || chooseWildType();
+  const biomeHint = groupAnchor ? biomeBaseId(worldBiomeAt(groupAnchor.x, groupAnchor.y))
+    : nearPlayer ? biomeBaseId(worldBiomeAt(player.x, player.y))
+    : randomBiomeZoneId();
+  const type = forcedType || chooseWildType(biomeHint);
 
   let stage = forcedStage;
   if (!stage) {
@@ -15603,19 +15806,10 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
       x = clamp(player.x + Math.cos(a) * d, spawnR + 24, WORLD_W - spawnR - 24);
       y = clamp(player.y + Math.sin(a) * d, spawnR + 24, WORLD_H - spawnR - 24);
     } else {
-      const roll = Math.random();
-      if (roll < 0.55) {
-        x = rand(spawnR + 80, WORLD_W - spawnR - 80);
-        y = rand(spawnR + 80, WORLD_H - spawnR - 80);
-      } else if (roll < 0.8) {
-        const a = rand(0, TAU);
-        const d = rand(900, Math.min(WORLD_W, WORLD_H) * 0.38);
-        x = clamp(WORLD_W / 2 + Math.cos(a) * d, spawnR + 40, WORLD_W - spawnR - 40);
-        y = clamp(WORLD_H / 2 + Math.sin(a) * d, spawnR + 40, WORLD_H - spawnR - 40);
-      } else {
-        x = rand(spawnR + 40, WORLD_W - spawnR - 40);
-        y = rand(spawnR + 40, WORLD_H - spawnR - 40);
-      }
+      const baseBiome = groupAnchor ? biomeBaseId(worldBiomeAt(groupAnchor.x, groupAnchor.y)) : biomeHint;
+      const point = Math.random() < 0.82 ? randomPointInBiome(baseBiome, spawnR + 40) : randomPointInBiome(randomBiomeZoneId(), spawnR + 40);
+      x = point.x;
+      y = point.y;
     }
     tries++;
   } while (
@@ -15646,6 +15840,7 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
     r, hp, maxHp: hp, coat, spots, spotCol,
     gender: randomAnimalGender(), motherId: "", fatherId: "", bredChild: false,
     speed: animalSpeed(type, stage, false),
+    biome: biomeBaseId(worldBiomeAt(x, y)),
     sleeping, tameProgress: 0, owned: false, follow: false,
     abilityCd: rand(3, infoAbilityCd(type)), targetX: null, targetY: null,
     wanderT: rand(1, 3), wanderA: rand(0, TAU),
@@ -15660,7 +15855,7 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
 
 function spawnWildAnimalCluster(nearPlayer, forcedStage = null) {
   // One visible animal means there should usually be 3-5 more of its species nearby.
-  const type = chooseWildType();
+  const type = chooseWildType(randomBiomeZoneId());
   const anchor = spawnWildAnimal(nearPlayer, forcedStage, type, null);
   if (!anchor) return 0;
   let made = 1;
@@ -15820,6 +16015,8 @@ function restoreCleanWorldTemplate() {
 function initWorld() {
   return withSelectedWorldSeed(() => {
   resources = [];
+  placePonds();
+  placeBiomeFeatures();
   // The giant world should feel full instead of sparse: many more, larger resources.
   scatter("tree", 980, 9, 240, 12);
   scatter("rock", 680, 4, 240, 20);
@@ -15843,8 +16040,9 @@ function chooseRandomPlayerSpawn(avoidX = null, avoidY = null, minDistance = 0) 
   const margin = 650;
   const hasAvoid = Number.isFinite(avoidX) && Number.isFinite(avoidY) && minDistance > 0;
   for (let tries = 0; tries < 320; tries++) {
-    const x = rand(margin, WORLD_W - margin);
-    const y = rand(margin, WORLD_H - margin);
+    const point = tries < 260 ? randomPointInBiome(randomBiomeZoneId(), margin) : { x: rand(margin, WORLD_W - margin), y: rand(margin, WORLD_H - margin) };
+    const x = point.x;
+    const y = point.y;
     // A death restart must feel like a genuinely new location, not a tiny shuffle.
     if (hasAvoid && dist(x, y, avoidX, avoidY) < minDistance) continue;
     // Keep the starting point away from the permanent center monument and solid scenery.
@@ -16094,6 +16292,8 @@ function handleHotkey(key) {
       player.lastWeaponTool = item.tool;
       player.heldSpecial = null;
     }
+  } else if (item.special === "Bucket" || item.label === "Bucket") {
+    selectBucket();
   } else if (item.special === "Berry" || item.label === "Berry") {
     selectBerry();
   } else if (item.special === "Saddle" || item.label === "Saddle") {
@@ -16278,6 +16478,7 @@ function isFacing(tx, ty, maxAngle = 0.85) {
 
 // ---------- attacking ----------
 function meleeAttack() {
+  if (player.heldSpecial === "Bucket") { useBucket(); return; }
   if (player.heldSpecial === "Berry") {
     if (player.attackCd > 0) return;
     eatBerry();
@@ -16300,6 +16501,7 @@ function meleeAttack() {
   if (player.attackCd > 0) return;
   // Fists animate quickly, but the opposite hand waits longer before it can punch.
   player.attackCd = t.cadence || t.swing;
+  if(!net.room) consumeHydration(0.9);
   player.punchSide *= -1;
   player.punchTimer = t.swing;
   player.swingWeapon = player.tool;
@@ -16440,7 +16642,7 @@ function meleeAttack() {
     }
   }
   for (const r of resources) {
-    if (!r.alive) continue;
+    if (!r.alive || r.type === "pond") continue;
     let resourceHit = false;
     if (r.type === "log") {
       resourceHit = logSolidHitboxes(r).some(h =>
@@ -16473,6 +16675,7 @@ function meleeAttack() {
         continue;
       }
       gainSkillXp(1,"resource-hit");
+      consumeHydration(1.05);
       let take = 0;
       if ((player.tool || "Fist") === "Fist") {
         // Bare hands only chip tiny flakes off gold. About 9 punches per gold.
@@ -16512,17 +16715,28 @@ function meleeAttack() {
 
 function gatherResource(r, t) {
   const toolName = player.tool || "Fist";
-  if(!net.room)gainSkillXp(1,"resource-hit");
+  if(!net.room){gainSkillXp(1,"resource-hit"); consumeHydration(r.type === "bush" ? 0.65 : 1.2);}
   const isWood = r.type === "tree" || r.type === "log";
 
   if (net.room && r.netId) {
     r.pulse = 1;
     try { net.room.send("resourceHit", { id: r.netId, tool: toolName, tier: player.toolTiers?.[toolName]||0 }); } catch (e) {}
-    const col = isWood ? "#c99a5b" : "#a9b3bd";
+    const biomeInfo=BIOME_RESOURCE_INFO[r.type];
+    const col = biomeInfo?.color || (isWood ? "#c99a5b" : "#a9b3bd");
     spark(r.x, r.y, col, 4, 55);
     if (r.type === "tree") sfx.treeHit();
     else if (r.type === "log") sfx.logHit();
     else sfx.stoneHit();
+    return;
+  }
+  const biomeInfo=BIOME_RESOURCE_INFO[r.type];
+  if(biomeInfo){
+    const correct=(biomeInfo.category==="wood"&&toolName==="Axe")||(biomeInfo.category==="stone"&&toolName==="Pickaxe")||(biomeInfo.category==="soft"&&(toolName==="Fist"||toolName==="Axe"));
+    let dmg=(t.resourcePower==null?1:t.resourcePower)*(correct?1.25:.68); if(toolName==="Sword")dmg*=.35;
+    r.hp-=dmg;r.pulse=1;const yieldAmt=correct?2:1;player.biomeMaterials=player.biomeMaterials||{};player.biomeMaterials[biomeInfo.material]=(player.biomeMaterials[biomeInfo.material]||0)+yieldAmt;gainSkillXp(.7*yieldAmt,"gather");consumeHydration(.9);
+    floatText(r.x,r.y-20,`+${yieldAmt} ${biomeInfo.name}`,biomeInfo.color);spark(r.x,r.y,biomeInfo.color,correct?7:4,correct?90:55);
+    if(biomeInfo.category==="stone")sfx.stoneHit();else sfx.logHit();
+    if(r.hp<=0){r.hp=0;r.alive=false;r.respawnAt=game.time+rand(18,30);spark(r.x,r.y,biomeInfo.color,10,100);}
     return;
   }
   const correctAxe = toolName === "Axe" && isWood;
@@ -16825,29 +17039,12 @@ function triggerFirstLightOffline() {
 
 
 function moonmarkSpawnPointOffline(radius=36) {
-  // Moonmarks may land anywhere in the world. The permanent giant pure-gold
-  // monument is the only protected object they are never allowed to overlap.
-  const pad = Math.max(54, radius + 18);
-  const blockedByPureGold = (x, y) => {
-    for (const g of goldChunks) {
-      if (!g || !(g.pure || g.infinite)) continue;
-      const gh = goldSolidHitbox(g);
-      if (dist(x, y, gh.x, gh.y) < radius + gh.r + 14) return true;
-    }
-    return false;
-  };
-  for (let tries = 0; tries < 180; tries++) {
-    const x = rand(pad, WORLD_W - pad), y = rand(pad, WORLD_H - pad);
-    if (!blockedByPureGold(x, y)) return {x, y};
-  }
-  // The protected monument occupies only a tiny fraction of the map, so this
-  // fallback is effectively unreachable, but it still never returns on top of it.
-  const step = 120, offX = rand(0, step), offY = rand(0, step);
-  for (let y = pad + offY; y <= WORLD_H - pad; y += step) {
-    for (let x = pad + offX; x <= WORLD_W - pad; x += step) {
-      if (!blockedByPureGold(x, y)) return {x, y};
-    }
-  }
+  const pad=Math.max(54,radius+18);
+  const blockedByPureGold=(x,y)=>{for(const g of goldChunks){if(!g||!(g.pure||g.infinite))continue;const gh=goldSolidHitbox(g);if(dist(x,y,gh.x,gh.y)<radius+gh.r+14)return true;}return false;};
+  // Put the Midnight boss near enough to be a real hunt, not somewhere across a 14k map.
+  const ax=player&&!player.dead?player.x:WORLD_W/2,ay=player&&!player.dead?player.y:WORLD_H/2;
+  for(let tries=0;tries<120;tries++){const a=rand(0,TAU),d=rand(540,780),x=clamp(ax+Math.cos(a)*d,pad,WORLD_W-pad),y=clamp(ay+Math.sin(a)*d,pad,WORLD_H-pad);if(!blockedByPureGold(x,y))return{x,y};}
+  for(let tries=0;tries<80;tries++){const x=rand(pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);if(!blockedByPureGold(x,y))return{x,y};}
   return null;
 }
 
@@ -18293,8 +18490,8 @@ function applyOfflineSlowWeak(target,seconds,slowMul=.55,weakMul=.70){
 }
 function applyOfflinePoison(target,isAnimal,pet,impactDamage){
   if(!target||target.dead)return;
-  // Five-second DoT. The five ticks together add half of the impact damage.
-  target._petPoison={time:5,tick:0.55,dps:Math.max(.2,impactDamage*.10),isAnimal:!!isAnimal,pet};
+  // Five-second DoT. Venom now bites much harder than before.
+  target._petPoison={time:5,tick:0.55,dps:Math.max(.6,impactDamage*.32),isAnimal:!!isAnimal,pet};
 }
 function damagePetAbilityTargetOffline(pet,target,isAnimal,rawDamage){
   if(!target||target.dead)return 0;
@@ -18425,7 +18622,7 @@ function activatePetAbility(pet, batchCast = false, inheritedFrom = null) {
     abilityFx.push({type:"owlWave",x:px,y:py,life:.65,maxLife:.65,angle:a,r:petAbilityRangeFor(pet,100,2.2)});
   }else if(info.elem==="Poison"){
     const a=petAbilityAimAngleOffline(pet,620),dmg=stats.damage||5,projScale=petProjectileStageSize(pet.stage);
-    petBlasts.push({x:px+Math.cos(a)*(pet.r+7),y:py+Math.sin(a)*(pet.r+7),vx:Math.cos(a)*500,vy:Math.sin(a)*500,life:1.3,r:9*projScale,dmg,kind:"poison",color:"#65cc65",sourcePet:pet,dotTime:5});
+    petBlasts.push({x:px+Math.cos(a)*(pet.r+7),y:py+Math.sin(a)*(pet.r+7),vx:Math.cos(a)*500,vy:Math.sin(a)*500,life:1.3,r:9*projScale,dmg,kind:"poison",color:"#65cc65",sourcePet:pet,dotTime:6.5});
     abilityFx.push({type:"poisonMuzzle",x:px,y:py,life:.5,maxLife:.5,angle:a,r:pet.r+15});
   }else if(info.elem==="Light"){
     const range=petAbilityRangeFor(pet,155,3.15),dmg=stats.damage||16,heal=dmg*.5;
@@ -19740,7 +19937,9 @@ function updateTime(dt) {
     if (phase.name === "Midnight") {
       banner("Midnight — Rangers and Chimest emerge, and the Forest Moonmark awakens!");
       // One biome Moonmark boss appears every Midnight. The forest is the first biome profile.
-      if (!game.midnightMarkSpawned && enemies.length < 70) {
+      if (!game.midnightMarkSpawned) {
+        // Moonmarks outrank the ordinary Hostl cap. If the wave is full, retire one normal Hostl first.
+        if(enemies.length>=70){const idx=enemies.findIndex(e=>e&&!e.dead&&!e.moonMarked);if(idx>=0)enemies.splice(idx,1);}
         const moonBoss = spawnEnemy(true, "Forest Warden", true);
         if (moonBoss) {
           game.midnightMarkSpawned = true;
@@ -19937,6 +20136,49 @@ window.getCubeResetCoreInfo = () => ({
   serverAuthoritativeOnlineMovement: true,
 });
 
+// ---------- hydration ----------
+function hydrationMoveMul(value=player.hydration){
+  const h=clamp(Number(value)||0,0,100);
+  if(h>=35)return 1;
+  return .60 + (h/35)*.40;
+}
+function consumeHydration(amount){
+  const loss=Math.max(0,Number(amount)||0);
+  if(!(loss>0)||player.dead)return;
+  player.hydration=clamp((Number(player.hydration)||0)-loss,0,100);
+  updateHydrationHud();
+}
+function applyMovementHydration(dt,moveMul=1){
+  if(net.room||player.dead||!(dt>0))return;
+  const biome=worldBiomeAt(player.x,player.y);
+  if(!isHotDryBiome(biome))return;
+  const mul=clamp(Number(moveMul)||0,0,1.35);
+  const rate=1.85*(0.45+mul*0.55);
+  player.hydration=clamp((Number(player.hydration)||0)-dt*rate,0,100);
+  updateHydrationHud();
+}
+function updateHydrationHud(){
+  const h=clamp(Number(player.hydration)||0,0,100),fill=el("hydrationFill"),txt=el("hydrationText"),hud=el("hydrationHud");
+  if(fill)fill.style.width=h.toFixed(1)+"%";if(txt)txt.textContent=Math.round(h)+"%";if(hud)hud.classList.toggle("low",h<35);
+}
+function nearestPond(maxExtra=78){
+  let best=null,bestD=Infinity;
+  for(const r of resources){if(!r||!r.alive||r.type!=="pond")continue;const d=dist(player.x,player.y,r.x,r.y);if(d<=Math.max(1,Number(r.solidR)||90)+maxExtra&&d<bestD){best=r;bestD=d;}}
+  return best;
+}
+function selectBucket(){
+  if(TOOLS[player.tool]&&player.owned[player.tool])player.lastWeaponTool=player.tool;player.heldSpecial="Bucket";
+  banner(player.bucketWater?"Bucket full — click to drink":"Empty bucket — stand by a pond and click to fill");syncHotbar();syncMobilePrimaryButton();
+}
+function useBucket(){
+  if(player.attackCd>0)return;player.attackCd=.28;
+  const action=player.bucketWater?"drink":"fill";
+  if(net.room){try{net.room.send("waterAction",{action});}catch(_){}return;}
+  if(action==="drink"){player.hydration=Math.min(100,(Number(player.hydration)||0)+70);player.bucketWater=false;banner("Water drunk — hydrated");}
+  else{const pond=nearestPond();if(!pond){banner("Move closer to a pond to fill the bucket",true);return;}player.bucketWater=true;banner("Bucket filled with pond water");}
+  updateHydrationHud();syncHotbar();
+}
+
 // ---------- player update ----------
 function updatePlayer(dt) {
   if (player.attackCd > 0) player.attackCd -= dt;
@@ -19971,7 +20213,7 @@ function updatePlayer(dt) {
       mobileFacingAngle = Math.atan2(dy, dx);
       player.angle = mobileFacingAngle;
     }
-    let speed = 148 * starterMoveMul();
+    let speed = 148 * starterMoveMul() * hydrationMoveMul();
     if (player.riding && !player.riding.dead) {
       const mount = player.riding;
       const desired = Math.atan2(dy, dx);
@@ -20002,6 +20244,7 @@ function updatePlayer(dt) {
   player._actualMoveVX = (player.x - moveStartX) / moveDt;
   player._actualMoveVY = (player.y - moveStartY) / moveDt;
   player._actualMoving = Math.hypot(player._actualMoveVX, player._actualMoveVY) > 2.5;
+  if(player._actualMoving) applyMovementHydration(dt, Math.min(1.2, Math.hypot(player._actualMoveVX, player._actualMoveVY) / 148));
   if (player.riding && !player.riding.dead) {
     const mountSpeed = Math.hypot(player._actualMoveVX, player._actualMoveVY);
     player.riding._visualMoveSpeed = mountSpeed;
@@ -20117,6 +20360,7 @@ function syncHud() {
   if (el("dockServs")) el("dockServs").textContent = goldCubits;
   if (el("dockBerries")) el("dockBerries").textContent = player.berries || 0;
   syncHotbar();
+  updateHydrationHud();
   updateSkillHud();
   updatePetCardCooldowns();
   if (bannerTimer > 0) {
@@ -20127,13 +20371,14 @@ function syncHud() {
 
 function registerHotbarItem(label) {
   if (!label) return;
-  if (!Array.isArray(player.hotbarOrder)) player.hotbarOrder = ["Fist"];
+  if (!Array.isArray(player.hotbarOrder)) player.hotbarOrder = ["Fist","Bucket"];
   if (!player.hotbarOrder.includes("Fist")) player.hotbarOrder.unshift("Fist");
   if (!player.hotbarOrder.includes(label)) player.hotbarOrder.push(label);
 }
 function ensureHotbarAcquisitionOrder() {
-  if (!Array.isArray(player.hotbarOrder)) player.hotbarOrder=["Fist"];
+  if (!Array.isArray(player.hotbarOrder)) player.hotbarOrder=["Fist","Bucket"];
   registerHotbarItem("Fist");
+  registerHotbarItem("Bucket");
   for (const t of ["Axe","Pickaxe","Sword","Bow"]) if (player.owned[t]) registerHotbarItem(t);
   if (player.hasSaddle) registerHotbarItem("Saddle");
   if ((player.berries||0)>0 || player.hotbarOrder.includes("Berry")) {
@@ -20153,7 +20398,8 @@ function getHotbarItems() {
     let entry=null;
     if (label === "Fist" || ["Axe","Pickaxe","Sword","Bow"].includes(label)) {
       if (label === "Fist" || player.owned[label]) entry={tool:label,label};
-    } else if (label === "Saddle" && player.hasSaddle) entry={tool:null,label:"Saddle",special:"Saddle"};
+    } else if (label === "Bucket") entry={tool:null,label:"Bucket",special:"Bucket",qty:player.bucketWater?"FULL":""};
+    else if (label === "Saddle" && player.hasSaddle) entry={tool:null,label:"Saddle",special:"Saddle"};
     else if (label === "Berry") entry={tool:null,label:"Berry",special:"Berry",qty:player.berries||0};
     else if (label === "Wall" && player.owned.Wall) entry={tool:null,label:"Wall"};
     else if (label === "Tower" && player.owned.Tower) entry={tool:null,label:"Tower",special:"Tower"};
@@ -20172,6 +20418,7 @@ function iconSvg(name) {
     Wall: '<rect x="3" y="3" width="20" height="20" rx="2" fill="#a9744f" stroke="#5c3a22" stroke-width="2"/><line x1="3" y1="13" x2="23" y2="13" stroke="#5c3a22" stroke-width="1.5"/><line x1="13" y1="3" x2="13" y2="13" stroke="#5c3a22" stroke-width="1.5"/>',
     Tower: '<rect x="7" y="6" width="12" height="16" rx="2" fill="#6b5344"/><rect x="4" y="4" width="18" height="6" fill="#8a6a50"/><circle cx="13" cy="14" r="3" fill="#c94b4b"/>',
     Saddle: '<path d="M5 9 Q13 4 21 9 L19 17 Q13 20 7 17 Z" fill="#9a6238" stroke="#4a2d18" stroke-width="2"/><path d="M8 10 Q13 7 18 10" fill="none" stroke="#d8b23f" stroke-width="2"/><path d="M9 17 L7 23 M17 17 L19 23" stroke="#5c3a22" stroke-width="2.2" stroke-linecap="round"/>',
+    Bucket: '<path d="M6 8 H20 L18 23 H8 Z" fill="#8c98a0" stroke="#252a2d" stroke-width="2"/><path d="M8 8 Q8 2 13 2 Q18 2 18 8" fill="none" stroke="#444b50" stroke-width="2"/><path d="M9 15 H17 L16.4 21 H9.6 Z" fill="#4aaed0"/><path d="M7 9 H19" stroke="#d7dde0" stroke-width="1.5"/>',
     Berry: '<circle cx="9" cy="15" r="5" fill="#d83d68"/><circle cx="17" cy="15" r="5" fill="#e65a80"/><circle cx="13" cy="10" r="4" fill="#c92e5c"/><path d="M13 7 Q16 3 20 5 Q17 9 13 9Z" fill="#6ab04c"/>', 
   };
   return `<svg class="ico" viewBox="0 0 26 26">${s[name] || ""}</svg>`;
@@ -20192,7 +20439,7 @@ function buildHotbar() {
       div.title = "Empty — craft items to fill";
     } else {
       div.innerHTML = `<span class="key">${item.key}</span>${iconSvg(item.label)}${item.qty != null ? `<span class="qty">${item.qty}</span>` : ""}`;
-      div.title = item.label === "Berry" ? `Berry ×${player.berries || 0} — select it, then click to eat` : (item.tool ? toolDisplayName(item.tool) : item.label);
+      div.title = item.label === "Bucket" ? (player.bucketWater?"Bucket (full) — select it, then click to drink":"Bucket (empty) — fill it at a pond") : item.label === "Berry" ? `Berry ×${player.berries || 0} — select it, then click to eat` : (item.tool ? toolDisplayName(item.tool) : item.label);
       div.addEventListener("click", () => handleHotkey(item.key));
     }
     bar.appendChild(div);
@@ -20215,13 +20462,17 @@ function syncHotbar() {
     const s = slots[i];
     if (!s) return;
     const isTool = !!item.tool;
+    const bucketActive = item.special === "Bucket" && player.heldSpecial === "Bucket";
     const berryActive = item.special === "Berry" && player.heldSpecial === "Berry";
     const wallActive = item.label === "Wall" && player.heldSpecial === "Wall";
     const saddleActive = item.label === "Saddle" && player.heldSpecial === "Saddle";
     const towerActive = item.label === "Tower" && player.heldSpecial === "Tower";
-    s.classList.toggle("active", (isTool && item.tool === player.tool && !player.heldSpecial) || berryActive || wallActive || saddleActive || towerActive);
+    s.classList.toggle("active", (isTool && item.tool === player.tool && !player.heldSpecial) || bucketActive || berryActive || wallActive || saddleActive || towerActive);
     s.classList.toggle("locked", false);
-    if (item.special === "Berry") {
+    if (item.special === "Bucket") {
+      const q=s.querySelector(".qty");if(q)q.textContent=player.bucketWater?"FULL":"";
+      s.title=player.bucketWater?"Bucket (full) — click to drink":"Bucket (empty) — fill it at a pond";
+    } else if (item.special === "Berry") {
       const q = s.querySelector(".qty");
       if (q) q.textContent = player.berries || 0;
       s.title = `Berry ×${player.berries || 0} — select it, then click to eat`;
@@ -20906,6 +21157,7 @@ function buildInv() {
     div.innerHTML = `<span style="color:${it.col}">${it.icon} ${it.name}</span><span class="qty">${it.qty}</span>`;
     grid.appendChild(div);
   }
+  for(const [material,qty] of Object.entries(player.biomeMaterials||{})){if(!(qty>0))continue;const mi=BIOME_MATERIAL_META[material]||{name:material,color:"#d8e2c7"};const div=document.createElement("div");div.className="inv-slot";div.innerHTML=`<span style="color:${mi.color}">◆ ${mi.name}</span><span class="qty">${qty}</span>`;grid.appendChild(div);}
 
   // ...and for selecting/equipping gear purchased from the in-game run shop.
   const purchasedGear = RUN_SHOP_ITEMS.filter(item => runShop.purchased.has(item.id));
@@ -20953,6 +21205,19 @@ function drawBackground() {
   ctx.translate(-game.camX, -game.camY);
   ctx.fillStyle = bgPattern;
   ctx.fillRect(game.camX, game.camY, W, H);
+  for (const zone of Object.values(BIOME_ZONES)) {
+    const profile = BIOME_PROFILES[zone.id];
+    if (!profile) continue;
+    ctx.fillStyle = profile.tint;
+    ctx.beginPath();
+    ctx.ellipse(zone.cx, zone.cy, zone.rx * 1.05, zone.ry * 1.05, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = profile.edge;
+    ctx.lineWidth = 14;
+    ctx.beginPath();
+    ctx.ellipse(zone.cx, zone.cy, zone.rx * 0.98, zone.ry * 0.98, 0, 0, TAU);
+    ctx.stroke();
+  }
   // Flat ground patches and tiny inked grass marks use the same simple cel-shaded language as the pets.
   const startX = Math.floor(game.camX / 220) * 220;
   const startY = Math.floor(game.camY / 220) * 220;
@@ -21001,7 +21266,39 @@ function drawResource(r) {
   ctx.save();
   ctx.translate(r.x, r.y);
   ctx.scale(sc, sc);
-  if (r.type === "tree") {
+  if (r.type === "pond") {
+    const rx=Math.max(52,Number(r.solidR)||90), ry=Math.max(38,Number(r.canopyR)||rx*.72);
+    ctx.rotate(r.rot||0);
+    ctx.fillStyle="rgba(0,0,0,.16)";ctx.beginPath();ctx.ellipse(3,7,rx+7,ry+7,0,0,TAU);ctx.fill();
+    ctx.fillStyle="#3d7f75";ctx.strokeStyle="#18231f";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(0,0,rx+3,ry+3,0,0,TAU);ctx.fill();ctx.stroke();
+    ctx.fillStyle="#3e9fbd";ctx.beginPath();ctx.ellipse(0,0,rx-7,ry-7,0,0,TAU);ctx.fill();
+    ctx.strokeStyle="rgba(218,250,255,.72)";ctx.lineWidth=3;ctx.lineCap="round";ctx.beginPath();ctx.ellipse(-rx*.18,-ry*.14,rx*.45,ry*.22,-.08,3.55,5.82);ctx.stroke();
+    ctx.strokeStyle="rgba(25,104,132,.7)";ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(rx*.18,ry*.15,rx*.34,ry*.16,.1,.1,2.7);ctx.stroke();
+    ctx.fillStyle="#5e9b55";for(const [lx,ly,lr] of [[-.52,-.18,.08],[.40,.20,.07],[.12,-.34,.055]]){ctx.beginPath();ctx.arc(rx*lx,ry*ly,rx*lr,0,TAU);ctx.fill();}
+  } else if (BIOME_RESOURCE_INFO[r.type]) {
+    const info=BIOME_RESOURCE_INFO[r.type],ink="#1b1d19";ctx.rotate(r.rot||0);ctx.lineWidth=3;ctx.strokeStyle=ink;
+    if(r.type==="desertCactus"){
+      ctx.fillStyle="#5f9d51";roundRect(-7,-25,14,50,6);ctx.fill();ctx.stroke();ctx.beginPath();ctx.moveTo(-7,-5);ctx.lineTo(-18,-12);ctx.lineTo(-18,-23);ctx.stroke();ctx.beginPath();ctx.moveTo(7,4);ctx.lineTo(18,-2);ctx.lineTo(18,-13);ctx.stroke();ctx.strokeStyle="#8ac56f";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-2,-20);ctx.lineTo(-2,18);ctx.stroke();
+    }else if(r.type==="desertSandstone"){
+      ctx.fillStyle="#caa865";poly([[-22,14],[-16,-11],[-4,-22],[17,-17],[24,5],[14,20],[-9,22]],"#caa865",ink);ctx.fillStyle="#e0c886";poly([[-11,-9],[-2,-17],[10,-12],[4,-4]],"#e0c886",null);
+    }else if(r.type==="arcticIceCrystal"){
+      ctx.fillStyle="#83dff3";poly([[0,-28],[10,-7],[7,22],[-8,22],[-11,-5]],"#83dff3",ink);poly([[-18,-13],[-7,-3],[-8,19],[-19,10]],"#bdefff",ink);poly([[18,-15],[9,-3],[8,17],[20,5]],"#a7eaff",ink);
+    }else if(r.type==="arcticFrostBerry"){
+      ctx.strokeStyle=ink;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,18);ctx.lineTo(0,-12);ctx.stroke();ctx.fillStyle="#cfeaff";for(const [x,y] of [[-10,-8],[8,-12],[-5,3],[11,1]]){ctx.beginPath();ctx.ellipse(x,y,8,5,x*.02,0,TAU);ctx.fill();ctx.stroke();}ctx.fillStyle="#7fa9e8";for(const [x,y] of [[-9,-3],[3,-8],[10,6]])circ(x,y,4);
+    }else if(r.type==="mountainIron"){
+      poly([[-24,14],[-17,-13],[-4,-23],[19,-15],[24,10],[9,22],[-11,21]],"#777f83",ink);ctx.fillStyle="#bcc5ca";for(const [x,y] of [[-9,-5],[8,-10],[4,8]]){ctx.beginPath();ctx.ellipse(x,y,7,4,.2,0,TAU);ctx.fill();ctx.stroke();}
+    }else if(r.type==="mountainQuartz"){
+      poly([[0,-29],[9,-8],[7,23],[-7,23],[-10,-7]],"#d9d2ed",ink);poly([[-16,-15],[-7,-4],[-7,18],[-17,7]],"#eee9fa",ink);poly([[16,-18],[7,-5],[8,17],[18,5]],"#c6bfe3",ink);
+    }else if(r.type==="rainforestVine"){
+      ctx.strokeStyle="#2f6f3e";ctx.lineWidth=7;ctx.lineCap="round";ctx.beginPath();ctx.moveTo(-22,18);ctx.bezierCurveTo(-8,-25,10,25,23,-20);ctx.stroke();ctx.fillStyle="#6ab75d";for(const [x,y,a] of [[-12,-7,-.5],[1,4,.4],[14,-8,-.4]]){ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.beginPath();ctx.ellipse(0,0,10,5,0,0,TAU);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.stroke();ctx.restore();}
+    }else if(r.type==="rainforestFruit"){
+      ctx.strokeStyle=ink;ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,16);ctx.lineTo(0,-11);ctx.stroke();ctx.fillStyle="#3d8a45";ctx.beginPath();ctx.ellipse(-5,-13,10,5,-.5,0,TAU);ctx.fill();ctx.stroke();ctx.fillStyle="#ee6d52";for(const [x,y] of [[-9,1],[3,-3],[10,7]]){ctx.beginPath();ctx.arc(x,y,7,0,TAU);ctx.fill();ctx.stroke();}
+    }else if(r.type==="forestHerb"){
+      ctx.strokeStyle="#315f36";ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(0,20);ctx.lineTo(0,-12);ctx.stroke();ctx.fillStyle="#79b85d";for(const [x,y,a] of [[-11,-5,-.5],[10,-10,.5],[-8,8,.4],[9,5,-.4]]){ctx.save();ctx.translate(x,y);ctx.rotate(a);ctx.beginPath();ctx.ellipse(0,0,10,5,0,0,TAU);ctx.fill();ctx.strokeStyle=ink;ctx.lineWidth=2;ctx.stroke();ctx.restore();}
+    }else if(r.type==="forestResin"){
+      poly([[-20,15],[-15,-14],[-4,-22],[18,-14],[23,10],[9,21],[-12,21]],"#805a37",ink);ctx.fillStyle="#d99d49";ctx.beginPath();ctx.ellipse(5,1,9,13,.2,0,TAU);ctx.fill();ctx.stroke();ctx.fillStyle="#f1c06d";ctx.beginPath();ctx.ellipse(3,-4,4,6,.2,0,TAU);ctx.fill();
+    }
+  } else if (r.type === "tree") {
     // Top-down tree canopy: no visible trunk, just a leafy crown with slightly spiky edges.
     ctx.fillStyle = "rgba(0,0,0,0.12)";
     ctx.beginPath(); ctx.ellipse(0, 20, 26, 10, 0, 0, TAU); ctx.fill();
@@ -22696,6 +22993,12 @@ function weaponIcon(type) {
 }
 
 const weaponIconCache = {};
+function drawHeldBucket(color,full){
+  ctx.save();ctx.strokeStyle="#23282b";ctx.lineWidth=2.1;ctx.fillStyle="#8d999f";roundRect(-8,-7,16,16,3);ctx.fill();ctx.stroke();
+  ctx.strokeStyle="#4e575c";ctx.lineWidth=1.6;ctx.beginPath();ctx.arc(0,-6,8,Math.PI,TAU);ctx.stroke();
+  if(full){ctx.fillStyle="#55b8d8";roundRect(-6,1,12,6,2);ctx.fill();}ctx.restore();
+}
+
 function drawHeldBerry(color, eatT) {
   // One hand holds the berry just ahead of the eyes; clicking pulls it toward the face.
   const bx = 25 - eatT * 10;
@@ -22825,7 +23128,12 @@ function drawPlayer() {
   const swingMax = (TOOLS[p.swingWeapon] && TOOLS[p.swingWeapon].swing) || 0.22;
   const swingEase = p.punchTimer > 0 ? Math.sin((1 - p.punchTimer / swingMax) * Math.PI) : 0;
   const holding = p.heldSpecial || p.tool || "Fist";
-  if (holding === "Berry") {
+  if (holding === "Bucket") {
+    ctx.save();
+    ctx.translate(0, armWalk * 0.28);
+    drawHeldBucket(armFill, player.bucketWater);
+    ctx.restore();
+  } else if (holding === "Berry") {
     ctx.save();
     ctx.translate(0, armWalk * 0.35);
     drawHeldBerry(armFill, swingEase);
@@ -24199,6 +24507,8 @@ function resetGame() {
   player.gold = meta.ownedStarters.gold15 ? 15 : (meta.ownedStarters.gold5 ? 5 : 0);
   net.goldFloor = Math.max(0, Number(player.gold) || 0);
   player.berries = meta.ownedStarters.berries10 ? 10 : 0;
+  player.biomeMaterials = {};
+  player.hydration = 100; player.bucketWater = false; updateHydrationHud();
   player.tool = "Fist";
   player.lastWeaponTool = "Fist";
   player.heldSpecial = null;
@@ -24209,7 +24519,7 @@ function resetGame() {
     Sword: !!meta.ownedStarters.startSword,
     Bow: !!meta.ownedStarters.startBow
   };
-  player.hotbarOrder = ["Fist"];
+  player.hotbarOrder = ["Fist","Bucket"];
   if (meta.ownedStarters.startAxe) registerHotbarItem("Axe");
   if (meta.ownedStarters.startPickaxe) registerHotbarItem("Pickaxe");
   if (meta.ownedStarters.startSword) registerHotbarItem("Sword");
