@@ -1329,7 +1329,7 @@ app.delete("/api/account", requireAccount, async (req, res) => {
 app.get("/", (_req, res) => {
   res.redirect("/index.html?server=self");
 });
-app.use(express.static(publicDir, { index: false, maxAge: "1h" }));
+app.use(express.static(publicDir, { index: false, maxAge: 0, etag: false, setHeaders(res){ res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate"); } }));
 
 const httpServer = createServer(app);
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer }) });

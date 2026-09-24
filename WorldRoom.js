@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "605";
+const CUBE_SHARED_RULES_VERSION = "607";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1162,14 +1162,15 @@ const MOONMARK_BIOMES={
   mountains:{id:"mountains",name:"Peak Crusher",element:"Stone",color:"#9d9aa6",accent:"#ddd9ef",mapColor:"#4f4f58",xp:320},
   rainforest:{id:"rainforest",name:"Jungle Howl",element:"Vine",color:"#2fb06a",accent:"#ccffd6",mapColor:"#165b34",xp:320}
 };
+// Broad LAND BANDS, not circular biome zones. cx/cy are only anchors.
 const BIOME_ZONES={
-  forest:{id:"forest",cx:WORLD_W*.11,cy:WORLD_H*.52,rx:WORLD_W*.11,ry:WORLD_H*.42},
-  arctic:{id:"arctic",cx:WORLD_W*.34,cy:WORLD_H*.22,rx:WORLD_W*.11,ry:WORLD_H*.18},
-  desert:{id:"desert",cx:WORLD_W*.35,cy:WORLD_H*.79,rx:WORLD_W*.12,ry:WORLD_H*.20},
-  mountains:{id:"mountains",cx:WORLD_W*.60,cy:WORLD_H*.50,rx:WORLD_W*.14,ry:WORLD_H*.42},
-  rainforest:{id:"rainforest",cx:WORLD_W*.86,cy:WORLD_H*.52,rx:WORLD_W*.11,ry:WORLD_H*.42}
+  forest:{id:"forest",minX:0,maxX:WORLD_W*.20,cx:WORLD_W*.10,cy:WORLD_H*.50},
+  arctic:{id:"arctic",minX:WORLD_W*.20,maxX:WORLD_W*.40,cx:WORLD_W*.30,cy:WORLD_H*.50},
+  mountains:{id:"mountains",minX:WORLD_W*.40,maxX:WORLD_W*.60,cx:WORLD_W*.50,cy:WORLD_H*.50},
+  desert:{id:"desert",minX:WORLD_W*.60,maxX:WORLD_W*.80,cx:WORLD_W*.70,cy:WORLD_H*.50},
+  rainforest:{id:"rainforest",minX:WORLD_W*.80,maxX:WORLD_W,cx:WORLD_W*.90,cy:WORLD_H*.50}
 };
-const BIOME_ORDER=["forest","arctic","desert","mountains","rainforest"];
+const BIOME_ORDER=["forest","arctic","mountains","desert","rainforest"];
 const BIOME_PROFILES={
   forest:{id:"forest",name:"Forest",species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear"]},
   desert:{id:"desert",name:"Desert",species:["fennec","camel","scorpion","hyena","caracal","snake","dragon"]},
@@ -1178,29 +1179,31 @@ const BIOME_PROFILES={
   rainforest:{id:"rainforest",name:"Rain Forest",species:["clouded","jaguar","toucan","tapir","capybara","anaconda"]}
 };
 function biomeMacroBoundaries(y){
-  const yn=clamp(y/WORLD_H,0,1);
+  const yn=clamp(y/WORLD_H,0,1),wave=Math.sin(yn*Math.PI*1.65),wave2=Math.sin(yn*Math.PI*2.15+1.1);
   return {
-    forest: WORLD_W*(0.19+0.025*Math.sin(yn*Math.PI*1.15-.25)),
-    split: WORLD_H*(0.50+0.035*Math.sin((y/WORLD_H)*Math.PI*1.7+.45)),
-    mid: WORLD_W*(0.44+0.03*Math.sin(yn*Math.PI*1.45+1.05)),
-    right: WORLD_W*(0.77+0.02*Math.sin(yn*Math.PI*1.25+2.15)),
+    b1:WORLD_W*(.20+.018*wave),
+    b2:WORLD_W*(.40+.016*wave2),
+    b3:WORLD_W*(.60+.018*Math.sin(yn*Math.PI*1.8+2.15)),
+    b4:WORLD_W*(.80+.015*Math.sin(yn*Math.PI*2.05+3.0))
   };
 }
 function worldBiomeAt(x,y){
   const b=biomeMacroBoundaries(y);
-  if(x<=b.forest)return "forest";
-  if(x<=b.mid)return y<=b.split?"arctic":"desert";
-  if(x<=b.right)return "mountains";
+  if(x<=b.b1)return "forest";
+  if(x<=b.b2)return "arctic";
+  if(x<=b.b3)return "mountains";
+  if(x<=b.b4)return "desert";
   return "rainforest";
 }
 function randomBiomeZoneId(){return pick(BIOME_ORDER);}
+function speciesHomeBiome(type){for(const id of BIOME_ORDER){if((BIOME_PROFILES[id]?.species||[]).includes(type))return id;}return "forest";}
 function randomPointInBiome(biomeId,pad=120){
   const base=biomeBaseId(biomeId),zone=BIOME_ZONES[base]||BIOME_ZONES.forest;
-  for(let tries=0;tries<160;tries++){
-    const x=clamp(rand(zone.cx-zone.rx,zone.cx+zone.rx),pad,WORLD_W-pad),y=clamp(rand(zone.cy-zone.ry,zone.cy+zone.ry),pad,WORLD_H-pad);
+  for(let tries=0;tries<180;tries++){
+    const x=clamp(rand(zone.minX+pad,zone.maxX-pad),pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);
     if(worldBiomeAt(x,y)===base)return{x,y};
   }
-  for(let tries=0;tries<220;tries++){
+  for(let tries=0;tries<240;tries++){
     const x=rand(pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);
     if(worldBiomeAt(x,y)===base)return{x,y};
   }
@@ -1769,7 +1772,7 @@ export class WorldRoom extends Room {
   addTower(x,y,ownerId="",tier=0){const t=new TowerState();Object.assign(t,{x,y,cd:.5,ownerId,tier:clamp(Math.floor(Number(tier)||0),0,2)});const id=`t${this.nextTowerId++}`;this.state.towers.set(id,t);return id;}
   addProjectile(data){const p=new ProjectileState();Object.assign(p,data);const id=`q${this.nextProjectileId++}`;this.state.projectiles.set(id,p);return id;}
 
-  scatter(type,count,hp,minCenter){for(let i=0;i<count;i++){for(let tries=0;tries<90;tries++){let scale=1,solid=12,canopy=0;if(type==="tree"){scale=rand(1.2,2.3);solid=8.8*scale;canopy=46*scale;}else if(type==="rock"){scale=rand(1,2.1);solid=26.5*scale;}else if(type==="log"){scale=rand(1,1.6);solid=17.5*scale;}else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}const x=rand(120,WORLD_W-120),y=rand(120,WORLD_H-120);if(!this.canPlace(x,y,solid,minCenter))continue;this.addResource(type,x,y,hp,solid,canopy,scale,type==="log"?rand(0,TAU):0);break;}}}
+  scatter(type,count,hp,minCenter){for(let i=0;i<count;i++){for(let tries=0;tries<110;tries++){let scale=1,solid=12,canopy=0;if(type==="tree"){scale=rand(1.2,2.3);solid=8.8*scale;canopy=46*scale;}else if(type==="rock"){scale=rand(1,2.1);solid=26.5*scale;}else if(type==="log"){scale=rand(1,1.6);solid=17.5*scale;}else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}const x=rand(120,WORLD_W-120),y=rand(120,WORLD_H-120),biome=worldBiomeAt(x,y);const chance=type==="tree"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="arctic"?.40:biome==="desert"?.18:.10):type==="bush"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="desert"?.38:biome==="arctic"?.30:.16):type==="log"?(biome==="rainforest"?.90:biome==="forest"?.82:biome==="arctic"?.36:biome==="desert"?.18:.12):(biome==="mountains"?1:biome==="desert"?.82:biome==="arctic"?.78:biome==="rainforest"?.55:.62);if(Math.random()>chance)continue;if(!this.canPlace(x,y,solid,minCenter))continue;this.addResource(type,x,y,hp,solid,canopy,scale,type==="log"?rand(0,TAU):0);break;}}}
   placeBiomeFeatures(){
     for(let i=0;i<12;i++)for(let t=0;t<90;t++){const radius=rand(62,104),pos=randomPointInBiome("desert",radius+60);if(!this.canPlace(pos.x,pos.y,radius+26,0))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.60,.80),1,rand(0,TAU));break;}
     for(let i=0;i<70;i++)for(let t=0;t<12;t++){const pos=randomPointInBiome("mountains",40),scale=rand(1.2,2.0),solid=26.5*scale;if(!this.canPlace(pos.x,pos.y,solid,0))continue;this.addResource("rock",pos.x,pos.y,4,solid,0,scale,0);break;}
@@ -1794,8 +1797,8 @@ export class WorldRoom extends Room {
     for(let i=0;i<120;i++)for(let t=0;t<70;t++){const x=rand(120,WORLD_W-120),y=rand(120,WORLD_H-120);if(this.canPlace(x,y,16)){this.addGold(x,y,"small",16,6);break;}}
     for(let i=0;i<72;i++)for(let t=0;t<80;t++){const x=rand(130,WORLD_W-130),y=rand(130,WORLD_H-130);if(dist(x,y,WORLD_W/2,WORLD_H/2)<280||!this.canPlace(x,y,20))continue;this.addChest(x,y);break;}
     const randomGroupStage=()=>{const roll=Math.random();return roll<.50?"baby":roll<.90?"adult":roll<.98?"boss":"superboss";};
-    const spawnWild=(forced=null,typeOverride=null,anchor=null)=>{
-      const biomeHint=anchor?biomeBaseId(worldBiomeAt(anchor.x,anchor.y)):randomBiomeZoneId();
+    const spawnWild=(forced=null,typeOverride=null,anchor=null,biomeOverride=null)=>{
+      const biomeHint=anchor?biomeBaseId(worldBiomeAt(anchor.x,anchor.y)):(biomeOverride?biomeBaseId(biomeOverride):(typeOverride?speciesHomeBiome(typeOverride):randomBiomeZoneId()));
       const species=(BIOME_PROFILES[biomeHint]?.species||WILD_SPECIES).filter(type=>WILD_SPECIES.includes(type));
       const type=typeOverride||randomWildSpecies(species);
       let stage=forced;
@@ -1809,7 +1812,7 @@ export class WorldRoom extends Room {
           x=clamp(anchor.x+Math.cos(aa)*dd,footprint+40,WORLD_W-footprint-40);
           y=clamp(anchor.y+Math.sin(aa)*dd,footprint+40,WORLD_H-footprint-40);
         }else{
-          const pos=Math.random()<.82?randomPointInBiome(biomeHint,footprint+60):randomPointInBiome(randomBiomeZoneId(),footprint+60);
+          const pos=randomPointInBiome(biomeHint,footprint+60);
           x=pos.x;y=pos.y;
         }
         if(!this.canPlace(x,y,footprint,0))continue;
@@ -1825,15 +1828,17 @@ export class WorldRoom extends Room {
       }
       return null;
     };
-    const spawnWildCluster=(forced=null)=>{
-      const type=randomWildSpecies((BIOME_PROFILES[randomBiomeZoneId()]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v))),anchor=spawnWild(forced,type,null);if(!anchor)return 0;
+    const spawnWildCluster=(forced=null,typeOverride=null,biomeOverride=null)=>{
+      const biome=biomeOverride?biomeBaseId(biomeOverride):randomBiomeZoneId();
+      const species=(BIOME_PROFILES[biome]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v));
+      const type=typeOverride||randomWildSpecies(species),anchor=spawnWild(forced,type,null,biome);if(!anchor)return 0;
       let made=1,extras=randi(3,5);
-      for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor))made++;
+      for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor,biome))made++;
       return made;
     };
-    // About the same total wildlife as before, now arranged in same-species groups.
-    for(let i=0;i<51;i++)spawnWildCluster();
-    for(let i=0;i<14;i++)spawnWildCluster("superboss");
+    for(const biome of BIOME_ORDER)for(const type of (BIOME_PROFILES[biome]?.species||[]))spawnWildCluster(null,type,biome);
+    for(let i=0;i<22;i++)spawnWildCluster();
+    for(let i=0;i<8;i++)spawnWildCluster("superboss");
     for(let i=0;i<5;i++)spawnWildCluster("bigmomma");
     console.log(`Full world generated: ${this.state.resources.size} resources, ${this.state.gold.size} gold, ${this.state.chests.size} chests, ${this.state.animals.size} wildlife`);
   }
@@ -2833,6 +2838,7 @@ export class WorldRoom extends Room {
       a.recentHit=Math.max(0,(a.recentHit||0)-dt);
       a.attackAnim=Math.max(0,(a.attackAnim||0)-dt);
       a.tailPhase=(a.tailPhase||0)+dt*(2.2+(a.speed||60)*.02);
+      if(!a.sleeping)this.moveCreatureSwept(a,Math.max(5,(Number(a.speed)||60)*.06),dt);
       if((Number(a._abilityStunUntil)||0)>this.state.worldTime){a.attackAnim=0;this.resolveStatic(a,(a.r||18)*.68);continue;}
       if(this.keepWildInHomeBiome(id,a,dt))continue;
 
@@ -3416,6 +3422,10 @@ export class WorldRoom extends Room {
       if(!owner)continue;
       if(p.bredChild)this.convertLoneOrphanToNormal(id,p);
 
+      if(owner.ridingPetId!==id&&!p.sleeping){
+        this.moveCreatureSwept(p,Math.max(7,(Number(p.speed)||60)*.10),dt);
+      }
+
       if(owner.ridingPetId===id){
         p._mountedCollision=true;p.x=owner.x;p.y=owner.y;
         const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
@@ -3517,7 +3527,10 @@ export class WorldRoom extends Room {
         if(!touch){
           const chaseBoost=targetSource==="combat"?(target.d>350?1.45:1.28):1.28;
           this.movePetChaseWithRecovery(id,p,target.obj,p.speed*chaseBoost,dt);
-        }else if(p.atkCd<=0){
+        }else{
+          p.angle+=((String(id).length&1)?1:-1)*.45*dt;
+          this.moveCreatureSwept(p,Math.max(8,(Number(p.speed)||60)*.16),dt);
+          if(p.atkCd<=0){
           const rawDmg=petAtkDmg(p);
           const dmg=target.kind==="animal"?animalDamageTaken(target.obj.type,target.obj.stage,rawDmg):rawDmg;
           p.atkCd=animalAttackCooldown(p.type,p.stage,true);
@@ -3536,6 +3549,7 @@ export class WorldRoom extends Room {
             const before=this.state.animals.has(target.id);
             this.hitWild(target.id,target.obj,rawDmg,p.ownerId,false,{kind:"pet",id});
             if(before&&!this.state.animals.has(target.id)){this.petFocusTargets.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);if(targetSource==="manual"){p.orderMode="follow";p.targetX=-1;p.targetY=-1;this.petFollowState.delete(id);}}
+          }
           }
         }
       }else if(p.orderMode==="combat"){
