@@ -1,0 +1,13 @@
+HOSTL Game 653 / Server 581 / Rules 605
+
+Biome + animal correction pass
+- Real macro land regions: Forest, Desert, Arctic, Mountains, Rain Forest. Forest is no longer the base beneath every biome.
+- Ground materials now visibly differ: forest grass, desert sand, Arctic snow/ice, mountain stone with grass patches, dark rich rain-forest grass.
+- Minimap paints and labels the biome lands.
+- Added 20 new vector biome animals with stage morphology and species-specific abilities.
+- Clouded Leopard changed to Wind. Its ability is Gale Slip, not Saber pounce.
+- Awake pets are continuously nudged/moving if an AI branch would otherwise leave them stationary; follow recovery was tightened.
+- Wild species spawn from their biome roster and are steered back toward their home biome if they cross out.
+- Ponds/rivers remain traversable water terrain, unbreakable/unattackable, and have no black outline. Players swim; animals/pets wade with water ripple/bob animation.
+- Biome resources retain different tree/rock/bush/log art by biome.
+- Animal/pet resource damage accumulates across multiple hits instead of requiring a one-shot.

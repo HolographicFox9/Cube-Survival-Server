@@ -3,8 +3,8 @@ HOSTL — FULL RENDER PROJECT — SERVER 580 / GAME 652 / RULES 604
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 652 browser client
-- WorldRoom.js          Server 580 Colyseus multiplayer room
+- public/index.html      Game 653 browser client
+- WorldRoom.js          Server 581 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
