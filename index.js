@@ -1296,6 +1296,15 @@ configureHostlAccountHooks({
       petStatUpgrades:JSON.parse(JSON.stringify(a.petStatUpgrades||{})), petStages:Object.fromEntries([...ACCOUNT_PET_TYPES].map(type=>[type,accountStarterStage(a,type)])), ownedStarters:{...(a.ownedStarters||{})},
       starterPetEntitlements:(a.starterPetEntitlements||[]).map(x=>({...x})), starterPetType:a.starterPetType||"", starterPetName:a.starterPetName||"", starterPetGender:a.starterPetGender||"Male" };
   },
+  refreshAccount(userId) {
+    const uid=String(userId||"");
+    const a=accountDb.byId[uid];
+    if(!a)return null;
+    ensurePetProgressState(a); ensureStarterPetEntitlements(a);
+    return { userId:uid, username:a.username||"", title:a.title||"", testerRank:Math.max(0,Math.floor(Number(a.testerRank)||0)), ownerRank:Math.max(0,Math.floor(Number(a.ownerRank)||0)),
+      petStatUpgrades:JSON.parse(JSON.stringify(a.petStatUpgrades||{})), petStages:Object.fromEntries([...ACCOUNT_PET_TYPES].map(type=>[type,accountStarterStage(a,type)])), ownedStarters:{...(a.ownedStarters||{})},
+      starterPetEntitlements:(a.starterPetEntitlements||[]).map(x=>({...x})), starterPetType:a.starterPetType||"", starterPetName:a.starterPetName||"", starterPetGender:a.starterPetGender||"Male" };
+  },
   rewardTesterKill,
   rewardOwnerKill,
   rewardGameplayMaterial,

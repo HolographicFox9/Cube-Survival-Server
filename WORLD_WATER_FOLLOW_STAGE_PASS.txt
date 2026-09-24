@@ -1,0 +1,12 @@
+HOSTL Game 652 / Server 580 / Rules 604
+
+WORLD / WATER / PET RELIABILITY PASS
+- World enlarged from 14,400 x 14,400 to 18,000 x 18,000 without multiplying the normal wildlife/resource population, limiting added simulation cost.
+- Players now begin each run/respawn with a full bucket.
+- Water density increased substantially: 12 biome-seeded ponds per biome, 30 extra world ponds, 12 Desert oases, and four connected 8-section river systems. New spawns preferentially choose safe ground near water so players actually encounter it.
+- Bucket filling works at ponds and rivers using rotated ellipse distance rather than an oversized center-radius check.
+- Biome ground colors now blend gradually with a soft edge instead of a hard ellipse/stroke transition. Off-screen biome gradients are skipped for performance.
+- Follow pets actively trail a moving owner rather than temporarily dropping into free-roam. A two-second extreme-distance recovery prevents rare lost/stuck followers.
+- Starter-pet stage enforcement now refreshes account progression both immediately before a run and again on the authoritative multiplayer server before pet creation/repair, fixing stale stage caches after upgrades.
+- Animal movement hitboxes use the existing multi-circle silhouette, tightened slightly, with the muzzle-tip removed and the remaining skull shifted back so the snout can overlap scenery a little.
+- Rules 604 keeps client/server movement, water, collision and pet-stage behavior synchronized.
