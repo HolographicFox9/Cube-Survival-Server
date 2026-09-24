@@ -5945,6 +5945,14 @@ setTimeout(() => {
     if (bootLoadingStatus) bootLoadingStatus.textContent = "Still loading…";
   }
 }, 6000);
+// Register this watchdog before the rest of the game initializes. If a later
+// startup step throws, the loading overlay must never permanently trap the UI.
+setTimeout(() => {
+  if (bootLoadingScreen && !bootLoadingScreen.classList.contains("boot-loaded")) {
+    console.warn("HOSTL loading watchdog released the boot overlay.");
+    hideLoadingScreen();
+  }
+}, 15000);
 
 // ---------- multiplayer server address ----------
 const CUBE_SERVER_STORAGE_KEY = "cubeServerUrl";
@@ -6144,7 +6152,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "608";
+const CUBE_SHARED_RULES_VERSION = "609";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -15664,10 +15672,20 @@ function resolveMountedDynamicContacts(mount) {
   resolveAnimalWorld(mount);
 }
 
+function addGeneratedResource(resource) {
+  resources.push(resource);
+  // During initial world generation the normal static grid used to be empty
+  // until the very end. Register each new resource immediately so placement
+  // checks only inspect nearby cells instead of rescanning thousands of objects.
+  addStaticCollider("resources", resource);
+  return resource;
+}
+
 function solidOverlaps(x, y, solid) {
-  for (const r of resources) {
+  const nearbyRange = Math.max(180, solid + 155);
+  for (const r of queryStaticNearby("resources", x, y, nearbyRange)) {
     if (!r.alive && r.respawnAt) continue;
-    if (r.type === "log") {
+    if (r.type === "log" || r.type === "pond" || r.type === "river") {
       if (resourceTouchingCircle(r, x, y, solid + 4)) return true;
     } else {
       const c = resourceSolidCenter(r);
@@ -15711,7 +15729,7 @@ function placePonds() {
       while(tries++<100){
         const pos=randomPointInBiome(biome,radius+55);
         if((biome==="forest"&&dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520)||solidOverlaps(pos.x,pos.y,radius+38))continue;
-        resources.push({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
+        addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
         break;
       }
     }
@@ -15719,7 +15737,7 @@ function placePonds() {
   for(let i=0;i<42;i++){
     let x,y,tries=0,radius=rand(70,126),squish=rand(.62,.82);
     do{x=rand(220,WORLD_W-220);y=rand(220,WORLD_H-220);tries++;}while((dist(x,y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(x,y,radius+40))&&tries<100);
-    if(tries<100)resources.push({type:"pond",x,y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
+    if(tries<100)addGeneratedResource({type:"pond",x,y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
   }
   // Four connected river systems. Each is a short chain of overlapping long
   // ellipses, so it reads as a river instead of an isolated blue oval.
@@ -15734,7 +15752,7 @@ function placePonds() {
       const rx=rand(330,430),ry=rand(55,78);
       cx=clamp(cx+Math.cos(ang)*(seg?rx*.93:0),rx+90,WORLD_W-rx-90);
       cy=clamp(cy+Math.sin(ang)*(seg?rx*.93:0),rx+90,WORLD_H-rx-90);
-      resources.push({type:"river",x:cx,y:cy,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:rx,canopyR:ry,scale:1,rot:ang});
+      addGeneratedResource({type:"river",x:cx,y:cy,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:rx,canopyR:ry,scale:1,rot:ang});
     }
   }
 }
@@ -15748,20 +15766,20 @@ function placeBiomeFeatures() {
       while (tries++ < 90) {
         const pos = randomPointInBiome(desert.id, radius + 60);
         if (solidOverlaps(pos.x, pos.y, radius + 26)) continue;
-        resources.push({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU),oasis:true});
+        addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU),oasis:true});
         break;
       }
     }
   }
   for (const _ of Array.from({length: 70})) {
     const pos = randomPointInBiome("mountains", 40);
-    if (!solidOverlaps(pos.x, pos.y, 22)) resources.push({type:"rock",x:pos.x,y:pos.y,hp:4,maxHp:4,alive:true,respawnAt:0,pulse:0,solidR:rand(18,30),canopyR:0,scale:rand(1.2,2.0),rot:0});
+    if (!solidOverlaps(pos.x, pos.y, 22)) addGeneratedResource({type:"rock",x:pos.x,y:pos.y,hp:4,maxHp:4,alive:true,respawnAt:0,pulse:0,solidR:rand(18,30),canopyR:0,scale:rand(1.2,2.0),rot:0});
   }
   for (const _ of Array.from({length: 80})) {
     const pos = randomPointInBiome("rainforest", 30);
-    if (!solidOverlaps(pos.x, pos.y, 14)) resources.push({type:"bush",x:pos.x,y:pos.y,hp:8,maxHp:8,alive:true,respawnAt:0,pulse:0,solidR:rand(11,18),canopyR:rand(20,34),scale:rand(1.05,1.7),rot:0});
+    if (!solidOverlaps(pos.x, pos.y, 14)) addGeneratedResource({type:"bush",x:pos.x,y:pos.y,hp:8,maxHp:8,alive:true,respawnAt:0,pulse:0,solidR:rand(11,18),canopyR:rand(20,34),scale:rand(1.05,1.7),rot:0});
   }
-  const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<45;t++){const pos=randomPointInBiome(biome,42),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+8))continue;resources.push({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
+  const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<45;t++){const pos=randomPointInBiome(biome,42),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+8))continue;addGeneratedResource({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
   placeUnique("forestHerb",20,"forest"); placeUnique("forestResin",18,"forest");
   placeUnique("desertCactus",22,"desert"); placeUnique("desertSandstone",20,"desert");
   placeUnique("arcticIceCrystal",22,"arctic"); placeUnique("arcticFrostBerry",20,"arctic");
@@ -15783,7 +15801,7 @@ function scatter(type, count, hp, minDistFromCenter, rSolid) {
       const chance=type==="tree"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="arctic"?.40:biome==="desert"?.18:.10):type==="bush"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="desert"?.38:biome==="arctic"?.30:.16):type==="log"?(biome==="rainforest"?.90:biome==="forest"?.82:biome==="arctic"?.36:biome==="desert"?.18:.12):(biome==="mountains"?1:biome==="desert"?.82:biome==="arctic"?.78:biome==="rainforest"?.55:.62);
       if(Math.random()>chance)continue;
       if(dist(x,y,WORLD_W/2,WORLD_H/2)<minDistFromCenter||solidOverlaps(x,y,solid))continue;
-      resources.push({type,x,y,hp,maxHp:hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:canopy,scale,rot:type==="log"?rand(0,TAU):0});
+      addGeneratedResource({type,x,y,hp,maxHp:hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:canopy,scale,rot:type==="log"?rand(0,TAU):0});
       placed=true;break;
     }
     if(!placed)continue;
@@ -16143,6 +16161,7 @@ function restoreCleanWorldTemplate() {
 function initWorld() {
   return withSelectedWorldSeed(() => {
   resources = [];
+  staticCollisionGrid = new Map();
   placePonds();
   placeBiomeFeatures();
   // The giant world should feel full instead of sparse: many more, larger resources.
@@ -26224,17 +26243,33 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
 };
 
 // boot
-setLoadingScreen("Building the world…", 18, false);
-initWorld();
-setLoadingScreen("Choosing a home view…", 42, false);
-game.homeCamReady = false;
-pickHomeCameraTarget(true);
-setLoadingScreen("Preparing menus and gear…", 66, false);
-buildHotbar();
-setupHome();
-setLoadingScreen("Finishing touches…", 90, false);
-requestAnimationFrame(frame);
-hideLoadingScreen();
+async function bootHostlGame() {
+  try {
+    setLoadingScreen("Building the world…", 18, false);
+    await waitOneFrame();
+    initWorld();
+    setLoadingScreen("Choosing a home view…", 48, false);
+    await waitOneFrame();
+    game.homeCamReady = false;
+    pickHomeCameraTarget(true);
+    setLoadingScreen("Preparing menus and gear…", 72, false);
+    buildHotbar();
+    setupHome();
+    setLoadingScreen("Finishing touches…", 92, false);
+    await waitOneFrame();
+    requestAnimationFrame(frame);
+  } catch (err) {
+    console.error("HOSTL boot recovered from an error:", err);
+    try { requestAnimationFrame(frame); } catch (_) {}
+  } finally {
+    hideLoadingScreen();
+  }
+}
+// Never let the overlay permanently cover a page that otherwise loaded.
+setTimeout(() => {
+  if (bootLoadingScreen && !bootLoadingScreen.classList.contains("boot-loaded")) hideLoadingScreen();
+}, 12000);
+bootHostlGame();
 
 })();
 
@@ -27596,6 +27631,6 @@ setTimeout(()=>{
 })();
 </script>
 
-<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 656 • RULES 608</div>
+<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 657 • RULES 609</div>
 </body>
 </html>

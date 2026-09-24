@@ -1,4 +1,4 @@
-HOSTL — FULL RENDER PROJECT — SERVER 584 / GAME 656 / RULES 608
+HOSTL — FULL RENDER PROJECT — SERVER 585 / GAME 657 / RULES 609
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
@@ -101,4 +101,6 @@ SERVER 575 / GAME 647 — ALL-BUTTON STABILITY + RELIABLE VECTOR PURCHASE ITEM R
 - Reveal has no dark/fullscreen background, panel, labels, or text: glow circle + purchased item art only.
 - Material description still closes for the reveal and returns after the four-second reveal finishes.
 
-GAME 656 art packaging: Clouded Leopard awake/sleep stage SVGs are embedded directly in public/index.html as data URIs. No external animal image files are required by the browser build.
+GAME 657 art packaging: Clouded Leopard awake/sleep stage SVGs are embedded directly in public/index.html as data URIs. No external animal image files are required by the browser build.
+
+GAME 657 loading fix: initial world placement now updates/queries the spatial collision grid as resources are created, avoiding full-array placement scans during boot. The loading overlay also has an early recovery watchdog.
