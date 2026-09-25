@@ -1193,6 +1193,15 @@ function waterNearPoint(r,x,y,extra=78){
   const edgePad=Math.max(0,Number(extra)||0)/Math.max(20,Math.min(rx,ry));
   return Math.hypot(lx/rx,ly/ry)<=1+edgePad;
 }
+function waterPlacementClear(resources,x,y,solidR,canopyR,gap=34){
+  const candidateR=Math.max(1,Number(solidR)||90,Number(canopyR)||0);
+  for(const[,r]of resources){
+    if(!r||!r.alive||(r.type!=="pond"&&r.type!=="river"))continue;
+    const existingR=Math.max(1,Number(r.solidR)||90,Number(r.canopyR)||0);
+    if(dist(x,y,r.x,r.y)<candidateR+existingR+Math.max(0,Number(gap)||0))return false;
+  }
+  return true;
+}
 const PET_KILL_STAGE_XP={baby:3,adult:14,boss:38,superboss:86,bigmomma:155};
 const PET_KILL_SPECIES_XP={rabbit:.65,dog:.85,cat:.90,fox:1.0,deer:1.05,dragon:1.15,wolf:1.25,bear:1.65,boar:1.30,snake:1.15,owl:1.10,saber:2.0,clouded:1.55};
 const PET_KILL_HOSTL_XP={Brawler:12,Swordsman:16,Rider:24,Tamer:26,Ranger:30,Chimest:34};
@@ -1280,6 +1289,8 @@ export class WorldRoom extends Room {
     this.onMessage("waterAction",(client,data={})=>this.handleWaterAction(client,data));
     this.onMessage("respawn",(client,data={})=>this.handleRespawn(client,data));
     this.onMessage("playerReady",(client)=>this.handlePlayerReady(client));
+    this.onMessage("playerPreview",(client)=>this.handlePlayerPreview(client));
+    this.onMessage("playerProfile",(client,data={})=>this.handlePlayerProfile(client,data));
     this.onMessage("petOrder",(client,data={})=>this.handlePetOrder(client,data));
     this.onMessage("petAbility",(client,data={})=>this.handlePetAbility(client,data));
     this.onMessage("petBreed",(client,data={})=>this.handlePetBreed(client,data));
@@ -1303,6 +1314,21 @@ export class WorldRoom extends Room {
     this.playerCombatReadyAt.set(id,this.state.worldTime+1.15);
     p.health=p.maxHealth;p.dead=false;
     this.pendingPlayerHits.delete(id);this.pendingAnimalPushes.delete(id);this.ownerThreat.delete(id);
+  }
+  handlePlayerPreview(client){
+    const id=client?.sessionId||"",p=this.state.players.get(id);if(!p)return;
+    // Home is a connected preview state: keep the Cube in the shared room so
+    // the client can watch live players/wildlife, but remove it from combat.
+    this.playerCombatReadyAt.delete(id);
+    this.pendingPlayerHits.delete(id);this.pendingAnimalPushes.delete(id);this.ownerThreat.delete(id);
+    p.moveX=0;p.moveY=0;p.moving=false;
+  }
+  handlePlayerProfile(client,data={}){
+    const p=this.state.players.get(client?.sessionId||"");if(!p)return;
+    const username=String(data?.username||"").trim().replace(/\s+/g," ").slice(0,14);
+    if(username)p.username=username;
+    const color=String(data?.color||"");
+    if(/^#[0-9a-f]{6}$/i.test(color))p.color=color;
   }
 
   handleChat(client,data={}) {
@@ -1779,9 +1805,9 @@ export class WorldRoom extends Room {
     this.addGold(WORLD_W/2,WORLD_H/2,"pure",176,999999999,true,true);
     // Ponds go first. Their enlarged placement-only water colliders reserve a
     // clean sloped shoreline so later resources can never spawn on top of them.
-    for(const biome of BIOME_ORDER){for(let i=0;i<16;i++)for(let t=0;t<90;t++){const radius=rand(78,134),pos=randomPointInBiome(biome,radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+72,0))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}}
-    for(let i=0;i<12;i++)for(let t=0;t<90;t++){const radius=rand(72,122),pos=randomLandPoint(radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+70,0))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}
-    for(let ri=0;ri<2;ri++){const start=randomPointInBiome(ri===0?"forest":"rainforest",720),baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;for(let seg=0;seg<6;seg++){const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;if(!this.canPlace(cx,cy,ry+38,0))continue;this.addResource("river",cx,cy,1,rx,ry,1,ang);}}
+    for(const biome of BIOME_ORDER){for(let i=0;i<16;i++)for(let t=0;t<90;t++){const radius=rand(78,134),pos=randomPointInBiome(biome,radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+72,0)||!waterPlacementClear(this.state.resources,pos.x,pos.y,radius,radius,42))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}}
+    for(let i=0;i<12;i++)for(let t=0;t<90;t++){const radius=rand(72,122),pos=randomLandPoint(radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+70,0)||!waterPlacementClear(this.state.resources,pos.x,pos.y,radius,radius,42))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}
+    for(let ri=0;ri<2;ri++){const start=randomPointInBiome(ri===0?"forest":"rainforest",720),baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;for(let seg=0;seg<6;seg++){const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;if(!this.canPlace(cx,cy,ry+38,0)||!waterPlacementClear(this.state.resources,cx,cy,rx,ry,34))continue;this.addResource("river",cx,cy,1,rx,ry,1,ang);}}
     this.placeBiomeFeatures();
     this.scatter("tree",620,9,240);this.scatter("rock",360,4,240);this.scatter("log",240,2.4,180);this.scatter("bush",410,8,180);
     for(let i=0;i<10;i++)for(let t=0;t<70;t++){const pos=randomLandPoint(500);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<500||!this.canPlace(pos.x,pos.y,48,0))continue;this.addGold(pos.x,pos.y,"huge",48,40);break;}

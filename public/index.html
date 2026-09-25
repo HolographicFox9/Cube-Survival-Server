@@ -511,9 +511,9 @@
   #serverPopulation{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:999px;border:1px solid rgba(240,230,200,0.14);background:rgba(0,0,0,0.16);font-size:11px;font-weight:800;white-space:nowrap;color:#dcebdc;}
   #serverPopulation.good{border-color:rgba(102,214,139,0.35);color:#aef0be;}
   #serverPopulation.bad{border-color:rgba(224,108,90,0.35);color:#ffc2b7;}
-  #netStatus{font-size:11px;opacity:0.72;min-width:78px;}
-  #netStatus.good{color:#8ee69c;opacity:1;}
-  #netStatus.bad{color:#ff9a85;opacity:1;}
+  /* Multiplayer connects quietly. Keep the technical connection text out of the player-facing Home UI. */
+  #netStatus{display:none !important;}
+  #netStatus.good,#netStatus.bad{display:none !important;}
   .home-side-panel .home-section-head,.home-panel .home-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;}
   .home-side-panel h3,.home-panel h3{margin:0;font-size:18px;color:#f8efcf;}
   .home-side-panel .lead,.home-panel .lead{margin:0 0 8px;font-size:13px;opacity:0.76;line-height:1.45;}
@@ -9633,6 +9633,10 @@ function setNetStatus(text, cls = "") {
   node.textContent = text;
   node.className = cls;
 }
+function sendNetworkProfile(){
+  if(!net.room)return;
+  try{net.room.send("playerProfile",{username:String(meta.username||"Cube").trim().slice(0,14)||"Cube",color:String(meta.color||COLORS[0])});}catch(_){}
+}
 
 function updateOnlineModeUI() {
   const off = document.getElementById("offlineModeBtn");
@@ -10764,12 +10768,13 @@ function ensureNetworkStarterPet() {
   } catch (_) {}
 }
 
-async function connectMultiplayer() {
+async function connectMultiplayer(options={}) {
+  const silent=!!options.silent;
   if (!net.enabled) return false;
   if (net.room) return true;
   if (net.connecting) return false;
   net.connecting = true;
-  setNetStatus("Connecting…");
+  if(!silent)setNetStatus("Connecting…");
   let joinPromise = null;
   let joinAccepted = false;
   let joinTimeoutId = 0;
@@ -10786,8 +10791,8 @@ async function connectMultiplayer() {
       startPetStage: game.startPet ? starterStageFor(game.startPet) : "baby",
       startPetName: game.startPet ? starterPetNameValue() : "",
       startPetGender: game.startPet ? starterPetGenderValue() : "Male",
-      // Play owns the online join. Derive starter gold directly from permanent
-      // starter ownership so the server can create the player in one pass.
+      // Home may already be connected. Derive starter gold directly from permanent
+      // starter ownership so the server can create the preview player in one pass.
       startGold: meta.ownedStarters?.gold15 ? 15 : (meta.ownedStarters?.gold5 ? 5 : 0),
       petStatUpgrades: JSON.stringify(meta.petStatUpgrades || {}),
       rulesVersion: CUBE_SHARED_RULES_VERSION,
@@ -11082,15 +11087,16 @@ async function connectMultiplayer() {
         syncNetworkStaticArea(px, py, 2200, true);
       }
     }
+    sendNetworkProfile();
     setTimeout(() => { if (net.room) syncNetworkFullWorld(true); }, 120);
     setTimeout(ensureNetworkStarterPet, 240);
     setTimeout(ensureNetworkStarterPet, 900);
-    setNetStatus("Online • shared world • PvP", "good");
+    if(!silent)setNetStatus("Online • shared world • PvP", "good");
     updatePlayAvailability();
 
     room.onError((code, message) => {
       console.warn("Multiplayer error", code, message);
-      setNetStatus("Server error", "bad");
+      if(!silent)setNetStatus("Server error", "bad");
     });
     room.onLeave(() => {
       net.room = null;
@@ -11098,15 +11104,17 @@ async function connectMultiplayer() {
       net.sessionId = null;
       net.goldFloor = 0;
       net.remoteVisuals.clear();
-      setNetStatus(net.enabled ? "Disconnected" : "Offline", net.enabled ? "bad" : "");
+      if(!silent)setNetStatus(net.enabled ? "Disconnected" : "Offline", net.enabled ? "bad" : "");
       updatePlayAvailability();
-      // Do not reconnect while sitting on Home. Online loading begins only when Play is pressed.
+      // Home is a live spectator view. If the room drops while the menu is open,
+      // reconnect quietly so players/world return without needing to press Play.
+      if(net.enabled&&!game.started)setTimeout(()=>{if(net.enabled&&!game.started&&!net.room&&!net.connecting)connectMultiplayer({silent:true});},1200);
     });
     return true;
   } catch (err) {
     console.warn("Multiplayer connection failed", err);
     const timedOut = /timed out/i.test(String(err && err.message || err || ""));
-    setNetStatus(timedOut ? "Server too slow" : "No server", "bad");
+    if(!silent)setNetStatus(timedOut ? "Server too slow" : "No server", "bad");
     // Promise.race cannot cancel Colyseus' join request. If a timed-out request
     // eventually succeeds, immediately leave that late room so it cannot leak a
     // ghost player after the client has already fallen back to offline play.
@@ -15302,6 +15310,19 @@ function waterNearPoint(r,x,y,extra=78){
   const edgePad=Math.max(0,Number(extra)||0)/Math.max(20,Math.min(rx,ry));
   return Math.hypot(lx/rx,ly/ry)<=1+edgePad;
 }
+// Water bodies get an additional broad-footprint reservation during generation.
+// This is intentionally stricter than ordinary scenery placement: two ponds/rivers
+// may not visually stack even when their rotated ellipse centers happen to pass a
+// cheaper point test.
+function generatedWaterPlacementClear(x,y,solidR,canopyR,gap=34){
+  const candidateR=Math.max(1,Number(solidR)||90,Number(canopyR)||0);
+  for(const r of resources){
+    if(!r||!r.alive||(r.type!=="pond"&&r.type!=="river"))continue;
+    const existingR=Math.max(1,Number(r.solidR)||90,Number(r.canopyR)||0);
+    if(dist(x,y,r.x,r.y)<candidateR+existingR+Math.max(0,Number(gap)||0))return false;
+  }
+  return true;
+}
 function pointInsideWater(x,y){
   if(!Number.isFinite(x)||!Number.isFinite(y))return false;
   for(const r of queryStaticNearby("resources",x,y,560)){
@@ -15877,7 +15898,7 @@ function placePonds() {
       let tries=0,radius=rand(78,134),squish=rand(.64,.84);
       while(tries++<90){
         const pos=randomPointInBiome(biome,radius+120);
-        if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+72))continue;
+        if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+72)||!generatedWaterPlacementClear(pos.x,pos.y,radius,radius*squish,42))continue;
         addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
         break;
       }
@@ -15887,7 +15908,7 @@ function placePonds() {
     let tries=0,radius=rand(72,122),squish=rand(.64,.84);
     while(tries++<90){
       const pos=randomLandPoint(radius+120);
-      if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+70))continue;
+      if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+70)||!generatedWaterPlacementClear(pos.x,pos.y,radius,radius*squish,42))continue;
       addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
       break;
     }
@@ -15901,7 +15922,7 @@ function placePonds() {
       const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);
       if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}
       const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;
-      if(solidOverlaps(cx,cy,ry+38))continue;
+      if(solidOverlaps(cx,cy,ry+38)||!generatedWaterPlacementClear(cx,cy,rx,ry,34))continue;
       addGeneratedResource({type:"river",x:cx,y:cy,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:rx,canopyR:ry,scale:1,rot:ang});
     }
   }
@@ -25916,7 +25937,9 @@ function setupHome() {
     d.style.background = c;
     d.addEventListener("click", () => {
       meta.color = c;
+      if(player)player.color=c;
       saveMeta();
+      sendNetworkProfile();
       sw.querySelectorAll(".swatch").forEach(x => x.classList.remove("selected"));
       d.classList.add("selected");
       drawHomePreview();
@@ -26206,6 +26229,7 @@ el("username").addEventListener("input", () => {
   if (raw.trim()) {
     meta.username = raw;
     if (player) player.username = raw;
+    sendNetworkProfile();
   }
 });
 el("username").addEventListener("keydown", (e) => {
@@ -26216,6 +26240,7 @@ el("username").addEventListener("change", async () => {
   meta.username = nextUsername;
   if (player) player.username = nextUsername;
   el("username").value = nextUsername;
+  sendNetworkProfile();
   if(accountState?.loggedIn && hostlSessionToken){
     // Save this exact draft immediately. Do not route it through the delayed
     // full-profile save because a friends refresh can otherwise restore the
@@ -26296,9 +26321,8 @@ el("offlineModeBtn").addEventListener("click", () => {
   localStorage.setItem("cubeOnlineMode", "offline");
   disconnectMultiplayer();
   if (!game.started) {
-    // Do not build the full offline world on the Home screen. Play owns loading.
-    resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];
-    staticCollisionGrid=new Map();cleanWorldTemplate=null;
+    // Offline still shows a complete living island before Play.
+    cleanWorldTemplate=null;initWorld();
     game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;
     pickHomeCameraTarget(true);
   }
@@ -26312,11 +26336,16 @@ el("onlineModeBtn").addEventListener("click", () => {
   updateOnlineModeUI();
   updatePlayAvailability();
   refreshHomePlayerCount();
-  if (!game.started) setNetStatus(`${HOSTL_WORLDS[selectedWorldId]?.name||"World"} selected • press Play to join`);
+  if (!game.started && !net.room && !net.connecting) connectMultiplayer({silent:true});
 });
-el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); if(!game.started) disconnectMultiplayer(); });
+el("serverUrl").addEventListener("change", () => {
+  saveMultiplayerServerInput();refreshHomePlayerCount();
+  if(!game.started){disconnectMultiplayer();if(net.enabled)setTimeout(()=>connectMultiplayer({silent:true}),0);}
+});
 el("serverUrl").addEventListener("blur", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
-net.enabled = localStorage.getItem("cubeOnlineMode") === "online";
+// Multiplayer is the normal HOSTL experience. First-time visitors connect automatically;
+// an explicit Offline choice is still respected.
+net.enabled = localStorage.getItem("cubeOnlineMode") !== "offline";
 updateOnlineModeUI();
 updatePlayAvailability();
 const worldSelect = el("worldSelect");
@@ -26328,12 +26357,13 @@ if (worldSelect) {
     selectedWorldId = next;
     try { localStorage.setItem("hostlWorldId", selectedWorldId); } catch (_) {}
     if (net.room) disconnectMultiplayer();
-    // Selecting a world on Home is lightweight. The full world is built/joined by Play.
+    // A selected world exists immediately behind Home: build its deterministic
+    // terrain/wildlife now, then bind it to the live multiplayer room silently.
     if (!game.started) {
-      cleanWorldTemplate=null;resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];
-      staticCollisionGrid=new Map();game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;pickHomeCameraTarget(true);
+      cleanWorldTemplate=null;initWorld();
+      game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;pickHomeCameraTarget(true);
+      if(net.enabled)setTimeout(()=>connectMultiplayer({silent:true}),0);
     }
-    setNetStatus(net.enabled ? `${HOSTL_WORLDS[selectedWorldId].name} selected • loads when Play is pressed` : "Offline");
   });
 }
 
@@ -26357,7 +26387,7 @@ if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedow
 el("playBtn").addEventListener("click", async () => {
   if ((game.started && !game.over) || playStartInProgress) return;
   playStartInProgress = true; updatePlayAvailability();
-  setLoadingScreen(net.enabled ? "Joining your world…" : "Building your island…", 10, true);
+  setLoadingScreen(net.enabled ? "Entering your world…" : "Entering your island…", 10, true);
   await waitOneFrame();
   try {
     closeCardInventory();closeStarterShop();closeChooseStarterPet();closePlayerDesign();closeHomeThemes();
@@ -26368,7 +26398,7 @@ el("playBtn").addEventListener("click", async () => {
     document.getElementById("mobileControls").classList.toggle("on",mobileMode);syncMobilePrimaryButton();document.body.classList.toggle("mobile-performance",mobileMode);if(!mobileMode)resetMobilePointers();
 
     if(net.enabled){
-      setLoadingScreen(`Joining ${HOSTL_WORLDS[selectedWorldId]?.name||"selected world"}…`,30,true);
+      setLoadingScreen(`Preparing ${HOSTL_WORLDS[selectedWorldId]?.name||"selected world"}…`,30,true);
       if(!net.room){const connected=await ensureMultiplayerReadyForPlay();if(!connected||!net.room)throw new Error("Could not join selected HOSTL world");}
       setLoadingScreen("Loading players, animals, and world…",58,true);
       await waitForOwnOnlinePlayer(4500);
@@ -26379,7 +26409,7 @@ el("playBtn").addEventListener("click", async () => {
     }else{
       setLoadingScreen("Building Forest + Rain Forest island…",26,true);
       await waitOneFrame();
-      // resetGame builds the local island only now, after Play was clicked.
+      // The Home island is already built; resetGame restores that prepared world.
       resetGame({firstEntry:true,preserveLiveWorld:false,instantLiveEntry:false});
       setLoadingScreen("Placing animals and resources…",82,false);
       await waitOneFrame();
@@ -26425,7 +26455,7 @@ el("restartBtn").addEventListener("click", (e) => {
   resetGame();
 });
 el("homeBtn").addEventListener("click", () => {
-  disconnectMultiplayer();
+  if(net.room){try{net.room.send("playerPreview",{});}catch(_){}}
   game.started = false;
   game.over = false;
   game.survivalTime = 0;
@@ -26460,6 +26490,7 @@ el("homeBtn").addEventListener("click", () => {
   document.getElementById("mobileControls").classList.remove("on");
   game.homeCamReady = false;
   setupHome();
+  if(net.enabled&&!net.room&&!net.connecting)setTimeout(()=>connectMultiplayer({silent:true}),0);
 });
 
 // Safe bridge used by the account layer (which lives outside this main game scope).
@@ -26549,14 +26580,18 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
 // boot
 async function bootHostlGame() {
   try {
-    // Home appears immediately. No full world generation and no loading screen at page entry.
+    // Build the selected island before Play so Home is looking at the real world,
+    // complete with terrain, water, resources and wildlife. Multiplayer then
+    // replaces nearby dynamic/static objects with authoritative live room state.
     resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];particles=[];floaters=[];
     staticCollisionGrid=new Map();cleanWorldTemplate=null;
+    initWorld();
     game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;pickHomeCameraTarget(true);
     buildHotbar();setupHome();updatePlayAvailability();
     requestAnimationFrame(frame);
-  }catch(err){console.error("HOSTL boot recovered from an error:",err);try{requestAnimationFrame(frame);}catch(_){}}
-  finally{hideLoadingScreen();}
+    if(net.enabled&&!net.room&&!net.connecting)setTimeout(()=>connectMultiplayer({silent:true}),0);
+  }catch(err){console.error("HOSTL boot recovered from an error:",err);try{requestAnimationFrame(frame);}catch(_){}
+  }finally{hideLoadingScreen();}
 }
 // Never let the overlay permanently cover a page that otherwise loaded.
 setTimeout(() => {
