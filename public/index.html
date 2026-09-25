@@ -6152,7 +6152,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "609";
+const CUBE_SHARED_RULES_VERSION = "610";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -16136,16 +16136,68 @@ function captureCleanWorldTemplate() {
   };
 }
 
+function overwriteWorldObject(target, source, cloneExtras = null) {
+  if (!target || !source) return false;
+  // Delete temporary/runtime fields that were added during a run, then restore
+  // the baseline fields. Keeping the SAME object identity means every bucket in
+  // staticCollisionGrid keeps pointing at the correct resource/chest/gold item.
+  for (const key of Object.keys(target)) {
+    if (!(key in source)) delete target[key];
+  }
+  Object.assign(target, source);
+  if (cloneExtras) cloneExtras(target, source);
+  return true;
+}
+function staticLayoutMatchesBaseline(live, baseline) {
+  if (!Array.isArray(live) || !Array.isArray(baseline) || live.length !== baseline.length) return false;
+  for (let i = 0; i < live.length; i++) {
+    const a = live[i], b = baseline[i];
+    if (!a || !b) return false;
+    if ((a.type || a.size || "") !== (b.type || b.size || "")) return false;
+    // Static world objects never move during a run. If coordinates differ, a
+    // multiplayer/world swap happened and the collision buckets must be rebuilt.
+    if (Math.abs((Number(a.x)||0) - (Number(b.x)||0)) > .01 || Math.abs((Number(a.y)||0) - (Number(b.y)||0)) > .01) return false;
+  }
+  return true;
+}
+function restoreStaticWorldArrayInPlace(live, baseline, cloneExtras = null) {
+  if (!staticLayoutMatchesBaseline(live, baseline)) return false;
+  for (let i = 0; i < baseline.length; i++) overwriteWorldObject(live[i], baseline[i], cloneExtras);
+  return true;
+}
+function restoreAnimalsInPlace(baseline) {
+  if (!Array.isArray(baseline)) return;
+  const common = Math.min(animals.length, baseline.length);
+  for (let i = 0; i < common; i++) {
+    overwriteWorldObject(animals[i], baseline[i], (target, source) => {
+      target.spots = Array.isArray(source.spots) ? source.spots.map(s => ({...s})) : [];
+    });
+  }
+  if (animals.length > baseline.length) animals.length = baseline.length;
+  for (let i = common; i < baseline.length; i++) animals.push(cloneWorldAnimalForReset(baseline[i]));
+}
 function restoreCleanWorldTemplate() {
   const t = cleanWorldTemplate;
   if (!t || !t.resources || !t.animals) return false;
-  resources = t.resources.map(r => ({...r}));
-  goldChunks = t.goldChunks.map(g => ({...g}));
-  chests = t.chests.map(c => ({
+
+  // Fast path: reset static objects IN PLACE. This avoids allocating thousands
+  // of replacements and, more importantly, avoids rebuilding the whole static
+  // collision grid every time Play/Try Again is pressed.
+  const resourcesKept = restoreStaticWorldArrayInPlace(resources, t.resources);
+  const goldKept = restoreStaticWorldArrayInPlace(goldChunks, t.goldChunks);
+  const chestsKept = restoreStaticWorldArrayInPlace(chests, t.chests, (target, source) => {
+    target.reward = source.reward && typeof source.reward === "object" ? {...source.reward} : source.reward;
+  });
+
+  let needsGridRebuild = !(resourcesKept && goldKept && chestsKept);
+  if (!resourcesKept) resources = t.resources.map(r => ({...r}));
+  if (!goldKept) goldChunks = t.goldChunks.map(g => ({...g}));
+  if (!chestsKept) chests = t.chests.map(c => ({
     ...c,
     reward: c.reward && typeof c.reward === "object" ? {...c.reward} : c.reward,
   }));
-  animals = t.animals.map(cloneWorldAnimalForReset);
+
+  restoreAnimalsInPlace(t.animals);
   walls = [];
   towers = [];
   projectiles = [];
@@ -16154,7 +16206,10 @@ function restoreCleanWorldTemplate() {
   floaters = [];
   enemies = [];
   abilityFx = [];
-  rebuildStaticCollisionGrid();
+  if (needsGridRebuild) {
+    rebuildStaticCollisionGrid();
+    rebuildStaticSpawnCandidateCache();
+  }
   return true;
 }
 
@@ -16185,12 +16240,31 @@ function initWorld() {
   for (let i = 0; i < 8; i++) spawnWildAnimalCluster(false, "superboss");
   for (let i = 0; i < 5; i++) spawnWildAnimalCluster(false, "bigmomma");
   rebuildStaticCollisionGrid();
+  rebuildStaticSpawnCandidateCache();
   if (!cleanWorldTemplate) captureCleanWorldTemplate();
   });
 }
 
+let cachedStaticSpawnCandidates = [];
+let cachedWaterResources = [];
+function rebuildStaticSpawnCandidateCache(targetCount = 72) {
+  cachedStaticSpawnCandidates = [];
+  cachedWaterResources = resources.filter(r => r && r.alive && (r.type === "pond" || r.type === "river"));
+  const margin = 650;
+  // These candidates only check terrain/static objects. Animal safety is checked
+  // when one is actually chosen after wildlife has been restored.
+  for (let tries = 0; tries < targetCount * 14 && cachedStaticSpawnCandidates.length < targetCount; tries++) {
+    const point = (tries % 3 !== 2 ? spawnCandidateNearWater(margin) : null) ||
+      (tries % 5 !== 4 ? randomPointInBiome(randomBiomeZoneId(), margin) : {x:rand(margin,WORLD_W-margin),y:rand(margin,WORLD_H-margin)});
+    if (!point) continue;
+    if (dist(point.x, point.y, WORLD_W / 2, WORLD_H / 2) < 700) continue;
+    if (solidOverlaps(point.x, point.y, PLAYER_R + 52)) continue;
+    cachedStaticSpawnCandidates.push({x:point.x,y:point.y});
+  }
+}
+
 function spawnCandidateNearWater(margin=650){
-  const waters=resources.filter(r=>r&&r.alive&&(r.type==="pond"||r.type==="river"));
+  const waters=cachedWaterResources.length?cachedWaterResources:resources.filter(r=>r&&r.alive&&(r.type==="pond"||r.type==="river"));
   if(!waters.length)return null;
   const w=waters[randi(0,waters.length-1)],a=rand(0,TAU),edge=Math.max(50,Number(w.solidR)||80),d=edge+rand(190,430);
   return {x:clamp(w.x+Math.cos(a)*d,margin,WORLD_W-margin),y:clamp(w.y+Math.sin(a)*d,margin,WORLD_H-margin)};
@@ -16198,8 +16272,14 @@ function spawnCandidateNearWater(margin=650){
 function chooseRandomPlayerSpawn(avoidX = null, avoidY = null, minDistance = 0) {
   const margin = 650;
   const hasAvoid = Number.isFinite(avoidX) && Number.isFinite(avoidY) && minDistance > 0;
+  const cached = cachedStaticSpawnCandidates.length ? cachedStaticSpawnCandidates.slice() : [];
+  // Shuffle a few indices cheaply so consecutive runs do not always try the
+  // same cached location first.
+  for (let i = cached.length - 1; i > 0; i--) {
+    const j = randi(0, i); const tmp = cached[i]; cached[i] = cached[j]; cached[j] = tmp;
+  }
   for (let tries = 0; tries < 320; tries++) {
-    const point = (tries < 190 ? spawnCandidateNearWater(margin) : null) || (tries < 275 ? randomPointInBiome(randomBiomeZoneId(), margin) : { x: rand(margin, WORLD_W - margin), y: rand(margin, WORLD_H - margin) });
+    const point = cached[tries] || (tries < 190 ? spawnCandidateNearWater(margin) : null) || (tries < 275 ? randomPointInBiome(randomBiomeZoneId(), margin) : { x: rand(margin, WORLD_W - margin), y: rand(margin, WORLD_H - margin) });
     const x = point.x;
     const y = point.y;
     // A death restart must feel like a genuinely new location, not a tiny shuffle.
@@ -26078,7 +26158,13 @@ el("playBtn").addEventListener("click", async () => {
   setLoadingScreen("Refreshing pet progression…", 45, true);
   await refreshAccountEntitlementsForRun();
   setLoadingScreen("Restoring the world…", 52, true);
+  const restoreStartedAt = performance.now();
   resetGame();
+  const restoreMs = performance.now() - restoreStartedAt;
+  // Leave this available for debugging slow devices without putting a debug UI
+  // in front of players. The normal fast path should now be a small in-place reset.
+  window.__hostlLastWorldRestoreMs = restoreMs;
+  setLoadingScreen("World ready — placing you in…", 68, true);
   // Always give the browser one paint after reset so the first playable frame
   // never has to compete with menu teardown and world restoration in one task.
   await waitOneFrame();
@@ -27631,6 +27717,6 @@ setTimeout(()=>{
 })();
 </script>
 
-<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 657 • RULES 609</div>
+<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 658 • RULES 610</div>
 </body>
 </html>

@@ -1,4 +1,4 @@
-HOSTL — FULL RENDER PROJECT — SERVER 585 / GAME 657 / RULES 609
+HOSTL — FULL RENDER PROJECT — SERVER 586 / GAME 658 / RULES 610
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
@@ -104,3 +104,5 @@ SERVER 575 / GAME 647 — ALL-BUTTON STABILITY + RELIABLE VECTOR PURCHASE ITEM R
 GAME 657 art packaging: Clouded Leopard awake/sleep stage SVGs are embedded directly in public/index.html as data URIs. No external animal image files are required by the browser build.
 
 GAME 657 loading fix: initial world placement now updates/queries the spatial collision grid as resources are created, avoiding full-array placement scans during boot. The loading overlay also has an early recovery watchdog.
+
+GAME 658 fast Play restore: Play/Try Again now restores static resources/gold/chests in place so the existing spatial collision grid stays valid instead of cloning thousands of objects and rebuilding every bucket. Wildlife resets in place too, and a cached static-safe spawn pool avoids repeating hundreds of terrain searches at Play time. No world size, resource count, biome detail, wildlife, ponds, or gameplay time was removed.
