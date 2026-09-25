@@ -6152,7 +6152,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "611";
+const CUBE_SHARED_RULES_VERSION = "612";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -9598,6 +9598,14 @@ const net = {
   // Static world topology almost never changes after join. Colyseus keeps each
   // netState object live, so avoid rescanning ~2,600 resources on every visual sync.
   lastSharedResourceTopologySyncAt: 0,
+  // Static terrain is already generated from the selected world's permanent seed.
+  // Multiplayer binds only the nearby authoritative objects to that terrain as the
+  // home camera/player moves, instead of rebuilding all ~2,600 objects at once.
+  lastStaticStreamAt: 0,
+  lastStaticStreamX: NaN,
+  lastStaticStreamY: NaN,
+  staticStreamRadius: 0,
+  staticStreamPass: 0,
   remoteVisuals: new Map(),
   resourceVisuals: new Map(),
   goldVisuals: new Map(),
@@ -9785,6 +9793,127 @@ function syncNetworkWorldResources() {
 
 function findNetHarvestTarget(id) {
   return net.resourceVisuals.get(id) || net.goldVisuals.get(id) || null;
+}
+
+function nearestUnboundLocalStatic(kind, x, y, type = "", maxDist = 8) {
+  let best = null, bestD = maxDist;
+  for (const obj of queryStaticNearby(kind, x, y, Math.max(24, maxDist + 8))) {
+    if (!obj || obj.netId) continue;
+    if (type && kind === "resources" && String(obj.type || "") !== type) continue;
+    const d = dist(x, y, Number(obj.x) || 0, Number(obj.y) || 0);
+    if (d <= bestD) { best = obj; bestD = d; }
+  }
+  return best;
+}
+
+function bindNearbyNetworkResource(s, id) {
+  const x = Number(s.x) || 0, y = Number(s.y) || 0, type = String(s.type || "rock");
+  let r = net.resourceVisuals.get(id);
+  if (!r) {
+    r = nearestUnboundLocalStatic("resources", x, y, type, 10);
+    if (!r) {
+      r = {type,x,y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,gatherCredit:0,solidR:12,canopyR:0,scale:1,rot:0};
+      resources.push(r); addStaticCollider("resources", r);
+    }
+    r.netId = id;
+    net.resourceVisuals.set(id, r);
+  }
+  r.netState = s;
+  r._netStreamMark = net.staticStreamPass;
+  r.type = type;
+  r.hp = damageLockedHp(r, Math.max(0, Number(s.hp) || 0));
+  r.maxHp = Math.max(1, Number(s.maxHp) || 1);
+  r.alive = s.alive !== false && r.hp > 0;
+  r.solidR = Number(s.solidR) || r.solidR || 12;
+  r.canopyR = Number(s.canopyR) || 0;
+  r.scale = Number(s.scale) || 1;
+  r.rot = Number(s.rot) || 0;
+  return r;
+}
+
+function bindNearbyNetworkGold(s, id) {
+  const x = Number(s.x) || 0, y = Number(s.y) || 0;
+  let g = net.goldVisuals.get(id);
+  if (!g) {
+    g = nearestUnboundLocalStatic("gold", x, y, "", 10);
+    if (!g) {
+      g = {x,y,size:s.size||"small",r:Number(s.r)||16,goldLeft:0,infinite:!!s.infinite,pure:!!s.pure,pulse:0,handGatherCredit:0};
+      goldChunks.push(g); addStaticCollider("gold", g);
+    }
+    g.netId = id;
+    net.goldVisuals.set(id, g);
+  }
+  g.netState = s;
+  g._netStreamMark = net.staticStreamPass;
+  g.size = s.size || g.size || "small";
+  g.r = Number(s.r) || g.r || 16;
+  g.infinite = !!s.infinite;
+  g.pure = !!s.pure;
+  g.goldLeft = g.infinite ? Infinity : Math.max(0, Number(s.goldLeft) || 0);
+  return g;
+}
+
+function bindNearbyNetworkChest(s, id) {
+  const x = Number(s.x) || 0, y = Number(s.y) || 0;
+  let c = net.chestVisuals.get(id);
+  if (!c) {
+    c = nearestUnboundLocalStatic("chests", x, y, "", 10);
+    if (!c) {
+      c = {x,y,r:Number(s.r)||18,opened:false,pulse:0,shine:Number(s.shine)||0,hp:4,maxHp:4,reward:null,chipSide:s.chipSide||"wood"};
+      chests.push(c); addStaticCollider("chests", c);
+    }
+    c.netId = id;
+    net.chestVisuals.set(id, c);
+  }
+  c.netState = s;
+  c._netStreamMark = net.staticStreamPass;
+  c.r = Number(s.r) || c.r || 18;
+  c.hp = damageLockedHp(c, Math.max(0, Number(s.hp) || 0));
+  c.maxHp = Math.max(1, Number(s.maxHp) || 4);
+  c.opened = !!s.opened;
+  c.pulse = Number(s.pulse) || 0;
+  c.shine = Number(s.shine) || c.shine || 0;
+  c.chipSide = s.chipSide || c.chipSide || "wood";
+  return c;
+}
+
+function syncNetworkStaticArea(cx, cy, radius = 1900, force = false) {
+  if (!net.room || !net.room.state || !Number.isFinite(cx) || !Number.isFinite(cy)) return false;
+  const now = performance.now();
+  const moved = Number.isFinite(net.lastStaticStreamX) ? dist(cx, cy, net.lastStaticStreamX, net.lastStaticStreamY) : Infinity;
+  if (!force && now - (net.lastStaticStreamAt || 0) < 650 && moved < Math.max(420, radius * .28)) return false;
+  net.lastStaticStreamAt = now; net.lastStaticStreamX = cx; net.lastStaticStreamY = cy; net.staticStreamRadius = radius;
+  net.staticStreamPass = (net.staticStreamPass || 0) + 1;
+  const pass = net.staticStreamPass;
+  const rr = radius * radius;
+  eachNetworkCollection("resources", (st, id) => {
+    const dx = (Number(st.x)||0) - cx, dy = (Number(st.y)||0) - cy;
+    if (dx*dx + dy*dy <= rr) bindNearbyNetworkResource(st, id);
+  });
+  eachNetworkCollection("gold", (st, id) => {
+    const dx = (Number(st.x)||0) - cx, dy = (Number(st.y)||0) - cy;
+    if (dx*dx + dy*dy <= rr) bindNearbyNetworkGold(st, id);
+  });
+  eachNetworkCollection("chests", (st, id) => {
+    const dx = (Number(st.x)||0) - cx, dy = (Number(st.y)||0) - cy;
+    if (dx*dx + dy*dy <= rr) bindNearbyNetworkChest(st, id);
+  });
+  // The nearby chunk is now authoritative. If the deterministic Home preview had
+  // an extra local object that does not exist in this server chunk, hide it rather
+  // than showing a duplicate/fake object beside the network one.
+  for (const r of queryStaticNearby("resources", cx, cy, radius + STATIC_GRID_CELL)) {
+    const dx=(Number(r.x)||0)-cx,dy=(Number(r.y)||0)-cy;if(dx*dx+dy*dy>rr)continue;
+    if (r._netStreamMark !== pass && !r.netId) r.alive = false;
+  }
+  for (const g of queryStaticNearby("gold", cx, cy, radius + STATIC_GRID_CELL)) {
+    const dx=(Number(g.x)||0)-cx,dy=(Number(g.y)||0)-cy;if(dx*dx+dy*dy>rr)continue;
+    if (g._netStreamMark !== pass && !g.netId && !g.infinite) g.goldLeft = 0;
+  }
+  for (const c of queryStaticNearby("chests", cx, cy, radius + STATIC_GRID_CELL)) {
+    const dx=(Number(c.x)||0)-cx,dy=(Number(c.y)||0)-cy;if(dx*dx+dy*dy>rr)continue;
+    if (c._netStreamMark !== pass && !c.netId) c.opened = true;
+  }
+  return true;
 }
 
 function syncNetworkSharedResourceState() {
@@ -10381,28 +10510,13 @@ function syncNetworkFullWorld(force = false) {
     if (!own.dead && player.dead && !game.over) { player.dead = false; player.splitT = 0; }
   }
 
-  // Shared resource/gold objects already keep a live Colyseus netState reference.
-  // Nearby HP/alive values are refreshed every frame by updateResources(), so a full
-  // topology walk is only needed occasionally (or when explicitly forced). This cuts
-  // thousands of Map/Schema iterations per second without making harvesting stale.
-  const topologyNow = performance.now();
-  const topologyInterval = mobileMode ? 2200 : 1600;
-  if (force || topologyNow - (net.lastSharedResourceTopologySyncAt || 0) >= topologyInterval) {
-    syncNetworkSharedResourceState();
-    net.lastSharedResourceTopologySyncAt = topologyNow;
-  }
-
-  const chestSeen = new Set();
-  eachNetworkCollection("chests", (s, id) => {
-    chestSeen.add(id);
-    let v = net.chestVisuals.get(id);
-    if (!v) { v = { netId:id }; net.chestVisuals.set(id, v); }
-    v.x = Number(s.x)||0; v.y = Number(s.y)||0; v.r = Number(s.r)||18;
-    v.hp = damageLockedHp(v, Math.max(0, Number(s.hp)||0)); v.maxHp = Math.max(1, Number(s.maxHp)||4);
-    v.opened = !!s.opened; v.pulse = Number(s.pulse)||0; v.shine = Number(s.shine)||0; v.chipSide = s.chipSide||"wood";
-  });
-  for (const id of Array.from(net.chestVisuals.keys())) if (!chestSeen.has(id)) net.chestVisuals.delete(id);
-  chests = Array.from(net.chestVisuals.values());
+  // The selected world already exists behind the Home screen from its permanent
+  // seed. Bind only the server objects around the current camera/player. This keeps
+  // harvesting authoritative without rebuilding the whole 18k map before Play.
+  const staticCx = game.started ? player.x : (game.camX + W * .5);
+  const staticCy = game.started ? player.y : (game.camY + H * .5);
+  const staticRadius = game.started ? 2200 : Math.max(1500, Math.hypot(W,H) * .85 + 500);
+  syncNetworkStaticArea(staticCx, staticCy, staticRadius, force);
 
   const animalSeen = new Set();
   eachNetworkCollection("animals", (s,id)=>{
@@ -10950,10 +11064,22 @@ async function connectMultiplayer() {
       setTimeout(() => syncNetworkFullWorld(true), 60);
     });
     room.onMessage("chat", receiveChatMessage);
-    const syncedResources = syncNetworkWorldResources();
-    if (!syncedResources) setTimeout(() => syncNetworkWorldResources(), 120);
+    // Home is already rendering this selected world's deterministic terrain.
+    // Pull in the live players/wildlife/builds immediately and bind only the
+    // nearby authoritative static chunk instead of reconstructing the full map.
     syncNetworkFullWorld(true);
-    setTimeout(() => syncNetworkFullWorld(true), 100);
+    const ownPreview = room.state?.players?.get?.(net.sessionId);
+    if (!game.started && ownPreview) {
+      const px = Number(ownPreview.x), py = Number(ownPreview.y);
+      if (Number.isFinite(px) && Number.isFinite(py)) {
+        player.x = px; player.y = py;
+        game.camX = clamp(px - W * .5, 0, Math.max(0, WORLD_W - W));
+        game.camY = clamp(py - H * .5, 0, Math.max(0, WORLD_H - H));
+        game.homeTargetX = px; game.homeTargetY = py; game.homeCamReady = true;
+        syncNetworkStaticArea(px, py, 2200, true);
+      }
+    }
+    setTimeout(() => { if (net.room) syncNetworkFullWorld(true); }, 120);
     setTimeout(ensureNetworkStarterPet, 240);
     setTimeout(ensureNetworkStarterPet, 900);
     setNetStatus("Online • shared world • PvP", "good");
@@ -10969,6 +11095,7 @@ async function connectMultiplayer() {
       net.goldFloor = 0;
       net.remoteVisuals.clear();
       setNetStatus(net.enabled ? "Disconnected" : "Offline", net.enabled ? "bad" : "");
+      if (net.enabled && !game.started) setTimeout(() => scheduleHomeWorldConnection(1200), 0);
     });
     return true;
   } catch (err) {
@@ -11004,6 +11131,7 @@ function disconnectMultiplayer() {
   net.resourceVisuals.clear(); net.goldVisuals.clear(); net.chestVisuals.clear(); net.animalVisuals.clear();
   net.petVisuals.clear(); net.remotePetVisuals.clear(); net.enemyVisuals.clear(); net.wallVisuals.clear();
   net.towerVisuals.clear(); net.projectileVisuals.clear(); net.initialPositionApplied = false; net.fullSyncAccum = 0; net.lastSharedResourceTopologySyncAt = 0;
+  net.lastStaticStreamAt = 0; net.lastStaticStreamX = NaN; net.lastStaticStreamY = NaN; net.staticStreamRadius = 0; net.staticStreamPass = 0;
   if (room) {
     try { room.leave(true); } catch (e) {}
   }
@@ -16324,6 +16452,22 @@ function pickHomeCameraTarget(forceStart = false) {
 }
 
 function updateHomeCamera(dt) {
+  // Online Home is the actual entry area of the selected room. Keep the menu
+  // camera centered on the protected server spawn so Play simply reveals the
+  // Cube in the exact scene already visible behind the menu.
+  if (net.room && !game.started) {
+    const own = net.room.state?.players?.get?.(net.sessionId);
+    const px = Number(own?.x), py = Number(own?.y);
+    if (Number.isFinite(px) && Number.isFinite(py)) {
+      const tx = clamp(px - W*.5, 0, Math.max(0, WORLD_W-W));
+      const ty = clamp(py - H*.5, 0, Math.max(0, WORLD_H-H));
+      const follow = 1 - Math.exp(-7 * Math.max(.001, dt));
+      if (!game.homeCamReady || !Number.isFinite(game.camX) || !Number.isFinite(game.camY)) { game.camX=tx; game.camY=ty; }
+      else { game.camX += (tx-game.camX)*follow; game.camY += (ty-game.camY)*follow; }
+      game.homeTargetX=tx; game.homeTargetY=ty; game.homeCamReady=true;
+      return;
+    }
+  }
   if (!game.homeCamReady) pickHomeCameraTarget(true);
   const dx = game.homeTargetX - game.camX;
   const dy = game.homeTargetY - game.camY;
@@ -24925,11 +25069,11 @@ function draw(menuMode = false) {
   ctx.globalAlpha = 1;
   for (const a of animals) if (!a.owned && renderInView(a.x, a.y, Math.max(135, (Number(a.r) || 18) * 3.5))) safeCanvasEntityDraw("wild animal", a, drawAnimal);
   for (const p of player.pets) if (renderInView(p.x, p.y, Math.max(135, (Number(p.r) || 18) * 3.5))) safeCanvasEntityDraw("pet", p, drawAnimal);
-  if (!menuMode) safeCanvasDrawCall("remote pets", drawRemotePets);
+  if (!menuMode || net.room) safeCanvasDrawCall("remote pets", drawRemotePets);
   // Multiplayer layering rule: pets first, people second. This applies whether
   // the remote player is merely standing beside a pet or actively riding it.
   // It prevents any remote pet sprite from covering its owner/rider.
-  if (!menuMode) safeCanvasDrawCall("remote players", drawRemotePlayers);
+  if (!menuMode || net.room) safeCanvasDrawCall("remote players", drawRemotePlayers);
   for (const en of enemies) if (!en.dead && renderInView(en.x, en.y, 130)) safeCanvasEntityDraw("enemy", en, drawEnemy);
   for (const p of projectiles) if (inView(p.x, p.y, 30)) safeCanvasEntityDraw("projectile", p, drawProjectile);
   for (const b of petBlasts) {
@@ -25030,6 +25174,7 @@ function endGame() {
 
 function resetGame(options = {}) {
   const firstEntry = !!options.firstEntry;
+  const preserveLiveWorld = !!options.preserveLiveWorld;
   // Run-only gold gear never carries into a new attempt.
   runShop = freshRunShopState();
   game.tamePending = false;
@@ -25115,14 +25260,13 @@ function resetGame(options = {}) {
   // Reuse the clean world that was generated for the Home screen. Full world
   // generation is intentionally avoided here because it can block the main
   // thread for seconds on slower PCs right after Play/Try Again is pressed.
-  if (!restoreCleanWorldTemplate()) initWorld();
+  if (!preserveLiveWorld && !restoreCleanWorldTemplate()) initWorld();
 
   // First multiplayer entry already has an authoritative safe spawn from the
   // server join. Do NOT choose a local spawn and then ask the server to respawn
   // us again — that was the visible double-jump seen after pressing Play.
   let useServerInitialSpawn = !!(firstEntry && net.room);
   if (useServerInitialSpawn) {
-    syncNetworkWorldResources();
     syncNetworkFullWorld(true);
     const own = net.room?.state?.players?.get?.(net.sessionId);
     const sx = Number(own?.x), sy = Number(own?.y), sa = Number(own?.angle);
@@ -25158,8 +25302,8 @@ function resetGame(options = {}) {
     pet.angle = player.angle;
   }
   if (net.room) {
-    syncNetworkWorldResources();
     syncNetworkFullWorld(true);
+    syncNetworkStaticArea(player.x, player.y, 2300, true);
   }
   game.camX = clamp(player.x - W / 2, 0, Math.max(0, WORLD_W - W));
   game.camY = clamp(player.y - H / 2, 0, Math.max(0, WORLD_H - H));
@@ -25311,8 +25455,24 @@ function frame(now) {
     } else {
       resetSimAccumulator = 0;
       resetWorldAccumulator = 0;
-      updateHomeCamera(renderDt);
-      updateHomeAnimals(renderDt);
+      if (net.room) {
+        // The Home screen is a spectator view of the REAL selected room. Dynamic
+        // entities keep following authoritative server snapshots while the menu is open.
+        net.fullSyncAccum += renderDt;
+        if (net.fullSyncAccum >= .12) {
+          net.fullSyncAccum %= .12;
+          syncNetworkFullWorld(false);
+        }
+        updateNetworkAnimalInterpolation(resetNetworkVisualDt);
+        updateNetworkPetInterpolation(resetNetworkVisualDt);
+        updateNetworkEnemyInterpolation(resetNetworkVisualDt);
+        updateNetworkProjectileMotion(resetNetworkVisualDt);
+        updateRemotePlayers(resetNetworkVisualDt);
+        updateHomeCamera(renderDt);
+      } else {
+        updateHomeCamera(renderDt);
+        updateHomeAnimals(renderDt);
+      }
     }
 
     updateFx(renderDt);
@@ -26088,10 +26248,44 @@ el("username").addEventListener("change", async () => {
   persistStarterPetPreference();
 });
 
+let homeWorldConnectTimer = 0;
+function scheduleHomeWorldConnection(delay = 80) {
+  if (homeWorldConnectTimer) clearTimeout(homeWorldConnectTimer);
+  if (!net.enabled || game.started) return;
+  homeWorldConnectTimer = setTimeout(async () => {
+    homeWorldConnectTimer = 0;
+    if (!net.enabled || game.started) return;
+    if (!window.Colyseus || !window.Colyseus.Client) { scheduleHomeWorldConnection(300); return; }
+    if (!net.room && !net.connecting) {
+      const ok = await connectMultiplayer();
+      if (!ok && net.enabled && !game.started) { scheduleHomeWorldConnection(3500); return; }
+    }
+    if (net.room && !game.started) {
+      syncNetworkFullWorld(true);
+      const own = net.room.state?.players?.get?.(net.sessionId);
+      const x = Number(own?.x), y = Number(own?.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        player.x = x; player.y = y;
+        game.camX = clamp(x - W*.5, 0, Math.max(0, WORLD_W-W));
+        game.camY = clamp(y - H*.5, 0, Math.max(0, WORLD_H-H));
+        game.homeTargetX = x; game.homeTargetY = y; game.homeCamReady = true;
+        syncNetworkStaticArea(x, y, 2300, true);
+      }
+    }
+  }, Math.max(0, delay|0));
+}
+
 el("offlineModeBtn").addEventListener("click", () => {
   net.enabled = false;
   localStorage.setItem("cubeOnlineMode", "offline");
   disconnectMultiplayer();
+  if (!game.started) {
+    // Undo any live-room chunk overrides and return to the clean deterministic
+    // selected-world preview when switching back to Offline from Home.
+    if (!restoreCleanWorldTemplate()) initWorld();
+    game.homeCamReady = false;
+    pickHomeCameraTarget(true);
+  }
   updateOnlineModeUI();
 });
 el("onlineModeBtn").addEventListener("click", () => {
@@ -26100,11 +26294,13 @@ el("onlineModeBtn").addEventListener("click", () => {
   saveMultiplayerServerInput();
   updateOnlineModeUI();
   refreshHomePlayerCount();
+  scheduleHomeWorldConnection(0);
 });
-el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
+el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); if(!game.started){disconnectMultiplayer();scheduleHomeWorldConnection(60);} });
 el("serverUrl").addEventListener("blur", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
 net.enabled = localStorage.getItem("cubeOnlineMode") === "online";
 updateOnlineModeUI();
+if (net.enabled) scheduleHomeWorldConnection(120);
 const worldSelect = el("worldSelect");
 if (worldSelect) {
   worldSelect.value = selectedWorldId;
@@ -26122,6 +26318,7 @@ if (worldSelect) {
       pickHomeCameraTarget(true);
     }
     setNetStatus(net.enabled ? `${HOSTL_WORLDS[selectedWorldId].name} selected` : "Offline");
+    if (net.enabled && !game.started) scheduleHomeWorldConnection(80);
   });
 }
 
@@ -26148,7 +26345,7 @@ el("playBtn").addEventListener("click", async () => {
   playStartInProgress = true;
   const playButton = el("playBtn");
   const originalPlayText = playButton?.textContent || "Play";
-  if (playButton) { playButton.disabled = true; playButton.textContent = net.enabled ? "Joining…" : "Play"; }
+  if (playButton) { playButton.disabled = true; playButton.textContent = (net.enabled && !net.room) ? "Joining…" : "Play"; }
 
   try {
     // Keep the Home screen visible while any online handshake happens. The
@@ -26187,10 +26384,9 @@ el("playBtn").addEventListener("click", async () => {
       }
     }
 
-    // Reset/position everything while Home still covers the canvas. In online
-    // mode firstEntry uses the server's join spawn directly, so there is only
-    // one spawn position instead of local-spawn -> server-respawn jumping.
-    resetGame({ firstEntry: true });
+    // The selected room has already been living behind the Home menu. Reset only
+    // run/player state, preserve that exact live world, and use the same server spawn.
+    resetGame({ firstEntry: true, preserveLiveWorld: !!net.room });
 
     // Reveal the already-ready world in one transition, Taming.io-style.
     const home = document.getElementById("home");
@@ -27763,6 +27959,6 @@ setTimeout(()=>{
 })();
 </script>
 
-<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 659 • RULES 611</div>
+<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 660 • RULES 612</div>
 </body>
 </html>
