@@ -1,4 +1,4 @@
-HOSTL — FULL RENDER PROJECT — SERVER 588 / GAME 660 / RULES 612
+HOSTL — FULL RENDER PROJECT — SERVER 589 / GAME 661 / RULES 613
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
@@ -116,9 +116,17 @@ GAME 659 direct-Play transition:
 - The click-time account entitlement refresh is non-blocking because account state is already restored on Home and the multiplayer server independently verifies permanent starter progression.
 
 
-GAME 660 live selected-world Home preview:
+GAME 661 instant-entry live world:
 - Online Home now joins the selected room before Play and renders the actual room's players, pets, wildlife, Hostls, builds and live time state behind the menu.
 - Pressing Play preserves that already-visible live world instead of rebuilding/restoring the full map.
 - Static server authority streams/binds around the Home camera/player in nearby areas rather than cloning the entire 18,000 x 18,000 resource map on entry.
 - Home-preview players remain combat-protected indefinitely until playerReady; the old 30-second hidden-player timeout is removed.
-- Rules 612 keeps the live-preview/nearby static streaming behavior synchronized with the server.
+- Rules 613 keeps live Home preview synchronized while making Play a zero-wait handoff into that already-loaded scene.
+
+
+GAME 661 INSTANT PLAY HANDOFF
+- Online mode now connects to the selected live world during initial Home preparation, before Play is enabled.
+- If Play is clickable, pressing it never joins, restores, streams a large static area, or waits for a world-ready condition.
+- The live scene behind Home is reused exactly; Play only resets run-local state, hides Home, enables control, and sends playerReady.
+- The first online entry avoids forced full-world/static-area resync calls inside the Play click path.
+- If the live room disconnects while Home is open, Play disables and the background reconnects automatically rather than starting a half-loaded run.
