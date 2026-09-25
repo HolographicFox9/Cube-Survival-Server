@@ -1,4 +1,4 @@
-HOSTL — FULL RENDER PROJECT — SERVER 586 / GAME 658 / RULES 610
+HOSTL — FULL RENDER PROJECT — SERVER 587 / GAME 659 / RULES 611
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
@@ -106,3 +106,11 @@ GAME 657 art packaging: Clouded Leopard awake/sleep stage SVGs are embedded dire
 GAME 657 loading fix: initial world placement now updates/queries the spatial collision grid as resources are created, avoiding full-array placement scans during boot. The loading overlay also has an early recovery watchdog.
 
 GAME 658 fast Play restore: Play/Try Again now restores static resources/gold/chests in place so the existing spatial collision grid stays valid instead of cloning thousands of objects and rebuilding every bucket. Wildlife resets in place too, and a cached static-safe spawn pool avoids repeating hundreds of terrain searches at Play time. No world size, resource count, biome detail, wildlife, ponds, or gameplay time was removed.
+
+
+GAME 659 direct-Play transition:
+- Pressing Play no longer reopens the boot/loading overlay. The Home screen remains visible only while an online handshake is unfinished, then the ready world is revealed in one transition.
+- game.started stays false until reset/connection/position preparation is complete, so offline AI cannot attack behind an overlay.
+- First multiplayer entry uses the server join spawn directly; it no longer chooses a local random spawn and then sends an immediate server respawn, eliminating the visible double teleport.
+- Server Rules 611 adds playerReady combat gating: newly joined players and their pets are ignored by hostile targeting/damage/pushes until the client reveals gameplay, then receive a short 1.15-second visible spawn grace.
+- The click-time account entitlement refresh is non-blocking because account state is already restored on Home and the multiplayer server independently verifies permanent starter progression.

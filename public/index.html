@@ -6152,7 +6152,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "610";
+const CUBE_SHARED_RULES_VERSION = "611";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -25028,7 +25028,8 @@ function endGame() {
   el("overlay").classList.add("show");
 }
 
-function resetGame() {
+function resetGame(options = {}) {
+  const firstEntry = !!options.firstEntry;
   // Run-only gold gear never carries into a new attempt.
   runShop = freshRunShopState();
   game.tamePending = false;
@@ -25116,16 +25117,38 @@ function resetGame() {
   // thread for seconds on slower PCs right after Play/Try Again is pressed.
   if (!restoreCleanWorldTemplate()) initWorld();
 
-  // Every run begins at a safe random location. After death, force the new run
-  // into a clearly different region so Try Again never feels like a same-spot revive.
-  const spawn = chooseRandomPlayerSpawn(
-    restartingAfterDeath ? previousRunX : null,
-    restartingAfterDeath ? previousRunY : null,
-    restartingAfterDeath ? 2400 : 0
-  );
-  player.x = spawn.x;
-  player.y = spawn.y;
-  player.angle = rand(-Math.PI, Math.PI);
+  // First multiplayer entry already has an authoritative safe spawn from the
+  // server join. Do NOT choose a local spawn and then ask the server to respawn
+  // us again — that was the visible double-jump seen after pressing Play.
+  let useServerInitialSpawn = !!(firstEntry && net.room);
+  if (useServerInitialSpawn) {
+    syncNetworkWorldResources();
+    syncNetworkFullWorld(true);
+    const own = net.room?.state?.players?.get?.(net.sessionId);
+    const sx = Number(own?.x), sy = Number(own?.y), sa = Number(own?.angle);
+    if (Number.isFinite(sx)) player.x = sx;
+    if (Number.isFinite(sy)) player.y = sy;
+    if (Number.isFinite(sa)) player.angle = sa;
+  } else {
+    // Offline starts and real Try Again runs still use a safe random location.
+    const spawn = chooseRandomPlayerSpawn(
+      restartingAfterDeath ? previousRunX : null,
+      restartingAfterDeath ? previousRunY : null,
+      restartingAfterDeath ? 2400 : 0
+    );
+    player.x = spawn.x;
+    player.y = spawn.y;
+    player.angle = rand(-Math.PI, Math.PI);
+    if (net.room && !firstEntry) {
+      try {
+        net.room.send("respawn", {
+          avoidX: restartingAfterDeath ? previousRunX : null,
+          avoidY: restartingAfterDeath ? previousRunY : null,
+          minDistance: restartingAfterDeath ? 2400 : 0
+        });
+      } catch (_) {}
+    }
+  }
   if (mobileMode) mobileFacingAngle = player.angle;
   for (let i = 0; i < player.pets.length; i++) {
     const pet = player.pets[i];
@@ -25134,20 +25157,13 @@ function resetGame() {
     pet.y = clamp(player.y + Math.sin(a) * 46, 30, WORLD_H - 30);
     pet.angle = player.angle;
   }
-  game.camX = clamp(player.x - W / 2, 0, Math.max(0, WORLD_W - W));
-  game.camY = clamp(player.y - H / 2, 0, Math.max(0, WORLD_H - H));
-  game.homeCamReady = false;
   if (net.room) {
-    try {
-      net.room.send("respawn", {
-        avoidX: restartingAfterDeath ? previousRunX : null,
-        avoidY: restartingAfterDeath ? previousRunY : null,
-        minDistance: restartingAfterDeath ? 2400 : 0
-      });
-    } catch (_) {}
     syncNetworkWorldResources();
     syncNetworkFullWorld(true);
   }
+  game.camX = clamp(player.x - W / 2, 0, Math.max(0, WORLD_W - W));
+  game.camY = clamp(player.y - H / 2, 0, Math.max(0, WORLD_H - H));
+  game.homeCamReady = false;
 
   el("overlay").classList.remove("show");
   el("craftOverlay").classList.remove("show");
@@ -26126,60 +26142,90 @@ if(el("homeAchievementsBtn")) el("homeAchievementsBtn").addEventListener("click"
 if(el("closeAchievementOverlay")) el("closeAchievementOverlay").addEventListener("click", closeAchievementOverlay);
 if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedown", (e)=>{ if(e.target===el("achievementOverlay")) closeAchievementOverlay(); });
 
+let playStartInProgress = false;
 el("playBtn").addEventListener("click", async () => {
-  if (game.started && !game.over) return; // already playing
-  setLoadingScreen(net.enabled ? "Connecting to the world…" : "Entering the world…", 28, true);
-  await waitOneFrame();
-  closeCardInventory();
-  closeStarterShop();
-  closeChooseStarterPet();
-  closePlayerDesign();
-  closeHomeThemes();
-  el("petShopOverlay").classList.remove("show");
-  meta.username = (el("username").value || "Cube").slice(0, 14);
-  persistStarterPetPreference();
-  mobileMode = el("mobileMode").checked;
-  if (mobileMode) mobileFacingAngle = player.angle;
-  try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}
-  document.getElementById("mobileControls").classList.toggle("on", mobileMode);
-  syncMobilePrimaryButton();
-  document.body.classList.toggle("mobile-performance", mobileMode);
-  if (!mobileMode) resetMobilePointers();
-  setHomeControlsEnabled(false);
-  document.body.classList.add("hostl-game-active");
-  const home = document.getElementById("home");
-  home.style.display = "none";
-  home.style.visibility = "hidden";
-  home.style.pointerEvents = "none";
-  syncHomeWorldThemeState();
-  document.getElementById("hud").style.display = "block";
-  game.started = true;
-  game.over = false;
-  setLoadingScreen("Refreshing pet progression…", 45, true);
-  await refreshAccountEntitlementsForRun();
-  setLoadingScreen("Restoring the world…", 52, true);
-  const restoreStartedAt = performance.now();
-  resetGame();
-  const restoreMs = performance.now() - restoreStartedAt;
-  // Leave this available for debugging slow devices without putting a debug UI
-  // in front of players. The normal fast path should now be a small in-place reset.
-  window.__hostlLastWorldRestoreMs = restoreMs;
-  setLoadingScreen("World ready — placing you in…", 68, true);
-  // Always give the browser one paint after reset so the first playable frame
-  // never has to compete with menu teardown and world restoration in one task.
-  await waitOneFrame();
-  setLoadingScreen(net.enabled ? "Joining multiplayer…" : "Finishing world setup…", 76, !!net.enabled);
-  await waitOneFrame();
-  if (net.enabled) {
-    const ok = await connectMultiplayer();
-    if (!ok) {
-      // Keep the run playable even if the multiplayer server is not running.
-      net.enabled = false;
-      localStorage.setItem("cubeOnlineMode", "offline");
+  if ((game.started && !game.over) || playStartInProgress) return;
+  playStartInProgress = true;
+  const playButton = el("playBtn");
+  const originalPlayText = playButton?.textContent || "Play";
+  if (playButton) { playButton.disabled = true; playButton.textContent = net.enabled ? "Joining…" : "Play"; }
+
+  try {
+    // Keep the Home screen visible while any online handshake happens. The
+    // gameplay loop remains stopped, so the player cannot move, be attacked,
+    // or briefly appear at a temporary spawn behind a loading overlay.
+    closeCardInventory();
+    closeStarterShop();
+    closeChooseStarterPet();
+    closePlayerDesign();
+    closeHomeThemes();
+    el("petShopOverlay").classList.remove("show");
+    meta.username = (el("username").value || "Cube").slice(0, 14);
+    persistStarterPetPreference();
+    mobileMode = el("mobileMode").checked;
+    if (mobileMode) mobileFacingAngle = player.angle;
+    try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}
+    document.getElementById("mobileControls").classList.toggle("on", mobileMode);
+    syncMobilePrimaryButton();
+    document.body.classList.toggle("mobile-performance", mobileMode);
+    if (!mobileMode) resetMobilePointers();
+    setHomeControlsEnabled(false);
+
+    // Account state was already restored while the Home screen loaded. Refresh
+    // it again without blocking Play; the multiplayer server independently
+    // verifies permanent starter progression before creating/repairing the pet.
+    Promise.resolve(refreshAccountEntitlementsForRun()).catch(() => {});
+
+    // Online joins happen BEFORE the player becomes active. No loading overlay
+    // is shown. If the server is unavailable, fall back to offline cleanly.
+    if (net.enabled && !net.room) {
+      const ok = await connectMultiplayer();
+      if (!ok) {
+        net.enabled = false;
+        try { localStorage.setItem("cubeOnlineMode", "offline"); } catch (_) {}
+        updateOnlineModeUI();
+      }
     }
+
+    // Reset/position everything while Home still covers the canvas. In online
+    // mode firstEntry uses the server's join spawn directly, so there is only
+    // one spawn position instead of local-spawn -> server-respawn jumping.
+    resetGame({ firstEntry: true });
+
+    // Reveal the already-ready world in one transition, Taming.io-style.
+    const home = document.getElementById("home");
+    document.body.classList.add("hostl-game-active");
+    home.style.display = "none";
+    home.style.visibility = "hidden";
+    home.style.pointerEvents = "none";
+    syncHomeWorldThemeState();
+    document.getElementById("hud").style.display = "block";
+    game.started = true;
+    game.over = false;
+    last = performance.now();
+
+    // The server keeps newly joined players/pets protected until this message,
+    // plus a brief grace period, so an online handshake can never cost health.
+    if (net.room) {
+      try { net.room.send("playerReady", {}); } catch (_) {}
+    }
+
+    // This overlay is for the initial page boot only. Play must never reopen it.
+    hideLoadingScreen();
+  } catch (err) {
+    console.warn("HOSTL Play transition failed", err);
+    if (!game.started) {
+      setHomeControlsEnabled(true);
+      const home = document.getElementById("home");
+      if (home) { home.style.display = ""; home.style.visibility = "visible"; home.style.pointerEvents = ""; }
+      document.body.classList.remove("hostl-game-active");
+      const hud = document.getElementById("hud"); if (hud) hud.style.display = "none";
+      showGameMessage("Could not enter world", "HOSTL kept you on the Home screen instead of spawning you into a half-loaded run.");
+    }
+  } finally {
+    playStartInProgress = false;
+    if (playButton) { playButton.disabled = false; playButton.textContent = originalPlayText; }
   }
-  last = performance.now();
-  hideLoadingScreen();
 });
 canvas.addEventListener("mousedown", (e) => {
   if (e.button === 0 && window._petSetTarget) {
@@ -27717,6 +27763,6 @@ setTimeout(()=>{
 })();
 </script>
 
-<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 658 • RULES 610</div>
+<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 659 • RULES 611</div>
 </body>
 </html>

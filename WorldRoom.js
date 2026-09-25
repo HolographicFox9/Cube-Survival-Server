@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "610";
+const CUBE_SHARED_RULES_VERSION = "611";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1267,6 +1267,10 @@ export class WorldRoom extends Room {
     this.firstLightReadyPlayers=new Set(); this.midnightMarkSpawned=false; this.petXpContrib=new Map();
     this.wildMateTargets=new Map(); this.wildLastBreedDay=new Map();
     this.populationKeys=new Map();this.playerAccountIds=new Map();this.playerAccountEntitlements=new Map();this.playerSurvivalSeconds=new Map();this.playerSurvivalAwards=new Map();this.playerNightSeen=new Set();
+    // A connected client is not a combat participant until its Play transition
+    // is finished. This prevents Hostls/wildlife/PvP from damaging a player
+    // while the browser is still joining or preparing the first frame.
+    this.playerCombatReadyAt=new Map();
     // Track input timing/sequence so fast mounts can send a position after a lag
     // gap without the server clamping it back to an old fixed-distance limit.
     this.playerInputNetState=new Map();
@@ -1298,7 +1302,8 @@ export class WorldRoom extends Room {
     this.onMessage("build",(client,data={})=>this.handleBuild(client,data));
     this.onMessage("heal",(client,data={})=>this.handleHeal(client,data));
     this.onMessage("waterAction",(client,data={})=>this.handleWaterAction(client,data));
-    this.onMessage("respawn",(client)=>this.handleRespawn(client));
+    this.onMessage("respawn",(client,data={})=>this.handleRespawn(client,data));
+    this.onMessage("playerReady",(client)=>this.handlePlayerReady(client));
     this.onMessage("petOrder",(client,data={})=>this.handlePetOrder(client,data));
     this.onMessage("petAbility",(client,data={})=>this.handlePetAbility(client,data));
     this.onMessage("petBreed",(client,data={})=>this.handlePetBreed(client,data));
@@ -1308,6 +1313,21 @@ export class WorldRoom extends Room {
     this.onMessage("chat",(client,data={})=>this.handleChat(client,data));
   }
 
+
+  isPlayerCombatReady(playerId){
+    const p=this.state.players.get(String(playerId||""));
+    if(!p||p.dead)return false;
+    const at=this.playerCombatReadyAt.get(String(playerId||""));
+    return Number.isFinite(at) && this.state.worldTime>=at;
+  }
+  handlePlayerReady(client){
+    const id=client?.sessionId||"",p=this.state.players.get(id);if(!p)return;
+    // Give the first visible frame a short safe grace period as well. This is
+    // not a loading pause; the player is already in the world and can move.
+    this.playerCombatReadyAt.set(id,this.state.worldTime+1.15);
+    p.health=p.maxHealth;p.dead=false;
+    this.pendingPlayerHits.delete(id);this.pendingAnimalPushes.delete(id);this.ownerThreat.delete(id);
+  }
 
   handleChat(client,data={}) {
     const player=this.state.players.get(client.sessionId);
@@ -2030,7 +2050,7 @@ export class WorldRoom extends Room {
     }
     p.health=clamp(p.health+amount,0,p.maxHealth);
   }
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.playerNightSeen.delete(client.sessionId);this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});this.sendSkillState(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.hydration=100;p.bucketWater=true;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerCombatReadyAt.set(client.sessionId,this.state.worldTime+1.15);this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.playerNightSeen.delete(client.sessionId);this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});this.sendSkillState(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.hydration=100;p.bucketWater=true;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   refreshVerifiedAccount(ownerId){
     const key=String(ownerId||""),accountId=this.playerAccountIds.get(key);
@@ -2409,7 +2429,7 @@ export class WorldRoom extends Room {
     return false;
   }
 
-  abilityStatusAlive(ref){const o=this.targetObject(ref);if(!o)return false;return ref.kind==="player"?!o.dead&&o.health>0:!o.dead&&o.hp>0;}
+  abilityStatusAlive(ref){const o=this.targetObject(ref);if(!o)return false;if(ref.kind==="player"&&!this.isPlayerCombatReady(ref.id))return false;if(ref.kind==="pet"&&o.ownerId&&!this.isPlayerCombatReady(o.ownerId))return false;return ref.kind==="player"?!o.dead&&o.health>0:!o.dead&&o.hp>0;}
   applyAbilityStun(ref,seconds){const o=this.targetObject(ref);if(!o)return;o._abilityStunUntil=Math.max(Number(o._abilityStunUntil)||0,this.state.worldTime+Math.max(0,Number(seconds)||0));}
   applyAbilitySlowWeak(ref,seconds,slowMul=.55,weakMul=.68){const o=this.targetObject(ref);if(!o)return;const until=this.state.worldTime+Math.max(0,Number(seconds)||0);o._abilitySlowUntil=Math.max(Number(o._abilitySlowUntil)||0,until);o._abilityWeakUntil=Math.max(Number(o._abilityWeakUntil)||0,until);o._abilitySlowMul=Math.min(Number(o._abilitySlowMul)||1,slowMul);o._abilityWeakMul=Math.min(Number(o._abilityWeakMul)||1,weakMul);if(Number.isFinite(Number(o.speed))){if(!Number.isFinite(Number(o._abilityBaseSpeed)))o._abilityBaseSpeed=Number(o.speed)||0;o.speed=o._abilityBaseSpeed*o._abilitySlowMul;}if(Number.isFinite(Number(o.dmg))){if(!Number.isFinite(Number(o._abilityBaseDmg)))o._abilityBaseDmg=Number(o.dmg)||0;o.dmg=o._abilityBaseDmg*o._abilityWeakMul;}}
   applyAbilityPoison(ref,impactDamage,ownerId,sourcePetId){if(!this.abilityStatusAlive(ref))return;const key=`${ref.kind}:${ref.id}`;this.abilityDots.set(key,{ref:{kind:ref.kind,id:ref.id},time:5,tick:1,dps:Math.max(.6,(Number(impactDamage)||0)*.32),ownerId,sourcePetId});}
@@ -2504,8 +2524,8 @@ export class WorldRoom extends Room {
 
   targetObject(ref){if(!ref)return null;if(ref.kind==="player")return this.state.players.get(ref.id)||null;if(ref.kind==="pet")return this.state.pets.get(ref.id)||null;if(ref.kind==="animal")return this.state.animals.get(ref.id)||null;if(ref.kind==="enemy")return this.state.enemies.get(ref.id)||null;return null;}
   targetRadius(ref,obj){return ref?.kind==="player"?PLAYER_R:(obj?.r||16);}
-  nearestPlayerOrPet(x,y,range=Infinity){let best=null,bestD=range;for(const[id,p]of this.state.players){if(p.dead)continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"player",id,obj:p,d};bestD=d;}}for(const[id,p]of this.state.pets){if(p.dead)continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"pet",id,obj:p,d};bestD=d;}}return best;}
-  nearestPlayer(x,y,range=Infinity){let best=null,bestD=range;for(const[id,p]of this.state.players){if(p.dead)continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"player",id,obj:p,d};bestD=d;}}return best;}
+  nearestPlayerOrPet(x,y,range=Infinity){let best=null,bestD=range;for(const[id,p]of this.state.players){if(p.dead||!this.isPlayerCombatReady(id))continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"player",id,obj:p,d};bestD=d;}}for(const[id,p]of this.state.pets){if(p.dead||!this.isPlayerCombatReady(p.ownerId))continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"pet",id,obj:p,d};bestD=d;}}return best;}
+  nearestPlayer(x,y,range=Infinity){let best=null,bestD=range;for(const[id,p]of this.state.players){if(p.dead||!this.isPlayerCombatReady(id))continue;const d=dist(x,y,p.x,p.y);if(d<bestD){best={kind:"player",id,obj:p,d};bestD=d;}}return best;}
 
   setWildReactionToAttacker(id,a,ref){
     if(!a||!ref)return;
@@ -3043,7 +3063,7 @@ export class WorldRoom extends Room {
     };
 
     for(const[id,p]of this.state.players){
-      if(p.dead)continue;
+      if(p.dead||!this.isPlayerCombatReady(id))continue;
       const mount=p.ridingPetId?this.state.pets.get(p.ridingPetId):null;
       if(mount&&!mount.dead){p.x=mount.x;p.y=mount.y;continue;}
       for(const rec of this.nearbyDynamic(p.x,p.y,180,kinds)){
@@ -3071,6 +3091,8 @@ export class WorldRoom extends Room {
 
   damageTarget(ref,dmg,attackerKind="world",attackerId=""){
     const obj=this.targetObject(ref);if(!obj)return false;
+    if(ref.kind==="player"&&!this.isPlayerCombatReady(ref.id))return false;
+    if(ref.kind==="pet"&&obj.ownerId&&!this.isPlayerCombatReady(obj.ownerId))return false;
     if(ref.kind==="player"){
       if(obj.dead)return false;
       const raw=Math.max(0,Number(dmg)||0);if(raw<=0)return false;
@@ -3970,7 +3992,7 @@ export class WorldRoom extends Room {
   onJoin(client,options={}){
     const populationKey=`${this.roomId||"world"}:${client.sessionId}`;
     this.populationKeys.set(client.sessionId,populationKey);ACTIVE_CUBE_PLAYER_KEYS.add(populationKey);
-    const s=this.safeSpawn(),p=new PlayerState();p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.hydration=100;p.bucketWater=true;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
+    const s=this.safeSpawn(),p=new PlayerState();this.playerCombatReadyAt.set(client.sessionId,this.state.worldTime+30);p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.hydration=100;p.bucketWater=true;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
     let verifiedAccount=null;try{verifiedAccount=HOSTL_ACCOUNT_HOOKS.resolveSession(String(options.accountToken||""));}catch(_){verifiedAccount=null;}
     if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));this.playerAccountEntitlements.set(client.sessionId,verifiedAccount);if(verifiedAccount.username)p.username=String(verifiedAccount.username).slice(0,14);p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));p.ownerRank=Math.max(0,Math.floor(Number(verifiedAccount.ownerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
     let upgrades={};if(verifiedAccount?.userId)upgrades=(verifiedAccount.petStatUpgrades&&typeof verifiedAccount.petStatUpgrades==="object")?verifiedAccount.petStatUpgrades:{};else try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}
@@ -3982,7 +4004,7 @@ export class WorldRoom extends Room {
     if(PET_TYPES[start])this.ensureStarterPetFor(client,start,startStage,{petName:options.startPetName,gender:options.startPetGender});client.send("serverReady",{fullWorld:true,rulesVersion:CUBE_SHARED_RULES_VERSION});this.sendSkillState(client.sessionId);
   }
 
-  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerAccountEntitlements?.delete(client.sessionId);this.playerSurvivalSeconds?.delete(client.sessionId);this.playerSurvivalAwards?.delete(client.sessionId);this.playerNightSeen?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.playerSkillProgress.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
+  onLeave(client){const presenceUid=this.playerAccountIds?.get(client.sessionId);if(presenceUid){try{HOSTL_ACCOUNT_HOOKS.onPresenceLeave(String(presenceUid),`${this.roomId||"world"}:${client.sessionId}`);}catch(_){}}const populationKey=this.populationKeys.get(client.sessionId);if(populationKey){ACTIVE_CUBE_PLAYER_KEYS.delete(populationKey);this.populationKeys.delete(client.sessionId);}this.state.players.delete(client.sessionId);this.playerAccountIds?.delete(client.sessionId);this.playerAccountEntitlements?.delete(client.sessionId);this.playerSurvivalSeconds?.delete(client.sessionId);this.playerSurvivalAwards?.delete(client.sessionId);this.playerNightSeen?.delete(client.sessionId);this.playerCombatReadyAt?.delete(client.sessionId);this.playerInputNetState?.delete(client.sessionId);this.firstLightReadyPlayers.delete(client.sessionId);this.playerPetStatUpgrades.delete(client.sessionId);this.playerRunShop.delete(client.sessionId);this.playerSkillProgress.delete(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);this.chatLastSent.delete(client.sessionId);this.playerAttackCd.delete(client.sessionId);this.playerShootCd.delete(client.sessionId);this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingPlayerHits.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);this.ownerThreat.delete(client.sessionId);const prefix=`${client.sessionId}:`;for(const k of Array.from(this.harvestCredits.keys()))if(k.startsWith(prefix))this.harvestCredits.delete(k);for(const k of Array.from(this.goldHandCredits.keys()))if(k.startsWith(prefix))this.goldHandCredits.delete(k);for(const[id,p]of Array.from(this.state.pets.entries()))if(p.ownerId===client.sessionId){this.petFocusTargets.delete(id);this.petFollowState.delete(id);this.petHuntState.delete(id);this.petChaseState.delete(id);this.petDeathTimers.delete(id);this.state.pets.delete(id);}}
   onDispose(){for(const key of this.populationKeys.values())ACTIVE_CUBE_PLAYER_KEYS.delete(key);this.populationKeys.clear();}
 
 }
