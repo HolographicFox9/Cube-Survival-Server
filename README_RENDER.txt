@@ -1,10 +1,10 @@
-HOSTL — FULL RENDER PROJECT — SERVER 589 / GAME 661 / RULES 613
+HOSTL — FULL RENDER PROJECT — SERVER 590 / GAME 662 / RULES 614
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 655 browser client
-- WorldRoom.js          Server 583 Colyseus multiplayer room
+- public/index.html      Game 662 browser client
+- WorldRoom.js          Server 590 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
@@ -124,9 +124,15 @@ GAME 661 instant-entry live world:
 - Rules 613 keeps live Home preview synchronized while making Play a zero-wait handoff into that already-loaded scene.
 
 
-GAME 661 INSTANT PLAY HANDOFF
-- Online mode now connects to the selected live world during initial Home preparation, before Play is enabled.
-- If Play is clickable, pressing it never joins, restores, streams a large static area, or waits for a world-ready condition.
-- The live scene behind Home is reused exactly; Play only resets run-local state, hides Home, enables control, and sends playerReady.
-- The first online entry avoids forced full-world/static-area resync calls inside the Play click path.
-- If the live room disconnects while Home is open, Play disables and the background reconnects automatically rather than starting a half-loaded run.
+GAME 661 LIVE WORLD PREVIEW (SUPERSEDED BY GAME 662 PLAY FLOW)
+- Online Home can pre-connect to the selected live room and render the real scene behind the menu.
+- Game 662 no longer requires that pre-connection to finish before the Play button can be pressed.
+
+
+GAME 662 PLAY-BUTTON LOADING FLOW
+- Play is never disabled just because the selected Online world is still connecting.
+- Clicking Play immediately changes that same button to Loading… and completes any remaining room join there.
+- No separate Play-time loading popup/overlay is shown. Home remains visible until the live player record exists, then gameplay opens.
+- If a Home-preview connection is already running, the Play click waits for that same attempt instead of rejecting the click as “half-loaded.”
+- World/player/static synchronization continues after entry; Play only waits for the authoritative room and this player's spawn record, not the full 18,000 x 18,000 world.
+- Failed online joins return the same button to Play for retry and do not open a blocking error modal.
