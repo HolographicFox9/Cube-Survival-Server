@@ -1,16 +1,14 @@
-HOSTL — FULL RENDER PROJECT — SERVER 590 / GAME 662 / RULES 614
+HOSTL — FULL RENDER PROJECT — SERVER 591 / GAME 663 / RULES 615
 
 This package contains the browser game and authoritative multiplayer/account server for HOSTL.
 
 BUILD CONTENTS
-- public/index.html      Game 662 browser client
-- WorldRoom.js          Server 590 Colyseus multiplayer room
+- public/index.html      Game 663 browser client
+- WorldRoom.js          Server 591 Colyseus multiplayer room
 - index.js              Express + account/economy/auth API + Colyseus launcher
 - package.json          Node start/dependency configuration
 - render.yaml           Free/test Render web-service configuration
 - render-persistent-example.yaml  Optional paid persistent-disk Blueprint example
-- PERSISTENT_ACCOUNT_STORAGE.txt
-- REWARDED_AD_SETUP.txt
 
 SERVER 570 / GAME 642 STARTER STAGE FIX
 - Player Skill XP is now always visible directly above the hotbar instead of living in the crafting menu.
@@ -136,3 +134,13 @@ GAME 662 PLAY-BUTTON LOADING FLOW
 - If a Home-preview connection is already running, the Play click waits for that same attempt instead of rejecting the click as “half-loaded.”
 - World/player/static synchronization continues after entry; Play only waits for the authoritative room and this player's spawn record, not the full 18,000 x 18,000 world.
 - Failed online joins return the same button to Play for retry and do not open a blocking error modal.
+
+
+Server 591 / Game 663 / Rules 615 — Forest + Rain Forest Island test
+- Online Colyseus multiplayer remains server-authoritative and works through the configured Render/WebSocket server, including players on different internet connections.
+- Active terrain is temporarily reduced to Forest + Rain Forest only; every animal species remains available while the other biome lands are deferred.
+- The 18,000 x 18,000 world now contains one large circular playable island with ocean outside the shoreline. Players/creatures are constrained to land.
+- Ocean rendering has layered wave marks and a broad sandy coastal shelf instead of the old square world-edge border.
+- Ponds reserve a clear bank before scenery generation, use filled sloped ground shelves with no outline stroke, and visually shrink on-foot players slightly as they move deeper into pond water.
+- The initial page opens without generating the full local world or showing the loading overlay. Pressing Play now opens the loading screen, performs the required offline generation or online room join/sync, then puts the player into the game.
+- World generation was reduced for this two-biome test (fewer static objects/water systems while keeping useful density) to improve Play-time loading.

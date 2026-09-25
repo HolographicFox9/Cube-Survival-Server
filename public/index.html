@@ -5367,14 +5367,14 @@ button:focus-visible{
 
 </head>
 <body>
-<div id="bootLoadingScreen" role="status" aria-live="polite">
+<div id="bootLoadingScreen" class="boot-loaded" role="status" aria-live="polite">
   <div class="boot-loader-card">
     <div class="boot-loader-mark">
       <span class="boot-loader-cube"></span>
       <span class="boot-loader-paw">🐾</span>
     </div>
     <div class="boot-loader-title">HOSTL</div>
-    <div class="boot-loader-status" id="bootLoadingStatus">Preparing the world…</div>
+    <div class="boot-loader-status" id="bootLoadingStatus">Ready</div>
     <div class="boot-loader-track"><div class="boot-loader-fill" id="bootLoadingFill"></div></div>
   </div>
 </div>
@@ -6152,7 +6152,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "613";
+const CUBE_SHARED_RULES_VERSION = "615";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -10786,8 +10786,8 @@ async function connectMultiplayer() {
       startPetStage: game.startPet ? starterStageFor(game.startPet) : "baby",
       startPetName: game.startPet ? starterPetNameValue() : "",
       startPetGender: game.startPet ? starterPetGenderValue() : "Male",
-      // Home now joins the live room before Play, so derive starter gold directly
-      // from permanent starter ownership instead of waiting for resetGame().
+      // Play owns the online join. Derive starter gold directly from permanent
+      // starter ownership so the server can create the player in one pass.
       startGold: meta.ownedStarters?.gold15 ? 15 : (meta.ownedStarters?.gold5 ? 5 : 0),
       petStatUpgrades: JSON.stringify(meta.petStatUpgrades || {}),
       rulesVersion: CUBE_SHARED_RULES_VERSION,
@@ -10795,7 +10795,7 @@ async function connectMultiplayer() {
       worldId: selectedWorldId,
     });
     const timeoutPromise = new Promise((_, reject) => {
-      joinTimeoutId = setTimeout(() => reject(new Error("Multiplayer connection timed out")), 12000);
+      joinTimeoutId = setTimeout(() => reject(new Error("Multiplayer connection timed out")), 45000);
     });
     const room = await Promise.race([joinPromise, timeoutPromise]);
     joinAccepted = true;
@@ -11041,9 +11041,11 @@ async function connectMultiplayer() {
         const ex = sx - player.x, ey = sy - player.y;
         player.x = clamp(player.x + ex * pushBlend, PLAYER_R, WORLD_W - PLAYER_R);
         player.y = clamp(player.y + ey * pushBlend, PLAYER_R, WORLD_H - PLAYER_R);
+        keepObjectOnIsland(player,PLAYER_R+10);
       } else if (Number.isFinite(dx) && Number.isFinite(dy)) {
         player.x = clamp(player.x + dx * pushBlend, PLAYER_R, WORLD_W - PLAYER_R);
         player.y = clamp(player.y + dy * pushBlend, PLAYER_R, WORLD_H - PLAYER_R);
+        keepObjectOnIsland(player,PLAYER_R+10);
       }
     });
     room.onMessage("petGrew", d => banner(`${PET_TYPES[d.type]?.name||"Pet"} became ${stageDisplayName(d.stage)}!`));
@@ -11098,7 +11100,7 @@ async function connectMultiplayer() {
       net.remoteVisuals.clear();
       setNetStatus(net.enabled ? "Disconnected" : "Offline", net.enabled ? "bad" : "");
       updatePlayAvailability();
-      if (net.enabled && !game.started) setTimeout(() => scheduleHomeWorldConnection(1200), 0);
+      // Do not reconnect while sitting on Home. Online loading begins only when Play is pressed.
     });
     return true;
   } catch (err) {
@@ -11313,6 +11315,7 @@ function drawRemotePlayer(v) {
 
   ctx.save();
   ctx.translate(v.x, v.y);
+  const remotePondScale=!v.ridingPetId?waterDepthScaleAt(v.x,v.y):1;if(remotePondScale<.999)ctx.scale(remotePondScale,remotePondScale);
   if(swimming)drawSwimRippleLocal(24,game.time*6.2);
   ctx.translate(0,bob);
   if (v.ridingPetId) ctx.translate(0, -12);
@@ -15209,20 +15212,19 @@ const MOONMARK_BIOMES = {
   mountains:{ id:"mountains", name:"Peak Crusher", element:"Stone", color:"#9d9aa6", accent:"#ddd9ef", mapColor:"#4f4f58", xp:320 },
   rainforest:{ id:"rainforest", name:"Jungle Howl", element:"Vine", color:"#2fb06a", accent:"#ccffd6", mapColor:"#165b34", xp:320 }
 };
-// These are broad LAND BANDS, not circular biome zones. cx/cy are only label/spawn anchors.
+// TEMP ISLAND PASS: for now the playable world has only Forest + Rain Forest.
+// All animal species stay in the game; their final home biomes can be restored later.
+const ISLAND_CX = WORLD_W * 0.5, ISLAND_CY = WORLD_H * 0.5;
+const ISLAND_RADIUS = Math.min(WORLD_W, WORLD_H) * 0.45;
+const ISLAND_SHORE_WIDTH = 230;
 const BIOME_ZONES = {
-  forest:{id:"forest",minX:0,maxX:WORLD_W*0.20,cx:WORLD_W*0.10,cy:WORLD_H*0.50},
-  arctic:{id:"arctic",minX:WORLD_W*0.20,maxX:WORLD_W*0.40,cx:WORLD_W*0.30,cy:WORLD_H*0.50},
-  mountains:{id:"mountains",minX:WORLD_W*0.40,maxX:WORLD_W*0.60,cx:WORLD_W*0.50,cy:WORLD_H*0.50},
-  desert:{id:"desert",minX:WORLD_W*0.60,maxX:WORLD_W*0.80,cx:WORLD_W*0.70,cy:WORLD_H*0.50},
-  rainforest:{id:"rainforest",minX:WORLD_W*0.80,maxX:WORLD_W,cx:WORLD_W*0.90,cy:WORLD_H*0.50},
+  forest:{id:"forest",cx:WORLD_W*0.31,cy:WORLD_H*0.50},
+  rainforest:{id:"rainforest",cx:WORLD_W*0.69,cy:WORLD_H*0.50},
 };
 const BIOME_PROFILES = {
-  forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0.00)", edge:"rgba(32,58,29,0.16)", minimap:"#5c7f4c", species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear"] },
-  desert:{ id:"desert", name:"Desert", tint:"rgba(216,188,104,0.28)", edge:"rgba(169,122,42,0.20)", minimap:"#c4ac67", species:["fennec","camel","scorpion","hyena","caracal","snake","dragon"] },
-  arctic:{ id:"arctic", name:"Arctic", tint:"rgba(215,239,255,0.30)", edge:"rgba(118,162,190,0.22)", minimap:"#d8f1ff", species:["polarbear","arcticfox","walrus","muskox","snowyowl","wolf"] },
-  mountains:{ id:"mountains", name:"Mountains", tint:"rgba(160,154,147,0.24)", edge:"rgba(98,92,86,0.22)", minimap:"#96908a", species:["mountaingoat","eagle","cougar","bighorn","marmot","saber"] },
-  rainforest:{ id:"rainforest", name:"Rain Forest", tint:"rgba(42,112,70,0.26)", edge:"rgba(28,76,47,0.22)", minimap:"#2f7f53", species:["clouded","jaguar","toucan","tapir","capybara","anaconda"] }
+  forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0)", edge:"rgba(32,58,29,.16)", minimap:"#668a52", species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","saber"] },
+  rainforest:{ id:"rainforest", name:"Rain Forest", tint:"rgba(42,112,70,.20)", edge:"rgba(28,76,47,.22)", minimap:"#285f3b", species:["clouded","jaguar","toucan","tapir","capybara","anaconda","fennec","camel","scorpion","hyena","caracal","snake","dragon"] },
+  ocean:{ id:"ocean", name:"Ocean", tint:"rgba(0,0,0,0)", edge:"rgba(0,0,0,0)", minimap:"#2f83a7", species:[] }
 };
 const BIOME_RESOURCE_INFO = Object.freeze({
   forestHerb:{biome:"forest",material:"wildHerb",name:"Wild Herb",color:"#8dcf68",category:"soft",hp:3},
@@ -15237,43 +15239,41 @@ const BIOME_RESOURCE_INFO = Object.freeze({
   rainforestFruit:{biome:"rainforest",material:"jungleFruit",name:"Jungle Fruit",color:"#f06d55",category:"soft",hp:3}
 });
 const BIOME_MATERIAL_META = Object.fromEntries(Object.values(BIOME_RESOURCE_INFO).map(v=>[v.material,{name:v.name,color:v.color,biome:v.biome}]));
-const BIOME_ORDER = ["forest","arctic","mountains","desert","rainforest"];
+const BIOME_ORDER = ["forest","rainforest"];
 function biomeBaseId(id){ return String(id||CURRENT_BIOME_ID).replace(/_edge$/,'') || CURRENT_BIOME_ID; }
 function biomeProfileAt(x,y){ return BIOME_PROFILES[biomeBaseId(worldBiomeAt(x,y))] || BIOME_PROFILES.forest; }
-function biomeMacroBoundaries(y){
-  const yn=clamp(y/WORLD_H,0,1),wave=Math.sin(yn*Math.PI*1.65),wave2=Math.sin(yn*Math.PI*2.15+1.1);
-  return {
-    b1:WORLD_W*(.20+.018*wave),
-    b2:WORLD_W*(.40+.016*wave2),
-    b3:WORLD_W*(.60+.018*Math.sin(yn*Math.PI*1.8+2.15)),
-    b4:WORLD_W*(.80+.015*Math.sin(yn*Math.PI*2.05+3.0))
-  };
+function islandDistance(x,y){ return Math.hypot(x-ISLAND_CX,y-ISLAND_CY); }
+function isInsideIsland(x,y,pad=0){ return islandDistance(x,y) <= Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0)); }
+function islandConstrainedPoint(x,y,pad=0){
+  const maxR=Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0)),dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy);
+  if(!Number.isFinite(d)||d<=maxR)return{x:clamp(x,0,WORLD_W),y:clamp(y,0,WORLD_H)};
+  const q=d>0?maxR/d:0; return{x:ISLAND_CX+dx*q,y:ISLAND_CY+dy*q};
+}
+function keepObjectOnIsland(obj,pad=20){ if(!obj)return; const p=islandConstrainedPoint(Number(obj.x)||ISLAND_CX,Number(obj.y)||ISLAND_CY,pad); obj.x=p.x;obj.y=p.y; }
+function forestRainBoundaryX(y){
+  const yn=(y-ISLAND_CY)/Math.max(1,ISLAND_RADIUS);
+  return ISLAND_CX + Math.sin(yn*Math.PI*1.25)*WORLD_W*.035 + Math.sin(yn*Math.PI*2.8+1.2)*WORLD_W*.012;
 }
 function worldBiomeAt(x,y){
-  const b=biomeMacroBoundaries(y);
-  if(x<=b.b1)return "forest";
-  if(x<=b.b2)return "arctic";
-  if(x<=b.b3)return "mountains";
-  if(x<=b.b4)return "desert";
-  return "rainforest";
+  if(!isInsideIsland(x,y,0))return "ocean";
+  return x <= forestRainBoundaryX(y) ? "forest" : "rainforest";
 }
-function randomBiomeZoneId(){ return pick(BIOME_ORDER); }
-function speciesHomeBiome(type){for(const id of BIOME_ORDER){if((BIOME_PROFILES[id]?.species||[]).includes(type))return id;}return "forest";}
+function randomBiomeZoneId(){ return Math.random()<.5?"forest":"rainforest"; }
+function speciesHomeBiome(type){
+  if((BIOME_PROFILES.rainforest.species||[]).includes(type))return "rainforest";
+  return "forest";
+}
 function randomPointInBiome(biomeId,pad=120){
-  const base=biomeBaseId(biomeId),zone=BIOME_ZONES[base] || BIOME_ZONES.forest;
-  // Sample the entire land band, then reject the narrow wavy transition sliver.
-  // No radius/ellipse math is used anywhere for biome placement.
-  for(let tries=0;tries<180;tries++){
-    const x=clamp(rand(zone.minX+pad, zone.maxX-pad), pad, WORLD_W-pad);
-    const y=rand(pad,WORLD_H-pad);
-    if(worldBiomeAt(x,y)===base)return {x,y};
+  const base=biomeBaseId(biomeId)==="rainforest"?"rainforest":"forest";
+  const safePad=Math.max(0,Number(pad)||0),maxR=Math.max(180,ISLAND_RADIUS-safePad-70);
+  for(let tries=0;tries<260;tries++){
+    const a=rand(0,TAU),rr=Math.sqrt(Math.random())*maxR;
+    const x=ISLAND_CX+Math.cos(a)*rr,y=ISLAND_CY+Math.sin(a)*rr;
+    if(worldBiomeAt(x,y)===base)return{x,y};
   }
-  for(let tries=0;tries<240;tries++){
-    const x=rand(pad,WORLD_W-pad),y=rand(pad,WORLD_H-pad);
-    if(worldBiomeAt(x,y)===base)return {x,y};
-  }
-  return {x:zone.cx,y:zone.cy};
+  const zone=BIOME_ZONES[base];return{x:zone.cx,y:zone.cy};
 }
+function randomLandPoint(pad=120){ return randomPointInBiome(randomBiomeZoneId(),pad); }
 function chooseWildType(biomeId = null) {
   const species = (BIOME_PROFILES[biomeBaseId(biomeId||CURRENT_BIOME_ID)]?.species || WILD_SPECIES).filter(type => WILD_SPECIES.includes(type));
   const counts = Object.fromEntries(WILD_SPECIES.map(t => [t, 0]));
@@ -15309,6 +15309,17 @@ function pointInsideWater(x,y){
     if(waterNearPoint(r,x,y,0))return true;
   }
   return false;
+}
+function waterDepthScaleAt(x,y){
+  let scale=1;
+  for(const r of queryStaticNearby("resources",x,y,360)){
+    if(!r||!r.alive||r.type!=="pond")continue;
+    const ang=-(Number(r.rot)||0),ca=Math.cos(ang),sa=Math.sin(ang),dx=x-r.x,dy=y-r.y;
+    const lx=dx*ca-dy*sa,ly=dx*sa+dy*ca,rx=Math.max(1,Number(r.solidR)||90),ry=Math.max(1,Number(r.canopyR)||rx*.72);
+    const n=Math.hypot(lx/rx,ly/ry);
+    if(n<1){const depth=1-clamp(n,0,1);scale=Math.min(scale,.95-depth*.07);}
+  }
+  return scale;
 }
 const PET_KILL_STAGE_XP = {baby:3,adult:14,boss:38,superboss:86,bigmomma:155};
 const PET_KILL_SPECIES_XP = {rabbit:.65,dog:.85,cat:.90,fox:1.0,deer:1.05,dragon:1.15,wolf:1.25,bear:1.65,boar:1.30,snake:1.15,owl:1.10,saber:2.0,clouded:1.55};
@@ -15815,10 +15826,16 @@ function addGeneratedResource(resource) {
 }
 
 function solidOverlaps(x, y, solid) {
-  const nearbyRange = Math.max(180, solid + 155);
+  if (!isInsideIsland(x, y, Math.max(44, (Number(solid)||0) + 34))) return true;
+  const nearbyRange = Math.max(180, solid + 220);
   for (const r of queryStaticNearby("resources", x, y, nearbyRange)) {
     if (!r.alive && r.respawnAt) continue;
-    if (r.type === "log" || r.type === "pond" || r.type === "river") {
+    if (r.type === "pond" || r.type === "river") {
+      // Water itself is non-solid during gameplay, but world generation reserves
+      // the entire water ellipse plus a natural bank so scenery never grows on it.
+      const bankPad = r.type === "pond" ? 58 : 30;
+      if (waterNearPoint(r, x, y, solid + bankPad)) return true;
+    } else if (r.type === "log") {
       if (resourceTouchingCircle(r, x, y, solid + 4)) return true;
     } else {
       const c = resourceSolidCenter(r);
@@ -15841,137 +15858,92 @@ function chestSolidHitbox(c) {
 }
 function placeChests() {
   chests = [];
-  for (let i = 0; i < 72; i++) {
-    let x, y, tries = 0;
-    do {
-      x = rand(130, WORLD_W - 130);
-      y = rand(130, WORLD_H - 130);
-      tries++;
-    } while ((dist(x, y, WORLD_W / 2, WORLD_H / 2) < 280 || solidOverlaps(x, y, 20)) && tries < 80);
-    if (tries >= 80) continue;
-    const reward = makeChestReward();
-    chests.push({ x, y, r: 18, opened: false, pulse: 0, shine: rand(0, TAU), hp: 4, maxHp: 4, reward, chipSide: Math.random() < 0.5 ? "wood" : "stone" });
+  for (let i = 0; i < 48; i++) {
+    for(let tries=0;tries<65;tries++){
+      const pos=randomLandPoint(180),x=pos.x,y=pos.y;
+      if(dist(x,y,WORLD_W/2,WORLD_H/2)<280||solidOverlaps(x,y,20))continue;
+      const reward=makeChestReward();
+      chests.push({x,y,r:18,opened:false,pulse:0,shine:rand(0,TAU),hp:4,maxHp:4,reward,chipSide:Math.random()<.5?"wood":"stone"});
+      break;
+    }
   }
 }
 
 function placePonds() {
-  const waterBiomes=["forest","desert","arctic","mountains","rainforest"];
-  for(const biome of waterBiomes){
-    for(let i=0;i<18;i++){
-      let tries=0,radius=rand(76,132),squish=rand(.62,.82);
-      while(tries++<100){
-        const pos=randomPointInBiome(biome,radius+55);
-        if((biome==="forest"&&dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520)||solidOverlaps(pos.x,pos.y,radius+38))continue;
+  // Ponds are placed BEFORE every tree/rock/log/bush. The wider bank clearance in
+  // solidOverlaps() means later scenery cannot spawn on the water or on its sloped rim.
+  for(const biome of BIOME_ORDER){
+    for(let i=0;i<16;i++){
+      let tries=0,radius=rand(78,134),squish=rand(.64,.84);
+      while(tries++<90){
+        const pos=randomPointInBiome(biome,radius+120);
+        if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+72))continue;
         addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
         break;
       }
     }
   }
-  for(let i=0;i<42;i++){
-    let x,y,tries=0,radius=rand(70,126),squish=rand(.62,.82);
-    do{x=rand(220,WORLD_W-220);y=rand(220,WORLD_H-220);tries++;}while((dist(x,y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(x,y,radius+40))&&tries<100);
-    if(tries<100)addGeneratedResource({type:"pond",x,y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
+  for(let i=0;i<12;i++){
+    let tries=0,radius=rand(72,122),squish=rand(.64,.84);
+    while(tries++<90){
+      const pos=randomLandPoint(radius+120);
+      if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||solidOverlaps(pos.x,pos.y,radius+70))continue;
+      addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU)});
+      break;
+    }
   }
-  // Four connected river systems. Each is a short chain of overlapping long
-  // ellipses, so it reads as a river instead of an isolated blue oval.
-  const riverStarts=["forest","desert","arctic","rainforest"];
-  for(let r=0;r<riverStarts.length;r++){
-    const start=randomPointInBiome(riverStarts[r],720);
-    const baseAngle=rand(-Math.PI,Math.PI);
-    let cx=start.x,cy=start.y;
-    for(let seg=0;seg<10;seg++){
-      const bend=Math.sin(seg*.82+r*1.7)*.20;
-      const ang=baseAngle+bend;
-      const rx=rand(330,430),ry=rand(55,78);
-      cx=clamp(cx+Math.cos(ang)*(seg?rx*.93:0),rx+90,WORLD_W-rx-90);
-      cy=clamp(cy+Math.sin(ang)*(seg?rx*.93:0),rx+90,WORLD_H-rx-90);
+  // Keep only two modest rivers for now so water still feels connected without
+  // making world construction expensive while we test the Forest/Rain Forest island.
+  for(let ri=0;ri<2;ri++){
+    const start=randomPointInBiome(ri===0?"forest":"rainforest",720);
+    const baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;
+    for(let seg=0;seg<6;seg++){
+      const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);
+      if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}
+      const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;
+      if(solidOverlaps(cx,cy,ry+38))continue;
       addGeneratedResource({type:"river",x:cx,y:cy,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:rx,canopyR:ry,scale:1,rot:ang});
     }
   }
 }
 function placeBiomeFeatures() {
-  const desert = BIOME_ZONES.desert;
-  if (desert) {
-    for (let i = 0; i < 12; i++) {
-      let tries = 0;
-      const radius = rand(62, 104);
-      const squish = rand(0.60, 0.80);
-      while (tries++ < 90) {
-        const pos = randomPointInBiome(desert.id, radius + 60);
-        if (solidOverlaps(pos.x, pos.y, radius + 26)) continue;
-        addGeneratedResource({type:"pond",x:pos.x,y:pos.y,hp:1,maxHp:1,alive:true,respawnAt:0,pulse:0,solidR:radius,canopyR:radius*squish,scale:1,rot:rand(0,TAU),oasis:true});
-        break;
-      }
-    }
+  // Only the two active biomes generate their unique materials for now.
+  for (let i = 0; i < 72; i++) {
+    const pos = randomPointInBiome("rainforest", 80);
+    const scale=rand(1.05,1.65),solid=10.8*scale;
+    if (!solidOverlaps(pos.x, pos.y, solid+10)) addGeneratedResource({type:"bush",x:pos.x,y:pos.y,hp:8,maxHp:8,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:24*scale,scale,rot:0});
   }
-  for (const _ of Array.from({length: 70})) {
-    const pos = randomPointInBiome("mountains", 40);
-    if (!solidOverlaps(pos.x, pos.y, 22)) addGeneratedResource({type:"rock",x:pos.x,y:pos.y,hp:4,maxHp:4,alive:true,respawnAt:0,pulse:0,solidR:rand(18,30),canopyR:0,scale:rand(1.2,2.0),rot:0});
-  }
-  for (const _ of Array.from({length: 80})) {
-    const pos = randomPointInBiome("rainforest", 30);
-    if (!solidOverlaps(pos.x, pos.y, 14)) addGeneratedResource({type:"bush",x:pos.x,y:pos.y,hp:8,maxHp:8,alive:true,respawnAt:0,pulse:0,solidR:rand(11,18),canopyR:rand(20,34),scale:rand(1.05,1.7),rot:0});
-  }
-  const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<45;t++){const pos=randomPointInBiome(biome,42),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+8))continue;addGeneratedResource({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
-  placeUnique("forestHerb",20,"forest"); placeUnique("forestResin",18,"forest");
-  placeUnique("desertCactus",22,"desert"); placeUnique("desertSandstone",20,"desert");
-  placeUnique("arcticIceCrystal",22,"arctic"); placeUnique("arcticFrostBerry",20,"arctic");
-  placeUnique("mountainIron",22,"mountains"); placeUnique("mountainQuartz",20,"mountains");
-  placeUnique("rainforestVine",22,"rainforest"); placeUnique("rainforestFruit",20,"rainforest");
+  const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<40;t++){const pos=randomPointInBiome(biome,70),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+12))continue;addGeneratedResource({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
+  placeUnique("forestHerb",24,"forest"); placeUnique("forestResin",22,"forest");
+  placeUnique("rainforestVine",26,"rainforest"); placeUnique("rainforestFruit",24,"rainforest");
 }
 
 function scatter(type, count, hp, minDistFromCenter, rSolid) {
   for (let i = 0; i < count; i++) {
-    let x, y, tries = 0, solid = rSolid, canopy = 0, scale = 1;
-    if (type === "tree") { scale = rand(1.2, 2.3); solid = 8.8 * scale; canopy = 46 * scale; }
-    else if (type === "rock") { scale = rand(1.0, 2.1); solid = 26.5 * scale; }
-    else if (type === "log") { scale = rand(1.0, 1.6); solid = 17.5 * scale; }
-    else if (type === "bush") { scale = rand(1.08, 1.7); solid = 10.8 * scale; canopy = 24 * scale; }
-    let placed=false;
-    while(tries++ < 110){
-      x=rand(120,WORLD_W-120);y=rand(120,WORLD_H-120);
-      const biome=worldBiomeAt(x,y);
-      const chance=type==="tree"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="arctic"?.40:biome==="desert"?.18:.10):type==="bush"?(biome==="rainforest"?1:biome==="forest"?.88:biome==="desert"?.38:biome==="arctic"?.30:.16):type==="log"?(biome==="rainforest"?.90:biome==="forest"?.82:biome==="arctic"?.36:biome==="desert"?.18:.12):(biome==="mountains"?1:biome==="desert"?.82:biome==="arctic"?.78:biome==="rainforest"?.55:.62);
+    let solid=rSolid,canopy=0,scale=1;
+    if(type==="tree"){scale=rand(1.2,2.3);solid=8.8*scale;canopy=46*scale;}
+    else if(type==="rock"){scale=rand(1,2.05);solid=26.5*scale;}
+    else if(type==="log"){scale=rand(1,1.6);solid=17.5*scale;}
+    else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}
+    for(let tries=0;tries<85;tries++){
+      const pos=randomLandPoint(Math.max(120,solid+80)),x=pos.x,y=pos.y,biome=worldBiomeAt(x,y);
+      const chance=type==="tree"?(biome==="rainforest"?1:.88):type==="bush"?(biome==="rainforest"?1:.82):type==="log"?(biome==="rainforest"?.90:.78):(biome==="rainforest"?.56:.68);
       if(Math.random()>chance)continue;
       if(dist(x,y,WORLD_W/2,WORLD_H/2)<minDistFromCenter||solidOverlaps(x,y,solid))continue;
       addGeneratedResource({type,x,y,hp,maxHp:hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:canopy,scale,rot:type==="log"?rand(0,TAU):0});
-      placed=true;break;
+      break;
     }
-    if(!placed)continue;
   }
 }
 
 function placeGoldChunks() {
   goldChunks = [];
-  // Permanent giant pure-gold monument at the exact center of the world.
-  // It never breaks and pays gold on every hit.
-  goldChunks.push({
-    x: WORLD_W / 2, y: WORLD_H / 2,
-    size: "pure", r: 176, goldLeft: Infinity,
-    infinite: true, pure: true, pulse: 0,
-  });
-  for (let i = 0; i < 14; i++) {
-    let x, y, tries = 0;
-    do {
-      x = rand(400, WORLD_W - 400);
-      y = rand(400, WORLD_H - 400);
-      tries++;
-    } while ((dist(x, y, WORLD_W / 2, WORLD_H / 2) < 500 || solidOverlaps(x, y, 48)) && tries < 60);
-    goldChunks.push({ x, y, size: "huge", r: 48, goldLeft: 40, pulse: 0 });
-  }
-  for (let i = 0; i < 120; i++) {
-    let x, y, tries = 0;
-    do {
-      x = rand(120, WORLD_W - 120);
-      y = rand(120, WORLD_H - 120);
-      tries++;
-    } while (solidOverlaps(x, y, 16) && tries < 50);
-    if (tries >= 50) continue;
-    goldChunks.push({ x, y, size: "small", r: 16, goldLeft: 6, pulse: 0 });
-  }
+  goldChunks.push({x:WORLD_W/2,y:WORLD_H/2,size:"pure",r:176,goldLeft:Infinity,infinite:true,pure:true,pulse:0});
+  for(let i=0;i<10;i++){for(let t=0;t<70;t++){const pos=randomLandPoint(500);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<500||solidOverlaps(pos.x,pos.y,48))continue;goldChunks.push({x:pos.x,y:pos.y,size:"huge",r:48,goldLeft:40,pulse:0});break;}}
+  for(let i=0;i<82;i++){for(let t=0;t<55;t++){const pos=randomLandPoint(170);if(solidOverlaps(pos.x,pos.y,16))continue;goldChunks.push({x:pos.x,y:pos.y,size:"small",r:16,goldLeft:6,pulse:0});break;}}
 }
 
-const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber","clouded","fennec","camel","scorpion","hyena","caracal","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","jaguar","toucan","tapir","capybara","anaconda"];
+const WILD_SPECIES = ["fox","wolf","bear","cat","dog","rabbit","owl","snake","deer","boar","saber","clouded","fennec","camel","scorpion","hyena","caracal","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","jaguar","toucan","tapir","capybara","anaconda","dragon"];
 // World population now follows the same rarity tiers shown in the pet/card UI.
 const WILD_RARITY_TARGET = Object.freeze({Common:1.45,Uncommon:.82,Rare:.44,Legendary:.16,Starter:.28});
 const WILD_TYPE_TARGETS = Object.fromEntries(WILD_SPECIES.map(type => [type, WILD_RARITY_TARGET[petRarity(type)] || .7]));
@@ -16353,10 +16325,10 @@ function initWorld() {
   placePonds();
   placeBiomeFeatures();
   // The giant world should feel full instead of sparse: many more, larger resources.
-  scatter("tree", 980, 9, 240, 12);
-  scatter("rock", 680, 4, 240, 20);
-  scatter("log", 420, 2.4, 180, 16); // easy fallen wood: a few punches, wood every hit
-  scatter("bush", 560, 8, 180, 13); // bushes take several hits; drop berries
+  scatter("tree", 620, 9, 240, 12);
+  scatter("rock", 360, 4, 240, 20);
+  scatter("log", 240, 2.4, 180, 16); // easy fallen wood: a few punches, wood every hit
+  scatter("bush", 410, 8, 180, 13); // bushes take several hits; drop berries
   placeGoldChunks();
   placeChests();
   walls = []; towers = []; projectiles = []; petBlasts = []; particles = []; floaters = []; enemies = []; animals = [];
@@ -16369,9 +16341,9 @@ function initWorld() {
       spawnWildAnimalCluster(false, null, type, biome);
     }
   }
-  for (let i = 0; i < 22; i++) spawnWildAnimalCluster(false);
-  for (let i = 0; i < 8; i++) spawnWildAnimalCluster(false, "superboss");
-  for (let i = 0; i < 5; i++) spawnWildAnimalCluster(false, "bigmomma");
+  for (let i = 0; i < 10; i++) spawnWildAnimalCluster(false);
+  for (let i = 0; i < 5; i++) spawnWildAnimalCluster(false, "superboss");
+  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "bigmomma");
   rebuildStaticCollisionGrid();
   rebuildStaticSpawnCandidateCache();
   if (!cleanWorldTemplate) captureCleanWorldTemplate();
@@ -16438,22 +16410,13 @@ function chooseRandomPlayerSpawn(avoidX = null, avoidY = null, minDistance = 0) 
     if (hasAvoid && dist(x, y, avoidX, avoidY) < minDistance * 0.7) continue;
     if (!solidOverlaps(x, y, PLAYER_R + 20)) return { x, y };
   }
-  return { x: margin + 40, y: margin + 40 };
+  return randomPointInBiome(Math.random()<.5?"forest":"rainforest",margin);
 }
 
 function pickHomeCameraTarget(forceStart = false) {
-  const maxX = Math.max(0, WORLD_W - W);
-  const maxY = Math.max(0, WORLD_H - H);
-  if (forceStart || !game.homeCamReady) {
-    game.camX = rand(0, maxX);
-    game.camY = rand(0, maxY);
-    game.homeCamReady = true;
-  }
-  // Pick a destination a good distance away so the menu feels like a roaming world tour.
-  const ang = rand(0, TAU);
-  const travel = rand(1200, 3200);
-  game.homeTargetX = clamp(game.camX + Math.cos(ang) * travel, 0, maxX);
-  game.homeTargetY = clamp(game.camY + Math.sin(ang) * travel, 0, maxY);
+  const maxX=Math.max(0,WORLD_W-W),maxY=Math.max(0,WORLD_H-H);
+  if(forceStart||!game.homeCamReady){const p=randomLandPoint(Math.max(700,Math.max(W,H)*.45));game.camX=clamp(p.x-W*.5,0,maxX);game.camY=clamp(p.y-H*.5,0,maxY);game.homeCamReady=true;}
+  const p=randomLandPoint(Math.max(700,Math.max(W,H)*.45));game.homeTargetX=clamp(p.x-W*.5,0,maxX);game.homeTargetY=clamp(p.y-H*.5,0,maxY);
 }
 
 function updateHomeCamera(dt) {
@@ -17628,6 +17591,7 @@ function resolveEnemyWorld(en) {
       en.y += Math.sin(ang) * 1.5;
     }
   }
+  keepObjectOnIsland(en, Math.max(22,(Number(en.r)||18)+8));
 }
 
 function smoothTurn(obj, targetAngle, dt, turnSpeed = 9) {
@@ -19226,6 +19190,7 @@ function resolveAnimalWorld(a) {
       a.y += Math.sin(ang) * hit.overlap;
     }
   }
+  keepObjectOnIsland(a, Math.max(22,(Number(a.r)||18)*.78));
 }
 
 
@@ -20419,6 +20384,7 @@ function resolveSolidCollisions() {
   };
   resolveList(animals);
   resolveList(player.pets);
+  keepObjectOnIsland(player, PLAYER_R + 10);
 
 }
 
@@ -21726,54 +21692,48 @@ el("closeRunShop").addEventListener("click", () => toggleRunShop(false));
 // ---------- drawing ----------
 function drawBackground() {
   ctx.save();
-  ctx.translate(-game.camX, -game.camY);
-  // Five equal macro-LANDS. The forest is one land, not the base/default ground.
-  const biomeGround={forest:"#668a52",arctic:"#e8f3f6",mountains:"#777a76",desert:"#d9bd78",rainforest:"#214e34"};
-  const tile = 96;
-  const bx0 = Math.floor(game.camX / tile) * tile - tile;
-  const by0 = Math.floor(game.camY / tile) * tile - tile;
-  for (let yy = by0; yy < game.camY + H + tile; yy += tile) {
-    for (let xx = bx0; xx < game.camX + W + tile; xx += tile) {
-      const cx=xx+tile*.5,cy=yy+tile*.5;
-      const biome=biomeBaseId(worldBiomeAt(cx,cy));
-      ctx.fillStyle=biomeGround[biome];ctx.fillRect(xx,yy,tile+.5,tile+.5);
-      // Blend only across an actual neighboring land boundary. This produces a
-      // soft grass/sand/snow/stone transition without circular overlays.
-      const left=biomeBaseId(worldBiomeAt(xx,cy)),right=biomeBaseId(worldBiomeAt(xx+tile,cy));
-      if(left!==right){
-        const g=ctx.createLinearGradient(xx,yy,xx+tile,yy);
-        g.addColorStop(0,biomeGround[left]);g.addColorStop(.5,biomeGround[biome]);g.addColorStop(1,biomeGround[right]);
-        ctx.fillStyle=g;ctx.fillRect(xx,yy,tile+.5,tile+.5);
-      }
+  ctx.translate(-game.camX,-game.camY);
+
+  // Ocean exists around the entire circular island. It is terrain, not a wall object.
+  ctx.fillStyle="#2c7fa2";
+  ctx.fillRect(game.camX-80,game.camY-80,W+160,H+160);
+  const waveStep=190,waveX=Math.floor(game.camX/waveStep)*waveStep-waveStep,waveY=Math.floor(game.camY/waveStep)*waveStep-waveStep;
+  ctx.lineCap="round";ctx.lineWidth=2;
+  for(let y=waveY;y<game.camY+H+waveStep;y+=waveStep){
+    for(let x=waveX;x<game.camX+W+waveStep;x+=waveStep){
+      if(isInsideIsland(x+70,y+55,20))continue;
+      const wig=((x*17+y*11)%47)-23;
+      ctx.strokeStyle="rgba(219,247,255,.24)";ctx.beginPath();ctx.arc(x+70+wig*.25,y+55,32,.18,2.75);ctx.stroke();
+      ctx.strokeStyle="rgba(17,88,124,.20)";ctx.beginPath();ctx.arc(x+104,y+104,24,3.35,5.85);ctx.stroke();
     }
   }
-  // Sparse terrain details identify the material underfoot without filling the screen with objects.
-  const startX = Math.floor(game.camX / 180) * 180;
-  const startY = Math.floor(game.camY / 180) * 180;
-  for (let y = startY; y < game.camY + H + 180; y += 180) {
-    for (let x = startX; x < game.camX + W + 180; x += 180) {
-      const ox=((x*13+y*7)%37)-18, oy=((x*5+y*11)%29)-14, biome=biomeBaseId(worldBiomeAt(x+110,y+110));
-      if(biome==="mountains"){
-        ctx.fillStyle="rgba(45,48,46,.34)";ctx.beginPath();ctx.ellipse(x+110+ox,y+110+oy,62,34,.2,0,TAU);ctx.fill();
-        ctx.fillStyle="rgba(91,126,75,.28)";ctx.beginPath();ctx.ellipse(x+74,y+68,18,9,-.4,0,TAU);ctx.fill();
-        ctx.strokeStyle="rgba(45,47,46,.42)";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+92,y+94);ctx.lineTo(x+118,y+108);ctx.lineTo(x+136,y+95);ctx.stroke();
-      }else if(biome==="desert"){
-        ctx.strokeStyle="rgba(132,91,34,.34)";ctx.lineWidth=2.2;ctx.beginPath();ctx.arc(x+108+ox,y+106+oy,45,.2,2.4);ctx.stroke();
-        ctx.beginPath();ctx.arc(x+137,y+136,27,3.3,5.4);ctx.stroke();
-      }else if(biome==="arctic"){
-        ctx.fillStyle="rgba(255,255,255,.24)";ctx.beginPath();ctx.ellipse(x+110+ox,y+110+oy,60,28,.1,0,TAU);ctx.fill();
-        ctx.strokeStyle="rgba(112,153,168,.20)";ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(x+72,y+126);ctx.lineTo(x+96,y+114);ctx.lineTo(x+113,y+120);ctx.stroke();
-      }else{
-        const rain=biome==="rainforest";
-        ctx.fillStyle=rain?"rgba(10,54,29,.38)":"rgba(55,83,50,.12)";ctx.beginPath();ctx.ellipse(x+110+ox,y+110+oy,rain?58:48,rain?34:29,.08,0,TAU);ctx.fill();
-        ctx.strokeStyle=rain?"rgba(96,154,86,.38)":"rgba(35,55,33,.28)";ctx.lineWidth=1.6;ctx.lineCap="round";
-        const gx=x+57+ox*.4,gy=y+63+oy*.4;ctx.beginPath();ctx.moveTo(gx,gy+5);ctx.lineTo(gx-5,gy-3);ctx.moveTo(gx,gy+5);ctx.lineTo(gx+1,gy-6);ctx.moveTo(gx,gy+5);ctx.lineTo(gx+6,gy-1);ctx.stroke();
-      }
+
+  // Shallow coastal water + broken foam make the ocean read as water rather
+  // than a flat blue world border. The land is painted over the inside half.
+  ctx.strokeStyle="rgba(70,181,202,.34)";ctx.lineWidth=300;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+105,0,TAU);ctx.stroke();
+  ctx.strokeStyle="rgba(169,231,239,.22)";ctx.lineWidth=90;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+42,0,TAU);ctx.stroke();
+  ctx.save();ctx.setLineDash([42,30]);ctx.lineDashOffset=-(game.time*8)%72;ctx.strokeStyle="rgba(238,252,252,.55)";ctx.lineWidth=4;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+8,0,TAU);ctx.stroke();ctx.restore();
+
+  // Everything from here is clipped to the big circular island.
+  ctx.save();ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS,0,TAU);ctx.clip();
+  const biomeGround={forest:"#668a52",rainforest:"#285f3b"};
+  const tile=96,bx0=Math.floor(game.camX/tile)*tile-tile,by0=Math.floor(game.camY/tile)*tile-tile;
+  for(let yy=by0;yy<game.camY+H+tile;yy+=tile){
+    for(let xx=bx0;xx<game.camX+W+tile;xx+=tile){
+      const cx=xx+tile*.5,cy=yy+tile*.5;if(!isInsideIsland(cx,cy,tile*.9))continue;
+      const biome=worldBiomeAt(cx,cy),base=biomeGround[biome]||biomeGround.forest;ctx.fillStyle=base;ctx.fillRect(xx,yy,tile+1,tile+1);
+      const boundary=forestRainBoundaryX(cy),near=Math.abs(cx-boundary);
+      if(near<tile*1.2){const other=biome==="forest"?biomeGround.rainforest:biomeGround.forest,g=ctx.createLinearGradient(boundary-tile,0,boundary+tile,0);g.addColorStop(0,biomeGround.forest);g.addColorStop(1,biomeGround.rainforest);ctx.fillStyle=g;ctx.fillRect(xx,yy,tile+1,tile+1);}
     }
   }
-  ctx.strokeStyle = "rgba(19,25,18,0.62)";
-  ctx.lineWidth = 10;
-  ctx.strokeRect(5, 5, WORLD_W - 10, WORLD_H - 10);
+  // Small ground details so Forest and Rain Forest are visibly different.
+  const startX=Math.floor(game.camX/180)*180,startY=Math.floor(game.camY/180)*180;
+  for(let y=startY;y<game.camY+H+180;y+=180){for(let x=startX;x<game.camX+W+180;x+=180){const px=x+110,py=y+110;if(!isInsideIsland(px,py,160))continue;const rain=worldBiomeAt(px,py)==="rainforest",ox=((x*13+y*7)%37)-18,oy=((x*5+y*11)%29)-14;ctx.fillStyle=rain?"rgba(8,48,26,.33)":"rgba(57,88,49,.13)";ctx.beginPath();ctx.ellipse(px+ox,py+oy,rain?58:45,rain?34:27,.08,0,TAU);ctx.fill();ctx.strokeStyle=rain?"rgba(104,171,92,.34)":"rgba(41,67,36,.27)";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+58,y+72);ctx.lineTo(x+53,y+63);ctx.moveTo(x+58,y+72);ctx.lineTo(x+59,y+60);ctx.moveTo(x+58,y+72);ctx.lineTo(x+65,y+64);ctx.stroke();}}
+  ctx.restore();
+
+  // A broad sandy shelf + damp green inner shelf makes the island edge read like coast, not a black wall.
+  ctx.strokeStyle="#c7b77b";ctx.lineWidth=150;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS-75,0,TAU);ctx.stroke();
+  ctx.strokeStyle="rgba(57,91,52,.46)";ctx.lineWidth=34;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS-166,0,TAU);ctx.stroke();
   ctx.restore();
 }
 
@@ -21815,15 +21775,13 @@ function drawResource(r) {
     const isRiver=r.type==="river";
     const rx=Math.max(isRiver?240:52,Number(r.solidR)||90), ry=Math.max(isRiver?40:38,Number(r.canopyR)||rx*.72);
     ctx.rotate(r.rot||0);
-    // Water is part of the ground. There are deliberately ZERO stroke() calls here:
-    // no black border, no light border, no dark border, and no breakable-object ring.
-    ctx.fillStyle=isRiver?"#3d99b7":"#43a2be";
-    ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);ctx.fill();
-    ctx.globalAlpha=.22;ctx.fillStyle="#dff8ff";
-    ctx.beginPath();ctx.ellipse(-rx*.20,-ry*.20,rx*(isRiver?.33:.40),ry*(isRiver?.24:.18),-.08,0,TAU);ctx.fill();
-    ctx.globalAlpha=.15;ctx.fillStyle="#1f7897";
-    ctx.beginPath();ctx.ellipse(rx*.20,ry*.18,rx*(isRiver?.24:.30),ry*(isRiver?.20:.14),.1,0,TAU);ctx.fill();
-    ctx.globalAlpha=1;
+    // Filled shelves only: the ground slopes down toward the water with no outline stroke.
+    const rain=worldBiomeAt(r.x,r.y)==="rainforest";
+    ctx.fillStyle=rain?"#355c3b":"#6e8053";ctx.beginPath();ctx.ellipse(0,0,rx*(isRiver?1.05:1.24),ry*(isRiver?1.34:1.28),0,0,TAU);ctx.fill();
+    ctx.fillStyle=rain?"#426a45":"#788a5b";ctx.beginPath();ctx.ellipse(0,0,rx*(isRiver?1.025:1.13),ry*(isRiver?1.17:1.14),0,0,TAU);ctx.fill();
+    ctx.fillStyle=isRiver?"#3d99b7":"#43a2be";ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);ctx.fill();
+    ctx.globalAlpha=.21;ctx.fillStyle="#dff8ff";ctx.beginPath();ctx.ellipse(-rx*.20,-ry*.20,rx*(isRiver?.33:.40),ry*(isRiver?.24:.18),-.08,0,TAU);ctx.fill();
+    ctx.globalAlpha=.14;ctx.fillStyle="#1f7897";ctx.beginPath();ctx.ellipse(rx*.20,ry*.18,rx*(isRiver?.24:.30),ry*(isRiver?.20:.14),.1,0,TAU);ctx.fill();ctx.globalAlpha=1;
     if(!isRiver){ctx.fillStyle="#609c58";for(const [lx,ly,lr] of [[-.52,-.18,.08],[.40,.20,.07],[.12,-.34,.055]]){ctx.beginPath();ctx.arc(rx*lx,ry*ly,rx*lr,0,TAU);ctx.fill();}}
   } else if (BIOME_RESOURCE_INFO[r.type]) {
     const info=BIOME_RESOURCE_INFO[r.type],ink="#1b1d19";ctx.rotate(r.rot||0);ctx.lineWidth=3;ctx.strokeStyle=ink;
@@ -23727,6 +23685,8 @@ function drawPlayer() {
   const p = player;
   ctx.save();
   ctx.translate(p.x, p.y);
+  const pondScale = !p.riding ? waterDepthScaleAt(p.x,p.y) : 1;
+  if (pondScale < .999) ctx.scale(pondScale,pondScale);
 
   if (p.dead) {
     const t = p.splitT, ease = 1 - Math.pow(1 - t, 3);
@@ -24853,14 +24813,14 @@ let lastMinimapDrawAt = 0;
 function drawMinimap() {
   const s = 140 / Math.max(WORLD_W, WORLD_H);
   // Show the actual biome lands on the minimap.
-  const mmGround={forest:"#5f8150",desert:"#c9ad6a",arctic:"#dcecf0",mountains:"#858782",rainforest:"#315f3c"};
+  const mmGround={forest:"#668a52",rainforest:"#285f3b",ocean:"#2f83a7"};
   const cells=70,cs=140/cells;
   for(let gy=0;gy<cells;gy++)for(let gx=0;gx<cells;gx++){
     const wx=(gx+.5)/cells*WORLD_W,wy=(gy+.5)/cells*WORLD_H,b=biomeBaseId(worldBiomeAt(wx,wy));
     mmCtx.fillStyle=mmGround[b]||mmGround.forest;mmCtx.fillRect(gx*cs,gy*cs,cs+.5,cs+.5);
   }
   mmCtx.font="bold 7px sans-serif";mmCtx.textAlign="center";mmCtx.textBaseline="middle";
-  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z)continue;mmCtx.fillStyle=id==="arctic"?"#33505d":"rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),z.cx*s,z.cy*s);}
+  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z)continue;mmCtx.fillStyle="rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),z.cx*s,z.cy*s);}
 
   // Giant center gold monument.
   mmCtx.fillStyle = "#f2c94c";
@@ -25039,10 +24999,12 @@ function draw(menuMode = false) {
   }
   visibleTrees.sort((a, b) => resourceDrawY(a) - resourceDrawY(b));
 
-  // Rocks and every kind of gold chunk are low ground objects: draw them first
-  // so the player can visually pass over them. Trees still remain above everyone.
+  // Rocks and water are low ground objects: draw them first so the player,
+  // pets, wildlife, and Hostls always appear on top of ponds/rivers. Trees
+  // still remain above everyone. The pond-depth player scale is applied later.
   for (const r of viewResources) {
-    if (r.alive && r.type === "rock") safeCanvasEntityDraw("rock", r, drawResource);
+    if (r.alive && (r.type === "rock" || r.type === "pond" || r.type === "river"))
+      safeCanvasEntityDraw(r.type === "rock" ? "rock" : "water", r, drawResource);
   }
   for (const g of viewGold) safeCanvasEntityDraw("gold", g, drawGoldChunk);
 
@@ -25056,9 +25018,11 @@ function draw(menuMode = false) {
   // player's body/rider always appears above their pet instead of being hidden
   // underneath the animal sprite.
 
-  // Taller world objects still sit over an on-foot player.
+  // Taller world objects still sit over an on-foot player. Water was already
+  // drawn as terrain beneath the player, so do not paint it over characters here.
   for (const r of viewResources) {
-    if (r.alive && r.type !== "tree" && r.type !== "rock") safeCanvasEntityDraw("resource", r, drawResource);
+    if (r.alive && r.type !== "tree" && r.type !== "rock" && r.type !== "pond" && r.type !== "river")
+      safeCanvasEntityDraw("resource", r, drawResource);
   }
   for (const c of viewChests) safeCanvasEntityDraw("chest", c, drawChest);
   for (const w of walls) if (inView(w.x, w.y, 50)) safeCanvasEntityDraw("wall", w, drawWall);
@@ -26287,42 +26251,44 @@ el("username").addEventListener("change", async () => {
   persistStarterPetPreference();
 });
 
+let playStartInProgress = false;
 function updatePlayAvailability() {
   const btn = el("playBtn");
   if (!btn || game.started) return;
-  const waitingForLiveWorld = !!(net.enabled && !net.room);
-  btn.disabled = waitingForLiveWorld;
-  btn.textContent = waitingForLiveWorld ? "Connecting world…" : "Play";
-  btn.title = waitingForLiveWorld
-    ? "HOSTL is connecting the live selected world before Play so entering is instant."
-    : "Enter the world immediately";
+  // PLAY MUST ALWAYS BE AVAILABLE. If Online is still connecting, clicking Play
+  // owns that wait and the button itself shows Loading… until the live room is
+  // ready. Never gate the player behind a pre-Play "Connecting world" state.
+  btn.disabled = !!playStartInProgress;
+  btn.textContent = playStartInProgress ? "Loading…" : "Play";
+  btn.title = playStartInProgress ? "Joining the selected world…" : "Play HOSTL";
 }
 
-let homeWorldConnectTimer = 0;
-function scheduleHomeWorldConnection(delay = 80) {
-  if (homeWorldConnectTimer) clearTimeout(homeWorldConnectTimer);
-  if (!net.enabled || game.started) return;
-  homeWorldConnectTimer = setTimeout(async () => {
-    homeWorldConnectTimer = 0;
-    if (!net.enabled || game.started) return;
-    if (!window.Colyseus || !window.Colyseus.Client) { scheduleHomeWorldConnection(300); return; }
-    if (!net.room && !net.connecting) {
-      const ok = await connectMultiplayer();
-      if (!ok && net.enabled && !game.started) { scheduleHomeWorldConnection(3500); return; }
+async function ensureMultiplayerReadyForPlay() {
+  if (!net.enabled) return true;
+  if (net.room) return true;
+
+  // Online connection is owned by the Play click. Nothing joins or builds the
+  // multiplayer world merely because the page/Home screen was opened.
+  if (net.connecting) {
+    const until = performance.now() + 45500;
+    while (net.connecting && !net.room && performance.now() < until) {
+      await new Promise(resolve => setTimeout(resolve, 45));
     }
-    if (net.room && !game.started) {
-      syncNetworkFullWorld(true);
-      const own = net.room.state?.players?.get?.(net.sessionId);
-      const x = Number(own?.x), y = Number(own?.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        player.x = x; player.y = y;
-        game.camX = clamp(x - W*.5, 0, Math.max(0, WORLD_W-W));
-        game.camY = clamp(y - H*.5, 0, Math.max(0, WORLD_H-H));
-        game.homeTargetX = x; game.homeTargetY = y; game.homeCamReady = true;
-        syncNetworkStaticArea(x, y, 2300, true);
-      }
-    }
-  }, Math.max(0, delay|0));
+    if (net.room) return true;
+  }
+
+  return !!(await connectMultiplayer());
+}
+
+async function waitForOwnOnlinePlayer(timeoutMs = 2200) {
+  if (!net.room) return false;
+  const until = performance.now() + Math.max(0, timeoutMs);
+  while (performance.now() < until) {
+    const own = net.room?.state?.players?.get?.(net.sessionId);
+    if (own && Number.isFinite(Number(own.x)) && Number.isFinite(Number(own.y))) return true;
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }
+  return !!net.room?.state?.players?.get?.(net.sessionId);
 }
 
 el("offlineModeBtn").addEventListener("click", () => {
@@ -26330,10 +26296,10 @@ el("offlineModeBtn").addEventListener("click", () => {
   localStorage.setItem("cubeOnlineMode", "offline");
   disconnectMultiplayer();
   if (!game.started) {
-    // Undo any live-room chunk overrides and return to the clean deterministic
-    // selected-world preview when switching back to Offline from Home.
-    if (!restoreCleanWorldTemplate()) initWorld();
-    game.homeCamReady = false;
+    // Do not build the full offline world on the Home screen. Play owns loading.
+    resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];
+    staticCollisionGrid=new Map();cleanWorldTemplate=null;
+    game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;
     pickHomeCameraTarget(true);
   }
   updateOnlineModeUI();
@@ -26346,14 +26312,13 @@ el("onlineModeBtn").addEventListener("click", () => {
   updateOnlineModeUI();
   updatePlayAvailability();
   refreshHomePlayerCount();
-  scheduleHomeWorldConnection(0);
+  if (!game.started) setNetStatus(`${HOSTL_WORLDS[selectedWorldId]?.name||"World"} selected • press Play to join`);
 });
-el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); if(!game.started){disconnectMultiplayer();scheduleHomeWorldConnection(60);} });
+el("serverUrl").addEventListener("change", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); if(!game.started) disconnectMultiplayer(); });
 el("serverUrl").addEventListener("blur", () => { saveMultiplayerServerInput(); refreshHomePlayerCount(); });
 net.enabled = localStorage.getItem("cubeOnlineMode") === "online";
 updateOnlineModeUI();
 updatePlayAvailability();
-if (net.enabled) scheduleHomeWorldConnection(120);
 const worldSelect = el("worldSelect");
 if (worldSelect) {
   worldSelect.value = selectedWorldId;
@@ -26363,15 +26328,12 @@ if (worldSelect) {
     selectedWorldId = next;
     try { localStorage.setItem("hostlWorldId", selectedWorldId); } catch (_) {}
     if (net.room) disconnectMultiplayer();
-    // Rebuild the offline/home preview from the chosen world's permanent seed.
+    // Selecting a world on Home is lightweight. The full world is built/joined by Play.
     if (!game.started) {
-      cleanWorldTemplate = null;
-      initWorld();
-      game.homeCamReady = false;
-      pickHomeCameraTarget(true);
+      cleanWorldTemplate=null;resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];
+      staticCollisionGrid=new Map();game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;pickHomeCameraTarget(true);
     }
-    setNetStatus(net.enabled ? `${HOSTL_WORLDS[selectedWorldId].name} selected` : "Offline");
-    if (net.enabled && !game.started) scheduleHomeWorldConnection(80);
+    setNetStatus(net.enabled ? `${HOSTL_WORLDS[selectedWorldId].name} selected • loads when Play is pressed` : "Offline");
   });
 }
 
@@ -26392,82 +26354,51 @@ if(el("homeAchievementsBtn")) el("homeAchievementsBtn").addEventListener("click"
 if(el("closeAchievementOverlay")) el("closeAchievementOverlay").addEventListener("click", closeAchievementOverlay);
 if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedown", (e)=>{ if(e.target===el("achievementOverlay")) closeAchievementOverlay(); });
 
-let playStartInProgress = false;
-el("playBtn").addEventListener("click", () => {
+el("playBtn").addEventListener("click", async () => {
   if ((game.started && !game.over) || playStartInProgress) return;
-
-  // Online Play is only enabled after the live selected room is already behind
-  // the Home screen. Never start a connection, restore a world, or wait here.
-  if (net.enabled && !net.room) {
-    updatePlayAvailability();
-    scheduleHomeWorldConnection(0);
-    return;
-  }
-
-  playStartInProgress = true;
-  const playButton = el("playBtn");
-  if (playButton) playButton.disabled = true;
-
+  playStartInProgress = true; updatePlayAvailability();
+  setLoadingScreen(net.enabled ? "Joining your world…" : "Building your island…", 10, true);
+  await waitOneFrame();
   try {
-    closeCardInventory();
-    closeStarterShop();
-    closeChooseStarterPet();
-    closePlayerDesign();
-    closeHomeThemes();
+    closeCardInventory();closeStarterShop();closeChooseStarterPet();closePlayerDesign();closeHomeThemes();
     el("petShopOverlay").classList.remove("show");
-    meta.username = (el("username").value || "Cube").slice(0, 14);
-    persistStarterPetPreference();
-    mobileMode = el("mobileMode").checked;
-    if (mobileMode) mobileFacingAngle = player.angle;
-    try { localStorage.setItem("cubeMobileControls", mobileMode ? "on" : "off"); } catch (_) {}
-    document.getElementById("mobileControls").classList.toggle("on", mobileMode);
-    syncMobilePrimaryButton();
-    document.body.classList.toggle("mobile-performance", mobileMode);
-    if (!mobileMode) resetMobilePointers();
+    meta.username=(el("username").value||"Cube").slice(0,14);persistStarterPetPreference();
+    mobileMode=el("mobileMode").checked;if(mobileMode)mobileFacingAngle=player.angle;
+    try{localStorage.setItem("cubeMobileControls",mobileMode?"on":"off");}catch(_){}
+    document.getElementById("mobileControls").classList.toggle("on",mobileMode);syncMobilePrimaryButton();document.body.classList.toggle("mobile-performance",mobileMode);if(!mobileMode)resetMobilePointers();
 
-    // Permanent account refresh can finish after control is handed over. The
-    // server still validates starter ownership/stage authoritatively.
-    Promise.resolve(refreshAccountEntitlementsForRun()).catch(() => {});
-
-    // Online: enter the exact live scene already visible behind Home. Offline:
-    // reset from the already-built clean world. Neither path opens a loader.
-    resetGame({
-      firstEntry: true,
-      preserveLiveWorld: !!net.room,
-      instantLiveEntry: !!net.room
-    });
-
-    const home = document.getElementById("home");
-    document.body.classList.add("hostl-game-active");
-    home.style.display = "none";
-    home.style.visibility = "hidden";
-    home.style.pointerEvents = "none";
-    syncHomeWorldThemeState();
-    document.getElementById("hud").style.display = "block";
-    game.started = true;
-    game.over = false;
-    last = performance.now();
-
-    if (net.room) {
-      try { net.room.send("playerReady", {}); } catch (_) {}
-      // Starter repair is idempotent and asynchronous; it must never delay Play.
-      setTimeout(ensureNetworkStarterPet, 0);
+    if(net.enabled){
+      setLoadingScreen(`Joining ${HOSTL_WORLDS[selectedWorldId]?.name||"selected world"}…`,30,true);
+      if(!net.room){const connected=await ensureMultiplayerReadyForPlay();if(!connected||!net.room)throw new Error("Could not join selected HOSTL world");}
+      setLoadingScreen("Loading players, animals, and world…",58,true);
+      await waitForOwnOnlinePlayer(4500);
+      syncNetworkFullWorld(true);
+      await waitOneFrame();
+      setLoadingScreen("Placing you in the world…",86,false);
+      resetGame({firstEntry:true,preserveLiveWorld:true,instantLiveEntry:true});
+    }else{
+      setLoadingScreen("Building Forest + Rain Forest island…",26,true);
+      await waitOneFrame();
+      // resetGame builds the local island only now, after Play was clicked.
+      resetGame({firstEntry:true,preserveLiveWorld:false,instantLiveEntry:false});
+      setLoadingScreen("Placing animals and resources…",82,false);
+      await waitOneFrame();
     }
-    hideLoadingScreen();
-  } catch (err) {
-    console.warn("HOSTL instant Play transition failed", err);
-    game.started = false;
-    setHomeControlsEnabled(true);
-    const home = document.getElementById("home");
-    if (home) { home.style.display = ""; home.style.visibility = "visible"; home.style.pointerEvents = ""; }
-    document.body.classList.remove("hostl-game-active");
-    const hud = document.getElementById("hud"); if (hud) hud.style.display = "none";
-    showGameMessage("Could not enter world", "HOSTL kept the Home screen open instead of starting a broken run.");
-  } finally {
-    playStartInProgress = false;
-    if (!game.started) updatePlayAvailability();
-  }
+
+    Promise.resolve(refreshAccountEntitlementsForRun()).catch(()=>{});
+    const home=document.getElementById("home");document.body.classList.add("hostl-game-active");
+    if(home){home.style.display="none";home.style.visibility="hidden";home.style.pointerEvents="none";}
+    syncHomeWorldThemeState();document.getElementById("hud").style.display="block";game.started=true;game.over=false;last=performance.now();
+    if(net.room){try{net.room.send("playerReady",{});}catch(_){}setNetStatus("Online • shared world • PvP","good");setTimeout(ensureNetworkStarterPet,0);}
+    setLoadingScreen("Ready",100,false);await waitOneFrame();hideLoadingScreen();
+  }catch(err){
+    console.warn("HOSTL Play join failed",err);game.started=false;setHomeControlsEnabled(true);
+    const home=document.getElementById("home");if(home){home.style.display="";home.style.visibility="visible";home.style.pointerEvents="";}
+    document.body.classList.remove("hostl-game-active");const hud=document.getElementById("hud");if(hud)hud.style.display="none";
+    hideLoadingScreen();if(net.enabled)setNetStatus("Could not join • press Play to retry","bad");else banner("World could not finish loading. Press Play to retry.",true);
+  }finally{playStartInProgress=false;if(!game.started)updatePlayAvailability();}
 });
+
 canvas.addEventListener("mousedown", (e) => {
   if (e.button === 0 && window._petSetTarget) {
     const pet = window._petSetTarget;
@@ -26618,41 +26549,14 @@ window.__hostlApplyAccountEntitlements = function(payload={}) {
 // boot
 async function bootHostlGame() {
   try {
-    setLoadingScreen("Building the world…", 18, false);
-    await waitOneFrame();
-    initWorld();
-    if (net.enabled && !net.room) {
-      setLoadingScreen(`Joining ${HOSTL_WORLDS[selectedWorldId]?.name || "selected world"}…`, 44, true);
-      await connectMultiplayer();
-    }
-    setLoadingScreen("Choosing a home view…", 58, false);
-    await waitOneFrame();
-    game.homeCamReady = false;
-    if (net.room) {
-      syncNetworkFullWorld(true);
-      const own = net.room.state?.players?.get?.(net.sessionId);
-      const x = Number(own?.x), y = Number(own?.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        player.x = x; player.y = y;
-        game.camX = clamp(x - W*.5, 0, Math.max(0, WORLD_W-W));
-        game.camY = clamp(y - H*.5, 0, Math.max(0, WORLD_H-H));
-        game.homeTargetX = x; game.homeTargetY = y; game.homeCamReady = true;
-      }
-    }
-    if (!game.homeCamReady) pickHomeCameraTarget(true);
-    setLoadingScreen("Preparing menus and gear…", 78, false);
-    buildHotbar();
-    setupHome();
-    updatePlayAvailability();
-    setLoadingScreen("Finishing touches…", 92, false);
-    await waitOneFrame();
+    // Home appears immediately. No full world generation and no loading screen at page entry.
+    resources=[];goldChunks=[];chests=[];animals=[];enemies=[];walls=[];towers=[];projectiles=[];petBlasts=[];particles=[];floaters=[];
+    staticCollisionGrid=new Map();cleanWorldTemplate=null;
+    game.homeCamReady=false;game.camX=ISLAND_CX-W*.5;game.camY=ISLAND_CY-H*.5;pickHomeCameraTarget(true);
+    buildHotbar();setupHome();updatePlayAvailability();
     requestAnimationFrame(frame);
-  } catch (err) {
-    console.error("HOSTL boot recovered from an error:", err);
-    try { requestAnimationFrame(frame); } catch (_) {}
-  } finally {
-    hideLoadingScreen();
-  }
+  }catch(err){console.error("HOSTL boot recovered from an error:",err);try{requestAnimationFrame(frame);}catch(_){}}
+  finally{hideLoadingScreen();}
 }
 // Never let the overlay permanently cover a page that otherwise loaded.
 setTimeout(() => {
@@ -28020,6 +27924,6 @@ setTimeout(()=>{
 })();
 </script>
 
-<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 661 • RULES 613</div>
+<div id="hostlBuildStamp" style="position:fixed;right:8px;bottom:7px;z-index:99999;font:800 9px/1.1 system-ui,sans-serif;letter-spacing:.08em;color:rgba(255,255,255,.78);background:rgba(15,18,16,.58);border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 6px;pointer-events:none">HOSTL GAME 663 • RULES 615</div>
 </body>
 </html>
