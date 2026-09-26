@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "617";
+const CUBE_SHARED_RULES_VERSION = "618";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -578,6 +578,9 @@ const TOOL = {
   Sword:   { dmg: 8.0, range: 54, cadence: 0.42, gather: 0.08, resourcePower: 0.10, woodWall:4.0, stoneWall:1.8 },
   Bow:     { dmg: 9.0, range: 46, cadence: 0.55, gather: 0.12, resourcePower: 0.18, woodWall:2.0, stoneWall:1.5 },
 };
+const HYDRATION_NORMAL_SPEED_AT = 35;
+const BUCKET_MAX_SIPS = 5;
+const BUCKET_SIP_HYDRATION = 14;
 
 class PlayerState extends Schema {
   constructor() {
@@ -589,14 +592,14 @@ class PlayerState extends Schema {
     this.moveX = 0; this.moveY = 0; this.moving = false; this.animalCarryT = 0;
     this.kills = 0; this.gold = 0; this.title = ""; this.testerRank = 0; this.ownerRank = 0;
     this.skillLevel = 0; this.skillXp = 0; this.skillSpeed = 0; this.skillStrength = 0; this.skillDefense = 0; this.skillPendingMilestone = 0;
-    this.hydration = 100; this.bucketWater = true;
+    this.hydration = 100; this.bucketWater = true; this.bucketSips = BUCKET_MAX_SIPS;
   }
 }
 defineTypes(PlayerState, {
   id:"string", username:"string", x:"number", y:"number", angle:"number",
   health:"number", maxHealth:"number", dead:"boolean", color:"string", tool:"string", heldSpecial:"string", ridingPetId:"string",
   moveX:"number", moveY:"number", moving:"boolean", animalCarryT:"number", kills:"number", gold:"number", title:"string", testerRank:"number", ownerRank:"number",
-  skillLevel:"number", skillXp:"number", skillSpeed:"number", skillStrength:"number", skillDefense:"number", skillPendingMilestone:"number", hydration:"number", bucketWater:"boolean"
+  skillLevel:"number", skillXp:"number", skillSpeed:"number", skillStrength:"number", skillDefense:"number", skillPendingMilestone:"number", hydration:"number", bucketWater:"boolean", bucketSips:"number"
 });
 
 class ResourceState extends Schema {
@@ -1251,8 +1254,10 @@ function petFollowRangeFor(p){
   const clingPad=(p?.type==="wolf"||p?.type==="boar")?14:6;
   const stop=clamp(PLAYER_R+bodyR*.70+22*stageFreedom+clingPad,54,170);
   const roamBand=clamp((22+moveSpeed*.50)*stageFreedom,20,205);
-  const start=stop+roamBand,run=start+clamp((70+moveSpeed*.46)*Math.sqrt(stageFreedom),82,245),sprint=run+clamp((105+moveSpeed*.60)*Math.sqrt(stageFreedom),120,330);
-  return{stop,start,run,sprint,wanderMax:start};
+  const start=stop+roamBand;
+  const run=start+clamp((72+moveSpeed*.48)*Math.sqrt(stageFreedom),84,250);
+  const dash=run+clamp((110+moveSpeed*.64)*Math.sqrt(stageFreedom),125,345);
+  return{stop,start,run,dash,sprint:dash,wanderMax:start};
 }
 
 
@@ -1866,7 +1871,9 @@ export class WorldRoom extends Room {
     };
     const spawnWildCluster=(forced=null,typeOverride=null,biomeOverride=null)=>{const biome=biomeOverride?biomeBaseId(biomeOverride):randomBiomeZoneId(),species=(BIOME_PROFILES[biome]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v)),type=typeOverride||randomWildSpecies(species),anchor=spawnWild(forced,type,null,biome);if(!anchor)return 0;let made=1,extras=randi(1,3);for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor,biome))made++;return made;};
     for(const biome of BIOME_ORDER)for(const type of (BIOME_PROFILES[biome]?.species||[]))spawnWildCluster(null,type,biome);
-    for(let i=0;i<6;i++)spawnWildCluster();for(let i=0;i<3;i++)spawnWildCluster("superboss");for(let i=0;i<2;i++)spawnWildCluster("bigmomma");
+    // A little more wildlife, but ALL of it is part of the pre-Play world build.
+    // There is still no hidden runtime population top-up that can pop predators in later.
+    for(let i=0;i<10;i++)spawnWildCluster();for(let i=0;i<4;i++)spawnWildCluster("superboss");for(let i=0;i<3;i++)spawnWildCluster("bigmomma");
     console.log(`Island world generated: ${this.state.resources.size} resources, ${this.state.gold.size} gold, ${this.state.chests.size} chests, ${this.state.animals.size} wildlife`);
   }
 
@@ -2057,7 +2064,7 @@ export class WorldRoom extends Room {
     }
     p.health=clamp(p.health+amount,0,p.maxHealth);
   }
-  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerCombatReadyAt.set(client.sessionId,this.state.worldTime+1.15);this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.playerNightSeen.delete(client.sessionId);this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});this.sendSkillState(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.hydration=100;p.bucketWater=true;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
+  handleRespawn(client,data={}){const p=this.state.players.get(client.sessionId);if(!p)return;this.playerCombatReadyAt.set(client.sessionId,this.state.worldTime+1.15);this.playerSurvivalSeconds.set(client.sessionId,0);this.playerSurvivalAwards.set(client.sessionId,new Set());this.playerNightSeen.delete(client.sessionId);this.playerRunShop.set(client.sessionId,{purchased:new Set(),hat:"",cape:"",armor:""});this.playerSkillProgress.set(client.sessionId,{level:0,xp:0,speed:0,strength:0,defense:0,milestones:{}});this.sendSkillState(client.sessionId);this.tamePendingPlayers.delete(client.sessionId);const oldX=p.x,oldY=p.y;const requested=Math.max(0,Math.min(3200,Number(data?.minDistance)||2400));const s=this.safeSpawn(oldX,oldY,requested);p.x=s.x;p.y=s.y;p.angle=rand(-Math.PI,Math.PI);p.health=p.maxHealth;p.hydration=100;p.bucketWater=true;p.bucketSips=BUCKET_MAX_SIPS;p.dead=false;p.heldSpecial="";p.ridingPetId="";p.animalCarryT=0;this.playerCarryUntil.delete(client.sessionId);this.playerCarryAnimal.delete(client.sessionId);this.pendingAnimalPushes.delete(client.sessionId);let i=0;for(const[id,pet]of this.state.pets){if(!pet||pet.ownerId!==client.sessionId)continue;const pos=this.safePetSpawnNear(p.x,p.y,pet.r||18);pet.x=pos.x;pet.y=pos.y;pet.angle=p.angle;pet.targetX=0;pet.targetY=0;pet.follow=true;pet.orderMode="follow";this.petFollowState.delete(id);this.petChaseState.delete(id);if(pet.dead){pet.dead=false;pet.hp=pet.maxHp;this.petDeathTimers.delete(id);}i++;}client.send("respawned",{x:p.x,y:p.y,movedFrom:{x:oldX,y:oldY}});}
 
   refreshVerifiedAccount(ownerId){
     const key=String(ownerId||""),accountId=this.playerAccountIds.get(key);
@@ -2138,14 +2145,21 @@ export class WorldRoom extends Room {
     this.ensureStarterPetFor(client,type,stage,{petName:data.petName,gender:data.gender});
   }
 
-  hydrationMoveMul(value){const h=clamp(Number(value)||0,0,100);return h>=35?1:(.60+(h/35)*.40);}
+  hydrationMoveMul(value){const h=clamp(Number(value)||0,0,100);return h>=HYDRATION_NORMAL_SPEED_AT?1:(.60+(h/HYDRATION_NORMAL_SPEED_AT)*.40);}
   consumeHydration(ownerId,amount){const p=this.state.players.get(ownerId);if(!p||p.dead)return;const loss=Math.max(0,Number(amount)||0);if(loss<=0)return;p.hydration=clamp((Number(p.hydration)||0)-loss,0,100);}
   applyMovementHydration(p,inputMag,dt){if(!p||p.dead||!(inputMag>0.02)||!(dt>0))return;const biome=worldBiomeAt(p.x,p.y);if(!isHotDryBiome(biome))return;const rate=1.85*(0.45+Math.min(1,Number(inputMag)||0)*0.55);p.hydration=clamp((Number(p.hydration)||0)-dt*rate,0,100);}
   handleWaterAction(client,data={}){
     const p=this.state.players.get(client.sessionId);if(!p||p.dead)return;const action=String(data.action||"");
-    if(action==="drink"){if(!p.bucketWater){client.send("waterResult",{ok:false,message:"Your bucket is empty",hydration:p.hydration,bucketWater:false});return;}p.bucketWater=false;p.hydration=clamp((Number(p.hydration)||0)+70,0,100);client.send("waterResult",{ok:true,message:"Water drunk — hydrated",hydration:p.hydration,bucketWater:false});return;}
+    if(action==="drink"){
+      let sips=clamp(Math.floor(Number(p.bucketSips)||0),0,BUCKET_MAX_SIPS);
+      if(sips<=0&&p.bucketWater)sips=BUCKET_MAX_SIPS; // migrate players connected from the older full/empty bucket state
+      if(sips<=0){p.bucketWater=false;p.bucketSips=0;client.send("waterResult",{ok:false,message:"Your bucket is empty",hydration:p.hydration,bucketWater:false,bucketSips:0});return;}
+      sips--;p.bucketSips=sips;p.bucketWater=sips>0;p.hydration=clamp((Number(p.hydration)||0)+BUCKET_SIP_HYDRATION,0,100);
+      client.send("waterResult",{ok:true,message:sips>0?`Sip taken — ${sips} sip${sips===1?"":"s"} left`:`Last sip — bucket empty`,hydration:p.hydration,bucketWater:p.bucketWater,bucketSips:sips});return;
+    }
     if(action!=="fill")return;let near=false;for(const[,r]of this.state.resources){if(!r||!r.alive||(r.type!=="pond"&&r.type!=="river"))continue;if(waterNearPoint(r,p.x,p.y,78)){near=true;break;}}
-    if(!near){client.send("waterResult",{ok:false,message:"Move closer to a pond or river to fill the bucket",hydration:p.hydration,bucketWater:!!p.bucketWater});return;}p.bucketWater=true;client.send("waterResult",{ok:true,message:"Bucket filled with water",hydration:p.hydration,bucketWater:true});
+    if(!near){client.send("waterResult",{ok:false,message:"Move closer to a pond or river to fill the bucket",hydration:p.hydration,bucketWater:!!p.bucketWater,bucketSips:clamp(Math.floor(Number(p.bucketSips)||0),0,BUCKET_MAX_SIPS)});return;}
+    p.bucketSips=BUCKET_MAX_SIPS;p.bucketWater=true;client.send("waterResult",{ok:true,message:"Bucket filled — 5 sips",hydration:p.hydration,bucketWater:true,bucketSips:BUCKET_MAX_SIPS});
   }
 
   handleResourceHit(client,data){const id=String(data.id||""),r=this.state.resources.get(id);if(!r||!r.alive||r.type==="pond"||r.type==="river"||!this.playerCanReach(client,r.x,r.y,Math.min(80,r.solidR)))return;this.addSkillXp(client.sessionId,1);const toolName=this.validTool(String(data.tool||"Fist")),t=this.toolStats(toolName,data.tier);const p=this.state.players.get(client.sessionId),biomeInfo=BIOME_RESOURCE_INFO[r.type];this.consumeHydration(client.sessionId,biomeInfo?.category==="soft"?.9:(r.type==="bush"?.65:1.2));this.broadcast("playerAction",{playerId:client.sessionId,action:"resourceHit",tool:toolName,angle:p?.angle||0,heldSpecial:p?.heldSpecial||"",targetKind:"resource",targetId:id});this.broadcastFx({kind:"hit",x:r.x,y:r.y,text:"",color:biomeInfo?.color||(r.type==="bush"?"#d1315c":(r.type==="rock"?"#a9b3bd":"#c99a5b"))});if(biomeInfo){const correct=(biomeInfo.category==="wood"&&toolName==="Axe")||(biomeInfo.category==="stone"&&toolName==="Pickaxe")||(biomeInfo.category==="soft"&&(toolName==="Fist"||toolName==="Axe"));let damage=(t.resourcePower==null?1:t.resourcePower)*(correct?1.25:.68);if(toolName==="Sword")damage*=.35;r.hp=Math.max(0,r.hp-damage);client.send("resourceReward",{id,kind:"biomeMaterial",material:biomeInfo.material,amount:correct?2:1,label:biomeInfo.name,color:biomeInfo.color});this.broadcastEntityHealth("resource",id,r);if(r.hp<=0){r.alive=false;this.resourceRespawns.set(id,rand(18,30));this.broadcastEntityHealth("resource",id,r);}return;}if(r.type==="bush"){r.hp=Math.max(0,r.hp-Math.max(.5,t.gather*.9));client.send("resourceReward",{id,kind:"berries",amount:Math.max(1,Math.round(randi(1,2)*this.runPerks(client.sessionId).gatherMul))});}else{const isWood=r.type==="tree"||r.type==="log",correctAxe=toolName==="Axe"&&isWood,correctPick=toolName==="Pickaxe"&&r.type==="rock";let damage=t.resourcePower;if(r.type==="log")damage*=1.35;if(toolName==="Fist")damage*=r.type==="log"?1.25:.82;if(toolName==="Axe"&&!correctAxe)damage*=.32;if(toolName==="Pickaxe"&&!correctPick)damage*=.32;r.hp=Math.max(0,r.hp-damage);let y=1;if(r.type==="log")y=toolName==="Fist"?2:correctAxe?6:toolName==="Sword"?1:2;else if(correctAxe||correctPick)y=t.gather;else if(toolName==="Fist")y=t.gather;else if(toolName==="Sword")y=.12;else if(toolName==="Bow")y=.35;else y=.45;y*=this.runPerks(client.sessionId).gatherMul;const key=`${client.sessionId}:${id}`,credit=(this.harvestCredits.get(key)||0)+y,whole=Math.floor(credit+1e-6);this.harvestCredits.set(key,credit-whole);if(whole>0)client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:whole});else if(toolName==="Sword")client.send("resourceReward",{id,kind:isWood?"wood":"stone",amount:0,tiny:true});}this.broadcastEntityHealth("resource",id,r);if(r.hp<=0){r.hp=0;r.alive=false;this.broadcastEntityHealth("resource",id,r);this.resourceRespawns.set(id,rand(12,22));}}
@@ -3450,6 +3464,10 @@ export class WorldRoom extends Room {
       const owner=this.state.players.get(p.ownerId);
       if(!owner)continue;
       if(p.bredChild)this.convertLoneOrphanToNormal(id,p);
+      // A sleeping pet wakes as soon as its owner actually leaves it behind.
+      // Follow pets are never allowed to remain asleep/unresponsive while the owner travels.
+      const wakeRange=petFollowRangeFor(p);
+      if(p.sleeping&&(owner.moving||Math.hypot(owner.moveX||0,owner.moveY||0)>.05||dist(p.x,p.y,owner.x,owner.y)>wakeRange.stop))p.sleeping=false;
 
       if(owner.ridingPetId!==id&&!p.sleeping){
         this.moveCreatureSwept(p,Math.max(7,(Number(p.speed)||60)*.10),dt);
@@ -3639,7 +3657,7 @@ export class WorldRoom extends Room {
           fs.roamA=(Number(p.angle)||0)+rand(-.62,.62);
           fs.roamT=rand(.35,.95);
         }
-        if(ownerDistance>followRange.sprint+1050)fs.farT=(Number(fs.farT)||0)+dt;
+        if(ownerDistance>followRange.dash+1050)fs.farT=(Number(fs.farT)||0)+dt;
         else fs.farT=Math.max(0,(Number(fs.farT)||0)-dt*2.5);
 
         if(fs.returning){
@@ -3647,16 +3665,16 @@ export class WorldRoom extends Room {
           const returnOffset=followRange.stop+Math.max(12,(p.r||18)*.35),returnA=ownerHeading+Math.PI+(fs.returnSide||1)*.58;
           const returnPoint=this.safePetFollowPoint(p,followX+Math.cos(returnA)*returnOffset,followY+Math.sin(returnA)*returnOffset);
           const returnDist=dist(p.x,p.y,returnPoint.x,returnPoint.y),targetAngle=angTo(p.x,p.y,returnPoint.x,returnPoint.y);
-          const turnRate=ownerDistance>=followRange.sprint?6.4:ownerDistance>=followRange.run?5.8:4.8;
+          const turnRate=ownerDistance>=followRange.dash?7.2:ownerDistance>=followRange.run?5.9:4.9;
           smoothTurn(p,targetAngle,dt,turnRate);
 
-          let followSpeed=Math.max(24,Number(p.speed)||60)*.92; // walk
-          if(ownerDistance>=followRange.sprint){
-            followSpeed=Math.max((Number(p.speed)||60)*2.30,ownerMoveSpeed*1.45+28); // sprint
+          let followSpeed=Math.max((Number(p.speed)||60)*1.04,ownerMoveSpeed*.92+8); // walk back
+          if(ownerDistance>=followRange.dash){
+            followSpeed=Math.max((Number(p.speed)||60)*2.85,ownerMoveSpeed*1.80+42); // dash
           }else if(ownerDistance>=followRange.run){
-            followSpeed=Math.max((Number(p.speed)||60)*1.62,ownerMoveSpeed*1.12+12); // run
+            followSpeed=Math.max((Number(p.speed)||60)*1.72,ownerMoveSpeed*1.18+16); // run
           }else if(!ownerMoving){
-            followSpeed=Math.max(34,(Number(p.speed)||60)*.78);
+            followSpeed=Math.max(34,(Number(p.speed)||60)*.86);
           }
 
           const sx=p.x,sy=p.y;
@@ -3682,7 +3700,7 @@ export class WorldRoom extends Room {
           // Recovery guard: if a Follow pet somehow remains extremely far away
           // for two seconds, restore it behind the owner even if collision code
           // failed to classify the pet as physically stuck.
-          if((ownerDistance>followRange.run+220&&fs.stuckT>.55)||ownerDistance>followRange.sprint+700||fs.farT>1.15){
+          if((ownerDistance>followRange.run+220&&fs.stuckT>.55)||ownerDistance>followRange.dash+700||fs.farT>1.15){
             const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
             const backA=ml>.05?Math.atan2(owner.moveY||0,owner.moveX||0):(owner.angle||0);
             const rescue=this.safePetFollowPoint(p,
@@ -3728,17 +3746,24 @@ export class WorldRoom extends Room {
           }
 
           smoothTurn(p,fs.roamA,dt,roamRatio>.78?2.85:2.15);
-          const roamSpeed=Math.max(18,(Number(p.speed)||60)*.40);
+          const roamSpeed=Math.max(22,(Number(p.speed)||60)*.46);
           const rx=p.x,ry=p.y;
           this.moveCreatureSwept(p,roamSpeed,dt);
 
-          // A blocked pet turns around the obstacle immediately instead of
-          // waiting in place for its next random steering update.
-          if(dist(rx,ry,p.x,p.y)<Math.max(.16,roamSpeed*dt*.20)){
-            fs.roamA=(Number(p.angle)||0)+fs.avoidSide*rand(.72,1.12);
-            fs.roamT=rand(.18,.46);
+          // A blocked close-by pet must never sit there creeping in place.
+          const roamMoved=dist(rx,ry,p.x,p.y);
+          if(roamMoved<Math.max(.16,roamSpeed*dt*.20)){
+            fs.roamStuckT=(Number(fs.roamStuckT)||0)+dt;
+            fs.roamA=(Number(p.angle)||0)+fs.avoidSide*rand(.82,1.30);
+            fs.roamT=rand(.12,.34);
             fs.avoidSide*=-1;
-          }
+            const ax=p.x,ay=p.y;this.moveCreatureSwept(p,roamSpeed*.92,dt);
+            if(fs.roamStuckT>.85&&dist(ax,ay,p.x,p.y)<.12){
+              const rescueA=rand(0,TAU),rescueD=clamp(followRange.stop+rand(18,58),followRange.stop,followRange.start*.86);
+              const rescue=this.safePetFollowPoint(p,followX+Math.cos(rescueA)*rescueD,followY+Math.sin(rescueA)*rescueD);
+              p.x=rescue.x;p.y=rescue.y;fs.roamStuckT=0;
+            }
+          }else fs.roamStuckT=Math.max(0,(Number(fs.roamStuckT)||0)-dt*3);
           }
         }
       }
@@ -3746,7 +3771,10 @@ export class WorldRoom extends Room {
       p.x=clamp(p.x,20,WORLD_W-20);
       p.y=clamp(p.y,20,WORLD_H-20);
       this.resolveStatic(p,p.r*.72);
-      if(!p.sleeping&&!p.dead&&dist(_petAlwaysX,_petAlwaysY,p.x,p.y)<.10){this.moveCreatureSwept(p,Math.max(18,(Number(p.speed)||60)*.28),dt);this.resolveStatic(p,p.r*.72);}
+      if(!p.sleeping&&!p.dead&&dist(_petAlwaysX,_petAlwaysY,p.x,p.y)<.10){
+        const ownerD=dist(p.x,p.y,owner.x,owner.y),a=ownerD>petFollowRangeFor(p).stop?angTo(p.x,p.y,owner.x,owner.y):(Number(p.angle)||0)+.92;
+        p.angle=a;this.moveCreatureSwept(p,Math.max(22,(Number(p.speed)||60)*.38),dt);this.resolveStatic(p,p.r*.72);
+      }
     }
 
     for(const[id,left]of this.petDeathTimers){
@@ -4000,7 +4028,7 @@ export class WorldRoom extends Room {
   onJoin(client,options={}){
     const populationKey=`${this.roomId||"world"}:${client.sessionId}`;
     this.populationKeys.set(client.sessionId,populationKey);ACTIVE_CUBE_PLAYER_KEYS.add(populationKey);
-    const s=this.safeSpawn(),p=new PlayerState();this.playerCombatReadyAt.set(client.sessionId,Infinity);p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.hydration=100;p.bucketWater=true;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
+    const s=this.safeSpawn(),p=new PlayerState();this.playerCombatReadyAt.set(client.sessionId,Infinity);p.id=client.sessionId;p.username=String(options.username||"Cube").slice(0,14);p.x=s.x;p.y=s.y;p.angle=0;p.health=100;p.maxHealth=100;p.hydration=100;p.bucketWater=true;p.bucketSips=BUCKET_MAX_SIPS;p.color=typeof options.color==="string"?options.color:"#3fa7ff";p.tool="Fist";
     let verifiedAccount=null;try{verifiedAccount=HOSTL_ACCOUNT_HOOKS.resolveSession(String(options.accountToken||""));}catch(_){verifiedAccount=null;}
     if(verifiedAccount?.userId){this.playerAccountIds.set(client.sessionId,String(verifiedAccount.userId));this.playerAccountEntitlements.set(client.sessionId,verifiedAccount);if(verifiedAccount.username)p.username=String(verifiedAccount.username).slice(0,14);p.title=String(verifiedAccount.title||"").slice(0,32);p.testerRank=Math.max(0,Math.floor(Number(verifiedAccount.testerRank)||0));p.ownerRank=Math.max(0,Math.floor(Number(verifiedAccount.ownerRank)||0));try{HOSTL_ACCOUNT_HOOKS.onPresenceJoin(String(verifiedAccount.userId),`${this.roomId||"world"}:${client.sessionId}`,this.worldId);}catch(_){}}
     let upgrades={};if(verifiedAccount?.userId)upgrades=(verifiedAccount.petStatUpgrades&&typeof verifiedAccount.petStatUpgrades==="object")?verifiedAccount.petStatUpgrades:{};else try{const parsed=JSON.parse(String(options.petStatUpgrades||"{}"));if(parsed&&typeof parsed==="object")upgrades=parsed;}catch(_){}

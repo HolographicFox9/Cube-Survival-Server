@@ -6204,7 +6204,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 24000, WORLD_H = 24000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "617";
+const CUBE_SHARED_RULES_VERSION = "618";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -10552,7 +10552,9 @@ function syncNetworkFullWorld(force = false) {
     const serverGold = Number(own.gold);
     if (Number.isFinite(serverGold)) applyServerGoldSnapshot(serverGold);
     if(Number.isFinite(Number(own.hydration)))player.hydration=clamp(Number(own.hydration),0,100);
-    player.bucketWater=!!own.bucketWater;updateHydrationHud();
+    if(Number.isFinite(Number(own.bucketSips)))player.bucketSips=clamp(Math.floor(Number(own.bucketSips)),0,BUCKET_MAX_SIPS);
+    else if(own.bucketWater&&!(player.bucketSips>0))player.bucketSips=BUCKET_MAX_SIPS;
+    player.bucketWater=(player.bucketSips||0)>0||!!own.bucketWater;updateHydrationHud();
     const schemaSkillLevel=Math.max(0,Math.floor(Number(own.skillLevel)||0));
     const schemaSkillXp=Math.max(0,Number(own.skillXp)||0);
     const schemaSkillSpeed=Math.max(0,Math.floor(Number(own.skillSpeed)||0));
@@ -10953,7 +10955,9 @@ async function connectMultiplayer(options={}) {
     });
     room.onMessage("waterResult", data=>{
       if(Number.isFinite(Number(data?.hydration)))player.hydration=clamp(Number(data.hydration),0,100);
-      if(typeof data?.bucketWater==="boolean")player.bucketWater=data.bucketWater;updateHydrationHud();syncHotbar();
+      if(Number.isFinite(Number(data?.bucketSips)))player.bucketSips=clamp(Math.floor(Number(data.bucketSips)),0,BUCKET_MAX_SIPS);
+      if(typeof data?.bucketWater==="boolean")player.bucketWater=data.bucketWater;else player.bucketWater=(player.bucketSips||0)>0;
+      updateHydrationHud();syncHotbar();syncMobilePrimaryButton();
       if(data?.message)banner(String(data.message),data.ok===false);
     });
     room.onMessage("resourceReward", applyNetworkHarvestReward);
@@ -11600,9 +11604,9 @@ const mobileCraftBtn = document.getElementById("mCraft");
 function syncMobilePrimaryButton() {
   if (!mobileAttackBtn) return;
   const special = player?.heldSpecial || "";
-  const label = special === "Bucket" ? (player.bucketWater?"DRINK":"FILL") : special === "Berry" ? "EAT" : (special === "Wall" || special === "Tower") ? "PLACE" : special === "Saddle" ? "USE" : "ATK";
+  const label = special === "Bucket" ? ((player.bucketSips||0)>0?`DRINK ${player.bucketSips}`:"FILL") : special === "Berry" ? "EAT" : (special === "Wall" || special === "Tower") ? "PLACE" : special === "Saddle" ? "USE" : "ATK";
   mobileAttackBtn.textContent = label;
-  const actionText = special === "Bucket" ? (player.bucketWater?"Drink water":"Fill bucket at water") : special === "Berry" ? "Eat berry" : (special === "Wall" || special === "Tower") ? "Place item" : special === "Saddle" ? "Tap a pet to ride" : "Attack";
+  const actionText = special === "Bucket" ? ((player.bucketSips||0)>0?`Drink water — ${player.bucketSips} sips left`:"Fill bucket at water") : special === "Berry" ? "Eat berry" : (special === "Wall" || special === "Tower") ? "Place item" : special === "Saddle" ? "Tap a pet to ride" : "Attack";
   mobileAttackBtn.setAttribute("aria-label", actionText);
   mobileAttackBtn.title = actionText;
 }
@@ -15493,9 +15497,15 @@ function petFollowRangeFor(p){
   const clingPad=(p?.type==="wolf"||p?.type==="boar")?14:6;
   const stop=clamp(PLAYER_R+bodyR*.70+22*stageFreedom+clingPad,54,170);
   const roamBand=clamp((22+moveSpeed*.50)*stageFreedom,20,205);
-  const start=stop+roamBand,run=start+clamp((70+moveSpeed*.46)*Math.sqrt(stageFreedom),82,245),sprint=run+clamp((105+moveSpeed*.60)*Math.sqrt(stageFreedom),120,330);
-  return{stop,start,run,sprint,wanderMax:start};
+  const start=stop+roamBand;
+  const run=start+clamp((72+moveSpeed*.48)*Math.sqrt(stageFreedom),84,250);
+  const dash=run+clamp((110+moveSpeed*.64)*Math.sqrt(stageFreedom),125,345);
+  return{stop,start,run,dash,sprint:dash,wanderMax:start};
 }
+
+const HYDRATION_NORMAL_SPEED_AT = 35;
+const BUCKET_MAX_SIPS = 5;
+const BUCKET_SIP_HYDRATION = 14;
 
 const player = {
   x: WORLD_W / 2 + 145, y: WORLD_H / 2, angle: 0,
@@ -15503,7 +15513,7 @@ const player = {
   shellHealth: 0, shellMaxHealth: 0,
   wood: 0, stone: 0, gold: 0, berries: 0,
   biomeMaterials: {},
-  hydration: 100, bucketWater: true,
+  hydration: 100, bucketWater: true, bucketSips: BUCKET_MAX_SIPS,
   tool: "Fist", lastWeaponTool: "Fist", heldSpecial: null, owned: { Fist: true, Axe: false, Pickaxe: false, Sword: false, Bow: false },
   attackCd: 0, shootCd: 0, punchTimer: 0, punchSide: 1, swingWeapon: "Fist",
   hurtFlash: 0, dead: false, splitT: 0,
@@ -16468,9 +16478,10 @@ function initWorld() {
       spawnWildAnimalCluster(false, null, type, biome);
     }
   }
-  for (let i = 0; i < 6; i++) spawnWildAnimalCluster(false);
-  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "superboss");
-  for (let i = 0; i < 2; i++) spawnWildAnimalCluster(false, "bigmomma");
+  // Slightly fuller wildlife population, all created before Play can finish loading.
+  for (let i = 0; i < 10; i++) spawnWildAnimalCluster(false);
+  for (let i = 0; i < 4; i++) spawnWildAnimalCluster(false, "superboss");
+  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "bigmomma");
   rebuildStaticCollisionGrid();
   rebuildStaticSpawnCandidateCache();
   if (!cleanWorldTemplate) captureCleanWorldTemplate();
@@ -19905,6 +19916,8 @@ function updateAnimals(dt) {
   for (const p of player.pets) {
     if (p.dead) continue;
     const _petAlwaysX=p.x,_petAlwaysY=p.y;
+    const wakeRange=petFollowRangeFor(p);
+    if(p.sleeping&&(movementInputActive()||dist(p.x,p.y,player.x,player.y)>wakeRange.stop))p.sleeping=false;
     if(!p.sleeping&&player.riding!==p){
       // Awake pets are never allowed to become motionless because an AI branch
       // is retargeting, biting, or switching follow states.
@@ -20097,7 +20110,7 @@ function updateAnimals(dt) {
         p._roamHeading = (Number(p.angle) || 0) + rand(-0.62, 0.62);
         p._roamTurnT = rand(0.35, 0.95);
       }
-      if(ownerDistance>followRange.sprint+1050)p._followFarT=(Number(p._followFarT)||0)+dt;
+      if(ownerDistance>followRange.dash+1050)p._followFarT=(Number(p._followFarT)||0)+dt;
       else p._followFarT=Math.max(0,(Number(p._followFarT)||0)-dt*2.5);
 
       if (p.followReturning) {
@@ -20106,16 +20119,16 @@ function updateAnimals(dt) {
         const returnOffset=followRange.stop+Math.max(12,(p.r||18)*.35),returnA=ownerHeading+Math.PI+p._returnSide*.58;
         const returnPoint=safePetFollowPoint(p,player.x+Math.cos(returnA)*returnOffset,player.y+Math.sin(returnA)*returnOffset);
         const targetAngle = angTo(p.x, p.y, returnPoint.x, returnPoint.y);
-        const turnRate = ownerDistance >= followRange.sprint ? 6.4 : ownerDistance >= followRange.run ? 5.8 : 4.8;
+        const turnRate = ownerDistance >= followRange.dash ? 7.2 : ownerDistance >= followRange.run ? 5.9 : 4.9;
         smoothTurn(p, targetAngle, dt, turnRate);
 
-        let followSpeed = Math.max(24, Number(p.speed) || 60) * 0.92; // walk
-        if (ownerDistance >= followRange.sprint) {
-          followSpeed = Math.max((Number(p.speed) || 60) * 2.30, ownerMoveSpeed * 1.45 + 28); // sprint
+        let followSpeed = Math.max((Number(p.speed) || 60) * 1.04, ownerMoveSpeed * 0.92 + 8); // walk back
+        if (ownerDistance >= followRange.dash) {
+          followSpeed = Math.max((Number(p.speed) || 60) * 2.85, ownerMoveSpeed * 1.80 + 42); // dash
         } else if (ownerDistance >= followRange.run) {
-          followSpeed = Math.max((Number(p.speed) || 60) * 1.62, ownerMoveSpeed * 1.12 + 12); // run
+          followSpeed = Math.max((Number(p.speed) || 60) * 1.72, ownerMoveSpeed * 1.18 + 16); // run
         } else if (!ownerMoving) {
-          followSpeed = Math.max(34, (Number(p.speed) || 60) * 0.78);
+          followSpeed = Math.max(34, (Number(p.speed) || 60) * 0.86);
         }
 
         const moveStartX = p.x, moveStartY = p.y;
@@ -20150,7 +20163,7 @@ function updateAnimals(dt) {
 
         // If a Follow pet stays extremely far away for two seconds, recover it
         // even if the collision system did not classify the pet as stuck.
-        if ((ownerDistance > followRange.run + 220 && (Number(p._followStuckT) || 0) > 0.55) || ownerDistance > followRange.sprint + 700 || (Number(p._followFarT)||0) > 1.15) {
+        if ((ownerDistance > followRange.run + 220 && (Number(p._followStuckT) || 0) > 0.55) || ownerDistance > followRange.dash + 700 || (Number(p._followFarT)||0) > 1.15) {
           const backA = ownerMoveSpeed > 2.5 ? Math.atan2(ownerMoveVY, ownerMoveVX) : (player.angle || 0);
           const rescue = safePetFollowPoint(p,
             player.x - Math.cos(backA) * (followRange.stop + 18),
@@ -20210,22 +20223,29 @@ function updateAnimals(dt) {
 
         const roamTurnRate = roamRatio > 0.78 ? 2.85 : 2.15;
         smoothTurn(p, p._roamHeading, dt, roamTurnRate);
-        const roamSpeed = Math.max(18, (Number(p.speed) || 60) * 0.40);
+        const roamSpeed = Math.max(22, (Number(p.speed) || 60) * 0.46);
         const roamStartX = p.x, roamStartY = p.y;
         moveOwnedPetSwept(p, roamSpeed, dt);
 
-        // If a rock/tree blocks the current path, immediately bend around it
-        // rather than standing still waiting for the next roam decision.
+        // A close pet keeps moving. If blocked, change path immediately; if the
+        // same spot still traps it, recover to a clear wandering point around the player.
         const roamMoved = dist(roamStartX, roamStartY, p.x, p.y);
         if (roamMoved < Math.max(0.16, roamSpeed * dt * 0.20)) {
+          p._roamStuckT=(Number(p._roamStuckT)||0)+dt;
           if (!Number.isFinite(p._followAvoidSide)) {
             const key = String(p.id || p.netId || p.type || "pet");
             p._followAvoidSide = (key.length & 1) ? 1 : -1;
           }
-          p._roamHeading = (Number(p.angle) || 0) + p._followAvoidSide * rand(0.72, 1.12);
-          p._roamTurnT = rand(0.18, 0.46);
+          p._roamHeading = (Number(p.angle) || 0) + p._followAvoidSide * rand(0.82, 1.30);
+          p._roamTurnT = rand(0.12, 0.34);
           p._followAvoidSide *= -1;
-        }
+          const sx=p.x,sy=p.y;moveOwnedPetSwept(p,roamSpeed*.92,dt);
+          if(p._roamStuckT>.85&&dist(sx,sy,p.x,p.y)<.12){
+            const rescueA=rand(0,TAU),rescueD=clamp(followRange.stop+rand(18,58),followRange.stop,followRange.start*.86);
+            const rescue=safePetFollowPoint(p,player.x+Math.cos(rescueA)*rescueD,player.y+Math.sin(rescueA)*rescueD);
+            p.x=rescue.x;p.y=rescue.y;p._roamStuckT=0;
+          }
+        } else p._roamStuckT=Math.max(0,(Number(p._roamStuckT)||0)-dt*3);
         }
       }
 
@@ -20236,7 +20256,9 @@ function updateAnimals(dt) {
     p.y = clamp(p.y, 20, WORLD_H - 20);
     resolveAnimalWorld(p);
     if(!p.sleeping&&!p.dead&&dist(_petAlwaysX,_petAlwaysY,p.x,p.y)<.10){
-      moveOwnedPetSwept(p,Math.max(18,(Number(p.speed)||60)*.28),dt);resolveAnimalWorld(p);
+      const ownerD=dist(p.x,p.y,player.x,player.y);
+      p.angle=ownerD>petFollowRangeFor(p).stop?angTo(p.x,p.y,player.x,player.y):(Number(p.angle)||0)+.92;
+      moveOwnedPetSwept(p,Math.max(22,(Number(p.speed)||60)*.38),dt);resolveAnimalWorld(p);
     }
   }
   // Remove defeated pets immediately and rebuild the cards so no dead-pet card lingers.
@@ -20741,8 +20763,9 @@ window.getCubeResetCoreInfo = () => ({
 // ---------- hydration ----------
 function hydrationMoveMul(value=player.hydration){
   const h=clamp(Number(value)||0,0,100);
-  if(h>=35)return 1;
-  return .60 + (h/35)*.40;
+  // Once hydration is back at the safe line, the dehydration speed penalty is gone immediately.
+  if(h>=HYDRATION_NORMAL_SPEED_AT)return 1;
+  return .60 + (h/HYDRATION_NORMAL_SPEED_AT)*.40;
 }
 function consumeHydration(amount){
   const loss=Math.max(0,Number(amount)||0);
@@ -20761,7 +20784,7 @@ function applyMovementHydration(dt,moveMul=1){
 }
 function updateHydrationHud(){
   const h=clamp(Number(player.hydration)||0,0,100),fill=el("hydrationFill"),txt=el("hydrationText"),hud=el("hydrationHud");
-  if(fill)fill.style.width=h.toFixed(1)+"%";if(txt)txt.textContent=Math.round(h)+"%";if(hud)hud.classList.toggle("low",h<35);
+  if(fill)fill.style.width=h.toFixed(1)+"%";if(txt)txt.textContent=Math.round(h)+"%";if(hud)hud.classList.toggle("low",h<HYDRATION_NORMAL_SPEED_AT);
 }
 function nearestPond(maxExtra=78){
   let best=null,bestD=Infinity;
@@ -20770,15 +20793,24 @@ function nearestPond(maxExtra=78){
 }
 function selectBucket(){
   if(TOOLS[player.tool]&&player.owned[player.tool])player.lastWeaponTool=player.tool;player.heldSpecial="Bucket";
-  banner(player.bucketWater?"Bucket full — click to drink":"Empty bucket — stand by water and click to fill");syncHotbar();syncMobilePrimaryButton();
+  const sips=clamp(Math.floor(Number(player.bucketSips)||0),0,BUCKET_MAX_SIPS);
+  banner(sips>0?`Bucket — ${sips} sip${sips===1?"":"s"} left`:"Empty bucket — stand by water and click to fill");syncHotbar();syncMobilePrimaryButton();
 }
 function useBucket(){
   if(player.attackCd>0)return;player.attackCd=.28;
-  const action=player.bucketWater?"drink":"fill";
+  const sips=clamp(Math.floor(Number(player.bucketSips)||0),0,BUCKET_MAX_SIPS);
+  player.bucketWater=sips>0;
+  const action=sips>0?"drink":"fill";
   if(net.room){try{net.room.send("waterAction",{action});}catch(_){}return;}
-  if(action==="drink"){player.hydration=Math.min(100,(Number(player.hydration)||0)+70);player.bucketWater=false;banner("Water drunk — hydrated");}
-  else{const pond=nearestPond();if(!pond){banner("Move closer to a pond or river to fill the bucket",true);return;}player.bucketWater=true;banner("Bucket filled with water");}
-  updateHydrationHud();syncHotbar();
+  if(action==="drink"){
+    player.bucketSips=Math.max(0,sips-1);player.bucketWater=player.bucketSips>0;
+    player.hydration=Math.min(100,(Number(player.hydration)||0)+BUCKET_SIP_HYDRATION);
+    banner(player.bucketSips>0?`Sip taken — ${player.bucketSips} sip${player.bucketSips===1?"":"s"} left`:"Last sip — bucket empty");
+  }else{
+    const pond=nearestPond();if(!pond){banner("Move closer to a pond or river to fill the bucket",true);return;}
+    player.bucketSips=BUCKET_MAX_SIPS;player.bucketWater=true;banner("Bucket filled — 5 sips");
+  }
+  updateHydrationHud();syncHotbar();syncMobilePrimaryButton();
 }
 
 // ---------- player update ----------
@@ -21015,7 +21047,7 @@ function getHotbarItems() {
     let entry=null;
     if (label === "Fist" || ["Axe","Pickaxe","Sword","Bow"].includes(label)) {
       if (label === "Fist" || player.owned[label]) entry={tool:label,label};
-    } else if (label === "Bucket") entry={tool:null,label:"Bucket",special:"Bucket",qty:player.bucketWater?"FULL":""};
+    } else if (label === "Bucket") { const sips=clamp(Math.floor(Number(player.bucketSips)||0),0,BUCKET_MAX_SIPS); entry={tool:null,label:"Bucket",special:"Bucket",qty:sips>0?sips:""}; }
     else if (label === "Saddle" && player.hasSaddle) entry={tool:null,label:"Saddle",special:"Saddle"};
     else if (label === "Berry") entry={tool:null,label:"Berry",special:"Berry",qty:player.berries||0};
     else if (label === "Wall" && player.owned.Wall) entry={tool:null,label:"Wall"};
@@ -21056,7 +21088,7 @@ function buildHotbar() {
       div.title = "Empty — craft items to fill";
     } else {
       div.innerHTML = `<span class="key">${item.key}</span>${iconSvg(item.label)}${item.qty != null ? `<span class="qty">${item.qty}</span>` : ""}`;
-      div.title = item.label === "Bucket" ? (player.bucketWater?"Bucket (full) — select it, then click to drink":"Bucket (empty) — fill it at water") : item.label === "Berry" ? `Berry ×${player.berries || 0} — select it, then click to eat` : (item.tool ? toolDisplayName(item.tool) : item.label);
+      div.title = item.label === "Bucket" ? ((player.bucketSips||0)>0?`Bucket — ${player.bucketSips} sip${player.bucketSips===1?"":"s"} left`:"Bucket (empty) — fill it at water") : item.label === "Berry" ? `Berry ×${player.berries || 0} — select it, then click to eat` : (item.tool ? toolDisplayName(item.tool) : item.label);
       div.addEventListener("click", () => handleHotkey(item.key));
     }
     bar.appendChild(div);
@@ -21087,8 +21119,9 @@ function syncHotbar() {
     s.classList.toggle("active", (isTool && item.tool === player.tool && !player.heldSpecial) || bucketActive || berryActive || wallActive || saddleActive || towerActive);
     s.classList.toggle("locked", false);
     if (item.special === "Bucket") {
-      const q=s.querySelector(".qty");if(q)q.textContent=player.bucketWater?"FULL":"";
-      s.title=player.bucketWater?"Bucket (full) — click to drink":"Bucket (empty) — fill it at water";
+      const sips=clamp(Math.floor(Number(player.bucketSips)||0),0,BUCKET_MAX_SIPS);player.bucketWater=sips>0;
+      const q=s.querySelector(".qty");if(q)q.textContent=sips>0?String(sips):"";
+      s.title=sips>0?`Bucket — ${sips} sip${sips===1?"":"s"} left`:"Bucket (empty) — fill it at water";
     } else if (item.special === "Berry") {
       const q = s.querySelector(".qty");
       if (q) q.textContent = player.berries || 0;
@@ -22542,14 +22575,26 @@ function drawBiomeVectorAnimal(a){
   ctx.lineJoin="round";ctx.lineCap="round";
   // Tail/body/head are independent silhouettes, matching the existing animal construction language.
   if(a.type==="scorpion"){
-    ctx.strokeStyle=outline;ctx.lineWidth=r*.34;ctx.beginPath();ctx.moveTo(-r*.55,0);ctx.bezierCurveTo(-r*1.0,-r*.55,-r*1.15,-r*.75,-r*.7,-r*.9);ctx.stroke();
-    ctx.strokeStyle=dark;ctx.lineWidth=r*.23;ctx.stroke();ctx.fillStyle=dark;circ(-r*.67,-r*.91,r*.14*(.8+grown*.35));
+    // Scorpion tail is drawn after the body so it stays visibly on top.
   } else if(a.type==="anaconda"){
     ctx.strokeStyle=outline;ctx.lineWidth=r*.74;ctx.beginPath();ctx.moveTo(-r*1.25,0);ctx.bezierCurveTo(-r*.65,r*.45,r*.05,-r*.42,r*.7,0);ctx.stroke();ctx.strokeStyle=col;ctx.lineWidth=r*.58;ctx.stroke();
   } else {
     ctx.strokeStyle=outline;ctx.lineWidth=Math.max(2.1,r*.10);ctx.fillStyle=dark;
     const tailLen=(a.type==="fennec"||a.type==="arcticfox"||a.type==="hyena"||a.type==="caracal"||a.type==="cougar"||a.type==="jaguar")?1.1:.62;
     ctx.beginPath();ctx.moveTo(-r*.55,-r*.08);ctx.quadraticCurveTo(-r*(.75+tailLen*.35),Math.sin(phase)*r*.20,-r*(.55+tailLen),Math.sin(phase)*r*.26);ctx.quadraticCurveTo(-r*(.66+tailLen*.55),Math.sin(phase)*r*.10,-r*.5,r*.15);ctx.closePath();ctx.fill();ctx.stroke();
+  }
+  // Scorpion is the creepy-crawler exception to HOSTL's normal legless animal style.
+  // Eight short legs sit under the body. Each has two joints and alternates while walking.
+  if(a.type==="scorpion"){
+    const legSwing=moving?Math.sin(phase)*.22:0;
+    for(const side of[-1,1]){
+      for(let i=0;i<4;i++){
+        const rootX=-r*.42+i*r*.25,alt=(i%2?1:-1)*side,walk=legSwing*alt;
+        const rootY=side*r*.30,midX=rootX-r*(.10+walk*.10),midY=side*r*(.60+walk*.22),endX=rootX+r*(.08-walk*.13),endY=side*r*(.91-walk*.18);
+        ctx.strokeStyle=outline;ctx.lineWidth=Math.max(2,r*.105);ctx.beginPath();ctx.moveTo(rootX,rootY);ctx.lineTo(midX,midY);ctx.lineTo(endX,endY);ctx.stroke();
+        ctx.strokeStyle=dark;ctx.lineWidth=Math.max(1.2,r*.055);ctx.beginPath();ctx.moveTo(rootX,rootY);ctx.lineTo(midX,midY);ctx.lineTo(endX,endY);ctx.stroke();
+      }
+    }
   }
   // body — species-specific silhouette rather than one recolored ellipse.
   ctx.fillStyle=col;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.8,r*.075);
@@ -22570,8 +22615,25 @@ function drawBiomeVectorAnimal(a){
       ctx.globalAlpha=1;
     }
   }
-  // HOSTL animals use the same legless body language as the user's original
-  // Forest animals. Do not draw separate legs/feet on these newer biome animals.
+  // All newer mammals and birds keep HOSTL's legless body language.
+  // Scorpions alone use articulated crawler legs.
+  if(a.type==="scorpion"){
+    const tailWave=moving?Math.sin(phase*.82)*r*.08:0;
+    // Three-jointed tail layered on top of the body.
+    const t0={x:-r*.48,y:-r*.05},t1={x:-r*.82,y:-r*(.34+grown*.05)+tailWave},t2={x:-r*.92,y:-r*(.72+grown*.10)+tailWave*.55},t3={x:-r*.55,y:-r*(1.00+grown*.12)};
+    ctx.strokeStyle=outline;ctx.lineWidth=r*.30;ctx.beginPath();ctx.moveTo(t0.x,t0.y);ctx.lineTo(t1.x,t1.y);ctx.lineTo(t2.x,t2.y);ctx.lineTo(t3.x,t3.y);ctx.stroke();
+    ctx.strokeStyle=dark;ctx.lineWidth=r*.19;ctx.beginPath();ctx.moveTo(t0.x,t0.y);ctx.lineTo(t1.x,t1.y);ctx.lineTo(t2.x,t2.y);ctx.lineTo(t3.x,t3.y);ctx.stroke();
+    for(const t of[t1,t2]){ctx.fillStyle=col;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.4,r*.055);ctx.beginPath();ctx.arc(t.x,t.y,r*.14,0,TAU);ctx.fill();ctx.stroke();}
+    ctx.fillStyle=dark;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.4,r*.055);ctx.beginPath();ctx.moveTo(t3.x-r*.13,t3.y-r*.05);ctx.lineTo(t3.x+r*.18,t3.y);ctx.lineTo(t3.x-r*.05,t3.y+r*.18);ctx.closePath();ctx.fill();ctx.stroke();
+    // Two-jointed front arms ending in proper pincers.
+    for(const side of[-1,1]){
+      const sy=side*r*.34,mx=r*.62,my=side*r*.58,cx=r*.95,cy=side*r*.64;
+      ctx.strokeStyle=outline;ctx.lineWidth=r*.16;ctx.beginPath();ctx.moveTo(r*.35,sy);ctx.lineTo(mx,my);ctx.lineTo(cx,cy);ctx.stroke();
+      ctx.strokeStyle=col;ctx.lineWidth=r*.10;ctx.beginPath();ctx.moveTo(r*.35,sy);ctx.lineTo(mx,my);ctx.lineTo(cx,cy);ctx.stroke();
+      ctx.fillStyle=dark;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.3,r*.05);ctx.beginPath();ctx.ellipse(cx+r*.11,cy,r*.25,r*.15,side*.10,0,TAU);ctx.fill();ctx.stroke();
+      ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(cx+r*.18,cy);ctx.lineTo(cx+r*.43,cy-side*r*.13);ctx.lineTo(cx+r*.34,cy);ctx.lineTo(cx+r*.43,cy+side*r*.13);ctx.closePath();ctx.fill();ctx.stroke();
+    }
+  }
   // wings for birds
   if(["eagle","snowyowl","toucan"].includes(a.type))for(const side of[-1,1]){ctx.fillStyle=dark;ctx.strokeStyle=outline;ctx.beginPath();ctx.moveTo(-r*.22,side*r*.12);ctx.quadraticCurveTo(-r*.55,side*r*(.8+grown*.20),r*.2,side*r*.62);ctx.quadraticCurveTo(r*.35,side*r*.3,r*.15,side*r*.08);ctx.closePath();ctx.fill();ctx.stroke();}
   // camel hump / musk ox fur
@@ -22598,7 +22660,6 @@ function drawBiomeVectorAnimal(a){
   // markings develop with age
   if(a.type==="jaguar"||a.type==="hyena"){ctx.fillStyle="#2e2721";const n=4+Math.round(grown*5);for(let i=0;i<n;i++){const xx=-r*.45+(i%4)*r*.28,yy=(i%2?1:-1)*r*(.15+.12*(i%3));circ(xx,yy,r*(.06+grown*.01));}}
   if(a.type==="polarbear"||a.type==="arcticfox"||a.type==="snowyowl"){ctx.strokeStyle="rgba(91,134,155,.6)";ctx.lineWidth=1.5+grown;ctx.beginPath();ctx.arc(hx-r*.03,-r*.15,r*.16,.2,2.4);ctx.stroke();}
-  if(a.type==="scorpion"){ctx.fillStyle=dark;for(const side of[-1,1]){ctx.beginPath();ctx.ellipse(hx+r*.24,side*r*.34,r*.28,r*.16,side*.25,0,TAU);ctx.fill();ctx.stroke();}}
   // shared existing eye language
   eye(hx+r*.04,-r*.14);eye(hx+r*.04,r*.14);
   if(a.type!=="toucan"){ctx.fillStyle="#1c1a18";circ(hx+headR*.72,0,r*.065);}
@@ -25292,7 +25353,7 @@ function resetGame(options = {}) {
   net.goldFloor = Math.max(0, Number(player.gold) || 0);
   player.berries = meta.ownedStarters.berries10 ? 10 : 0;
   player.biomeMaterials = {};
-  player.hydration = 100; player.bucketWater = true; updateHydrationHud();
+  player.hydration = 100; player.bucketWater = true; player.bucketSips = BUCKET_MAX_SIPS; updateHydrationHud();
   player.tool = "Fist";
   player.lastWeaponTool = "Fist";
   player.heldSpecial = null;
