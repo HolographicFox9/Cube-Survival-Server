@@ -11122,6 +11122,13 @@ async function connectMultiplayer(options={}) {
       }
     }
     sendNetworkProfile();
+    // Play may have started while this quiet Home connection was still in flight.
+    // In that case the room joins as a preview player by default, so promote it to
+    // an active gameplay player immediately without showing Home or interrupting play.
+    if (game.started && !game.over) {
+      try { room.send("playerReady", {}); } catch (_) {}
+      syncNetworkFullWorld(true);
+    }
     setTimeout(() => { if (net.room) syncNetworkFullWorld(true); }, 120);
     setTimeout(ensureNetworkStarterPet, 240);
     setTimeout(ensureNetworkStarterPet, 900);
@@ -26440,10 +26447,12 @@ el("playBtn").addEventListener("click", async () => {
   if ((game.started && !game.over) || playStartInProgress) return;
   playStartInProgress = true;
   updatePlayAvailability();
-  // Never reopen the full-screen boot loader for Play. The requested flow is:
-  // Play -> button says Loading... -> Home disappears -> gameplay.
+  // Play is intentionally simple: the button owns the tiny loading moment, then
+  // the already-built Home world becomes the playable world. Multiplayer is NOT
+  // allowed to cancel Play; if it is still connecting, it finishes in background.
   hideLoadingScreen();
   await waitOneFrame();
+
   try {
     closeCardInventory();closeStarterShop();closeChooseStarterPet();closePlayerDesign();closeHomeThemes();
     el("petShopOverlay").classList.remove("show");
@@ -26452,39 +26461,62 @@ el("playBtn").addEventListener("click", async () => {
     try{localStorage.setItem("cubeMobileControls",mobileMode?"on":"off");}catch(_){}
     document.getElementById("mobileControls").classList.toggle("on",mobileMode);syncMobilePrimaryButton();document.body.classList.toggle("mobile-performance",mobileMode);if(!mobileMode)resetMobilePointers();
 
-    if(net.enabled){
-      if(!net.room){const connected=await ensureMultiplayerReadyForPlay();if(!connected||!net.room)throw new Error("Could not join selected HOSTL world");}
-      const ownReady = await waitForOwnOnlinePlayer(4500);
-      if(!ownReady) throw new Error("Multiplayer player state was not ready");
+    // If Home already has a live multiplayer room, enter that exact live world.
+    // Otherwise use the prepared deterministic Home world immediately. There is
+    // no connection wait, timeout, or online-player-ready gate in the Play path.
+    if (net.room) {
       syncNetworkFullWorld(true);
-      await waitOneFrame();
       resetGame({firstEntry:true,preserveLiveWorld:true,instantLiveEntry:true});
-    }else{
-      // The Home island is already built; resetGame restores that prepared world.
+    } else {
       resetGame({firstEntry:true,preserveLiveWorld:false,instantLiveEntry:false});
-      await waitOneFrame();
     }
 
-    // Do this only after resetGame succeeds. From here on, Home is hard-hidden by
-    // both inline state and body.hostl-game-active CSS, so account/theme refreshes
-    // cannot place the Home screen back over an active run.
+    // This is the actual start switch: place/reset the player, hide Home, show HUD.
     enterGameplayUi();
-    if(net.room){try{net.room.send("playerReady",{});}catch(_){}setNetStatus("Online • shared world • PvP","good");setTimeout(ensureNetworkStarterPet,0);}
+
+    if (net.room) {
+      try { net.room.send("playerReady",{}); } catch (_) {}
+      setNetStatus("Online • shared world • PvP","good");
+      setTimeout(ensureNetworkStarterPet,0);
+    } else if (net.enabled && !net.connecting) {
+      // Start first; connect second. A slow/offline server can no longer send the
+      // player back to Home after they pressed Play.
+      setTimeout(() => {
+        if (game.started && !game.over && net.enabled && !net.room && !net.connecting) {
+          connectMultiplayer({silent:true}).catch(()=>{});
+        }
+      }, 0);
+    }
+
     Promise.resolve(refreshAccountEntitlementsForRun()).catch(()=>{});
     await waitOneFrame();
-    // Reassert after one paint in case a same-frame Home refresh finished late.
+    // Keep Home hard-hidden if a same-frame account/theme refresh completed late.
     enterGameplayUi();
-  }catch(err){
-    console.warn("HOSTL Play join failed",err);
-    game.started=false;
-    game.over=false;
-    document.body.classList.remove("hostl-game-active");
-    const home=document.getElementById("home");if(home){home.style.display="flex";home.style.visibility="visible";home.style.pointerEvents="auto";}
-    const hud=document.getElementById("hud");if(hud)hud.style.display="none";
-    setHomeControlsEnabled(true);
-    hideLoadingScreen();
-    if(net.enabled)setNetStatus("Could not join • press Play to retry","bad");else banner("World could not finish loading. Press Play to retry.",true);
-  }finally{
+  } catch (err) {
+    // A multiplayer problem must never undo Play. This catch is only for a real
+    // local start/reset error; even then, make one direct fallback attempt so the
+    // player is not dumped back to a dead Play button loop.
+    console.warn("HOSTL local Play start needed fallback", err);
+    try {
+      player.x = Number.isFinite(player.x) ? player.x : WORLD_W / 2 + 145;
+      player.y = Number.isFinite(player.y) ? player.y : WORLD_H / 2;
+      player.health = Math.max(1, Number(player.health) || 100);
+      player.maxHealth = Math.max(player.health, Number(player.maxHealth) || 100);
+      player.dead = false;
+      game.over = false;
+      enterGameplayUi();
+      if (net.room) { try { net.room.send("playerReady",{}); } catch (_) {} }
+    } catch (fallbackErr) {
+      console.error("HOSTL Play start failed", fallbackErr);
+      game.started=false;
+      game.over=false;
+      document.body.classList.remove("hostl-game-active");
+      const home=document.getElementById("home");if(home){home.style.display="flex";home.style.visibility="visible";home.style.pointerEvents="auto";}
+      const hud=document.getElementById("hud");if(hud)hud.style.display="none";
+      setHomeControlsEnabled(true);
+      banner("The game could not start. Reload HOSTL and try again.",true);
+    }
+  } finally {
     playStartInProgress=false;
     if(!game.started) updatePlayAvailability();
   }
