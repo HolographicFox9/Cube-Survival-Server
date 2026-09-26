@@ -865,6 +865,24 @@
     min-width:190px !important;
     background:linear-gradient(180deg,#f3cf72,#d79b3f 62%,#b87328) !important;
   }
+  #playBtn.play-loading{
+    display:inline-flex !important;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    cursor:wait;
+  }
+  #playBtn.play-loading::after{
+    content:"";
+    width:15px;
+    height:15px;
+    border-radius:50%;
+    border:3px solid rgba(63,43,20,.25);
+    border-top-color:#3f2b14;
+    animation:hostlPlaySpin .68s linear infinite;
+    box-sizing:border-box;
+  }
+  @keyframes hostlPlaySpin{to{transform:rotate(360deg);}}
 
   .home-shop-launcher{
     justify-content:center;
@@ -6186,7 +6204,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 18000, WORLD_H = 18000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "615";
+const CUBE_SHARED_RULES_VERSION = "616";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -11401,7 +11419,6 @@ function drawRemotePlayer(v) {
   roundRect(-16, -16, 32, 32, 7);
   ctx.fill();
   ctx.stroke();
-  if(swimming){ctx.strokeStyle="rgba(222,251,255,.72)";ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(-13,11);ctx.quadraticCurveTo(-5,8,2,11);ctx.quadraticCurveTo(8,14,14,11);ctx.stroke();}
 
   // Full eyes, including the white highlights that the old multiplayer
   // renderer was missing.
@@ -15368,12 +15385,22 @@ function chooseWildType(biomeId = null) {
   return best[randi(0, best.length - 1)] || species[0] || WILD_SPECIES[0];
 }
 function isHotDryBiome(id){ return String(id||"").startsWith("desert"); }
+function pondShapeFactor(r,theta){
+  const seed=Number(r?.rot)||0;
+  const f=1
+    +Math.sin(theta*3+seed*1.73)*.085
+    +Math.sin(theta*5-seed*.91+1.2)*.052
+    +Math.sin(theta*7+seed*2.27-.8)*.026;
+  return clamp(f,.82,1.18);
+}
 function waterNearPoint(r,x,y,extra=78){
   if(!r||(r.type!=="pond"&&r.type!=="river"))return false;
   const ang=-(Number(r.rot)||0),ca=Math.cos(ang),sa=Math.sin(ang),dx=x-r.x,dy=y-r.y;
   const lx=dx*ca-dy*sa,ly=dx*sa+dy*ca,rx=Math.max(1,Number(r.solidR)||90),ry=Math.max(1,Number(r.canopyR)||rx*.72);
   const edgePad=Math.max(0,Number(extra)||0)/Math.max(20,Math.min(rx,ry));
-  return Math.hypot(lx/rx,ly/ry)<=1+edgePad;
+  const nx=lx/rx,ny=ly/ry,n=Math.hypot(nx,ny);
+  if(r.type==="pond")return n<=pondShapeFactor(r,Math.atan2(ny,nx))+edgePad;
+  return n<=1+edgePad;
 }
 // Water bodies get an additional broad-footprint reservation during generation.
 // This is intentionally stricter than ordinary scenery placement: two ponds/rivers
@@ -15402,7 +15429,8 @@ function waterDepthScaleAt(x,y){
     if(!r||!r.alive||r.type!=="pond")continue;
     const ang=-(Number(r.rot)||0),ca=Math.cos(ang),sa=Math.sin(ang),dx=x-r.x,dy=y-r.y;
     const lx=dx*ca-dy*sa,ly=dx*sa+dy*ca,rx=Math.max(1,Number(r.solidR)||90),ry=Math.max(1,Number(r.canopyR)||rx*.72);
-    const n=Math.hypot(lx/rx,ly/ry);
+    const nx=lx/rx,ny=ly/ry,boundary=pondShapeFactor(r,Math.atan2(ny,nx));
+    const n=Math.hypot(nx,ny)/Math.max(.01,boundary);
     if(n<1){const depth=1-clamp(n,0,1);scale=Math.min(scale,.95-depth*.07);}
   }
   return scale;
@@ -21850,6 +21878,17 @@ function resourceBiomeStyle(r){
   };
 }
 
+function traceNaturalPondLocal(r,rx,ry,mulX=1,mulY=1){
+  const steps=48;
+  ctx.beginPath();
+  for(let i=0;i<steps;i++){
+    const a=i/steps*TAU,f=pondShapeFactor(r,a);
+    const x=Math.cos(a)*rx*mulX*f,y=Math.sin(a)*ry*mulY*f;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+}
+
 function drawResource(r) {
   const pulse = 1 + (r.pulse > 0 ? r.pulse * 0.15 : 0);
   const sc = (r.scale || 1) * pulse;
@@ -21860,13 +21899,17 @@ function drawResource(r) {
     const isRiver=r.type==="river";
     const rx=Math.max(isRiver?240:52,Number(r.solidR)||90), ry=Math.max(isRiver?40:38,Number(r.canopyR)||rx*.72);
     ctx.rotate(r.rot||0);
-    // Filled shelves only: the ground slopes down toward the water with no outline stroke.
+    // Ponds use an irregular shoreline rather than perfect ellipses. Rivers keep
+    // their long soft shape so connected segments still read as flowing water.
     const rain=worldBiomeAt(r.x,r.y)==="rainforest";
-    ctx.fillStyle=rain?"#355c3b":"#6e8053";ctx.beginPath();ctx.ellipse(0,0,rx*(isRiver?1.05:1.24),ry*(isRiver?1.34:1.28),0,0,TAU);ctx.fill();
-    ctx.fillStyle=rain?"#426a45":"#788a5b";ctx.beginPath();ctx.ellipse(0,0,rx*(isRiver?1.025:1.13),ry*(isRiver?1.17:1.14),0,0,TAU);ctx.fill();
-    ctx.fillStyle=isRiver?"#3d99b7":"#43a2be";ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);ctx.fill();
-    ctx.globalAlpha=.21;ctx.fillStyle="#dff8ff";ctx.beginPath();ctx.ellipse(-rx*.20,-ry*.20,rx*(isRiver?.33:.40),ry*(isRiver?.24:.18),-.08,0,TAU);ctx.fill();
-    ctx.globalAlpha=.14;ctx.fillStyle="#1f7897";ctx.beginPath();ctx.ellipse(rx*.20,ry*.18,rx*(isRiver?.24:.30),ry*(isRiver?.20:.14),.1,0,TAU);ctx.fill();ctx.globalAlpha=1;
+    ctx.fillStyle=rain?"#355c3b":"#6e8053";
+    if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx*1.05,ry*1.34,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1.24,1.28);ctx.fill();
+    ctx.fillStyle=rain?"#426a45":"#788a5b";
+    if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx*1.025,ry*1.17,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1.13,1.14);ctx.fill();
+    ctx.fillStyle=isRiver?"#3d99b7":"#43a2be";
+    if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1,1);ctx.fill();
+    ctx.globalAlpha=.18;ctx.fillStyle="#e9fbff";ctx.beginPath();ctx.ellipse(-rx*.20,-ry*.20,rx*(isRiver?.33:.34),ry*(isRiver?.24:.14),-.08,0,TAU);ctx.fill();
+    ctx.globalAlpha=.10;ctx.fillStyle="#1f7897";ctx.beginPath();ctx.ellipse(rx*.20,ry*.18,rx*(isRiver?.24:.25),ry*(isRiver?.20:.11),.1,0,TAU);ctx.fill();ctx.globalAlpha=1;
     if(!isRiver){ctx.fillStyle="#609c58";for(const [lx,ly,lr] of [[-.52,-.18,.08],[.40,.20,.07],[.12,-.34,.055]]){ctx.beginPath();ctx.arc(rx*lx,ry*ly,rx*lr,0,TAU);ctx.fill();}}
   } else if (BIOME_RESOURCE_INFO[r.type]) {
     const info=BIOME_RESOURCE_INFO[r.type],ink="#1b1d19";ctx.rotate(r.rot||0);ctx.lineWidth=3;ctx.strokeStyle=ink;
@@ -23638,7 +23681,7 @@ function drawAnimal(a) {
   const swimmingVisual = !!(a && !a.dead && pointInsideWater(a.x,a.y));
   let swimBaseY=null;
   if(swimmingVisual){
-    ctx.save();ctx.translate(a.x,a.y);drawSwimRippleLocal(Math.max(18,(Number(a.r)||18)*.72),game.time*5.8+(Number(a.tailPhase)||0));ctx.restore();
+    ctx.save();ctx.translate(a.x,a.y);drawSwimRippleLocal(Math.max(22,(Number(a.r)||18)*1.05),game.time*5.8+(Number(a.tailPhase)||0));ctx.restore();
     swimBaseY=a.y;a.y+=Math.sin(game.time*5.8+(Number(a.tailPhase)||0))*Math.min(2.2,Math.max(1,(Number(a.r)||18)*.055));
   }
   try {
@@ -23746,21 +23789,35 @@ function drawHeldSaddle(color) {
 
 function drawSwimRippleLocal(radius=23, phase=0){
   ctx.save();
-  ctx.globalAlpha=.88;
-  ctx.strokeStyle="rgba(220,250,255,.82)";ctx.lineWidth=2.1;ctx.lineCap="round";
-  ctx.beginPath();ctx.ellipse(0,3,radius+Math.sin(phase)*2,10,0,.18,Math.PI-.18);ctx.stroke();
-  ctx.globalAlpha=.48;ctx.strokeStyle="rgba(48,126,153,.9)";ctx.lineWidth=1.6;
-  ctx.beginPath();ctx.ellipse(0,5,radius+7+Math.cos(phase*.8)*2,13,0,Math.PI+.15,TAU-.15);ctx.stroke();
+  ctx.lineCap="round";
+  const pulse=(Math.sin(phase)+1)*.5;
+  ctx.globalAlpha=.34;ctx.strokeStyle="rgba(235,253,255,.95)";ctx.lineWidth=1.7;
+  ctx.beginPath();ctx.arc(0,2,radius+1+pulse*2.5,0,TAU);ctx.stroke();
+  ctx.globalAlpha=.17;ctx.lineWidth=1.25;
+  ctx.beginPath();ctx.arc(0,2,radius+8+(1-pulse)*3,0,TAU);ctx.stroke();
   ctx.restore();
 }
 function drawSwimArms(color,phase){
+  // One complete swimming stroke: reach forward -> sweep outward/back beside the
+  // cube -> recover toward the front/down -> repeat. Both arms mirror each other.
+  const t=((phase/TAU)%1+1)%1;
+  const sampleStroke=(u,side)=>{
+    const keys=[
+      [0.00,20,5],[0.18,31,10],[0.44,12,27],[0.62,-3,22],[0.82,8,13],[1.00,20,5]
+    ];
+    let a=keys[0],b=keys[keys.length-1];
+    for(let i=0;i<keys.length-1;i++)if(u>=keys[i][0]&&u<=keys[i+1][0]){a=keys[i];b=keys[i+1];break;}
+    const q=(u-a[0])/Math.max(.0001,b[0]-a[0]);
+    const e=q*q*(3-2*q);
+    return{x:a[1]+(b[1]-a[1])*e,y:side*(a[2]+(b[2]-a[2])*e)};
+  };
   const strokeArm=(side)=>{
-    const wave=Math.sin(phase+side*1.45), baseY=10*side;
-    const tipX=17+Math.abs(wave)*7, tipY=side*(17-wave*9);
-    ctx.lineCap="round";
-    ctx.strokeStyle="#191817";ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(7,baseY);ctx.lineTo(tipX,tipY);ctx.stroke();
-    ctx.strokeStyle=color;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(7,baseY);ctx.lineTo(tipX,tipY);ctx.stroke();
-    ctx.fillStyle="#191817";circ(tipX,tipY,5.6);ctx.fillStyle=color;circ(tipX,tipY,4.1);
+    const anchorX=7,anchorY=side*9,tip=sampleStroke(t,side);
+    const elbowX=(anchorX+tip.x)*.52+5,elbowY=(anchorY+tip.y)*.52+side*3;
+    ctx.lineCap="round";ctx.lineJoin="round";
+    ctx.strokeStyle="#191817";ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(anchorX,anchorY);ctx.quadraticCurveTo(elbowX,elbowY,tip.x,tip.y);ctx.stroke();
+    ctx.strokeStyle=color;ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(anchorX,anchorY);ctx.quadraticCurveTo(elbowX,elbowY,tip.x,tip.y);ctx.stroke();
+    ctx.fillStyle="#191817";circ(tip.x,tip.y,5.6);ctx.fillStyle=color;circ(tip.x,tip.y,4.1);
   };
   strokeArm(-1);strokeArm(1);
 }
@@ -23876,7 +23933,6 @@ function drawPlayer() {
   ctx.fillStyle = p.hurtFlash > 0 ? "rgba(255,210,198,.30)" : shadeColor(p.color, 34);
   ctx.globalAlpha = 0.34; roundRect(-11, -11, 15, 4.5, 2.2); ctx.fill(); ctx.globalAlpha = 1;
 
-  if(swimming){ctx.strokeStyle="rgba(222,251,255,.72)";ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(-13,11);ctx.quadraticCurveTo(-5,8,2,11);ctx.quadraticCurveTo(8,14,14,11);ctx.stroke();}
   ctx.fillStyle = "#12202b";
   circ(9, -6, 3.6); circ(9, 6, 3.6);
   ctx.fillStyle = "#fff";
@@ -24893,87 +24949,23 @@ function authoritativeResourcesForRender() {
   return out;
 }
 
-const MINIMAP_DISCOVERY_CELLS = 70;
-const MINIMAP_REVEAL_WORLD_RADIUS = 1200;
-let minimapDiscovery = null;
-let minimapDiscoveryWorld = "";
-let minimapDiscoveryDirty = false;
-let minimapDiscoveryLastSave = 0;
-
-function minimapDiscoveryStorageKey(){
-  return `hostlMinimapDiscovery:v1:${selectedWorldId}:${WORLD_W}x${WORLD_H}`;
-}
-function ensureMinimapDiscovery(){
-  const worldKey=minimapDiscoveryStorageKey();
-  if(minimapDiscovery && minimapDiscoveryWorld===worldKey)return;
-  minimapDiscoveryWorld=worldKey;
-  minimapDiscovery=new Uint8Array(MINIMAP_DISCOVERY_CELLS*MINIMAP_DISCOVERY_CELLS);
-  minimapDiscoveryDirty=false;
-  try{
-    const saved=localStorage.getItem(worldKey)||"";
-    if(saved.length===minimapDiscovery.length){
-      for(let i=0;i<saved.length;i++)minimapDiscovery[i]=saved.charCodeAt(i)===49?1:0;
-    }
-  }catch(_){}
-}
-function saveMinimapDiscovery(force=false){
-  if(!minimapDiscovery||!minimapDiscoveryDirty)return;
-  const now=performance.now();
-  if(!force&&now-minimapDiscoveryLastSave<1800)return;
-  minimapDiscoveryLastSave=now;
-  try{
-    let out="";
-    for(let i=0;i<minimapDiscovery.length;i++)out+=minimapDiscovery[i]?"1":"0";
-    localStorage.setItem(minimapDiscoveryWorld,out);
-    minimapDiscoveryDirty=false;
-  }catch(_){}
-}
-function revealMinimapAround(x,y,radius=MINIMAP_REVEAL_WORLD_RADIUS){
-  ensureMinimapDiscovery();
-  if(!Number.isFinite(x)||!Number.isFinite(y))return;
-  const cells=MINIMAP_DISCOVERY_CELLS,cw=WORLD_W/cells,ch=WORLD_H/cells;
-  const gx=Math.floor(x/cw),gy=Math.floor(y/ch),rx=Math.ceil(radius/cw)+1,ry=Math.ceil(radius/ch)+1;
-  for(let yy=Math.max(0,gy-ry);yy<=Math.min(cells-1,gy+ry);yy++){
-    for(let xx=Math.max(0,gx-rx);xx<=Math.min(cells-1,gx+rx);xx++){
-      const cx=(xx+.5)*cw,cy=(yy+.5)*ch;
-      if(Math.hypot(cx-x,cy-y)>radius+Math.hypot(cw,ch)*.55)continue;
-      const idx=yy*cells+xx;
-      if(!minimapDiscovery[idx]){minimapDiscovery[idx]=1;minimapDiscoveryDirty=true;}
-    }
-  }
-  saveMinimapDiscovery(false);
-}
-function minimapWorldExplored(x,y){
-  ensureMinimapDiscovery();
-  if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>=WORLD_W||y>=WORLD_H)return false;
-  const cells=MINIMAP_DISCOVERY_CELLS,gx=Math.max(0,Math.min(cells-1,Math.floor(x/WORLD_W*cells))),gy=Math.max(0,Math.min(cells-1,Math.floor(y/WORLD_H*cells)));
-  return !!minimapDiscovery[gy*cells+gx];
-}
-
 let lastMinimapDrawAt = 0;
 function drawMinimap() {
   const s = 140 / Math.max(WORLD_W, WORLD_H);
-  ensureMinimapDiscovery();
-  revealMinimapAround(player.x,player.y,MINIMAP_REVEAL_WORLD_RADIUS);
-
-  // Fog-of-war: only terrain the player has actually reached is drawn.
-  // This is intentionally world-sized so future distant islands / ocean routes
-  // can remain completely unknown until a player travels there.
+  // Show the actual biome lands on the minimap.
   const mmGround={forest:"#668a52",rainforest:"#285f3b",ocean:"#2f83a7"};
-  const cells=MINIMAP_DISCOVERY_CELLS,cs=140/cells;
-  mmCtx.fillStyle="#07100f";mmCtx.fillRect(0,0,140,140);
+  const cells=70,cs=140/cells;
   for(let gy=0;gy<cells;gy++)for(let gx=0;gx<cells;gx++){
-    if(!minimapDiscovery[gy*cells+gx])continue;
     const wx=(gx+.5)/cells*WORLD_W,wy=(gy+.5)/cells*WORLD_H,b=biomeBaseId(worldBiomeAt(wx,wy));
     mmCtx.fillStyle=mmGround[b]||mmGround.forest;mmCtx.fillRect(gx*cs,gy*cs,cs+.5,cs+.5);
   }
   mmCtx.font="bold 7px sans-serif";mmCtx.textAlign="center";mmCtx.textBaseline="middle";
-  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z||!minimapWorldExplored(z.cx,z.cy))continue;mmCtx.fillStyle="rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),z.cx*s,z.cy*s);}
+  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z)continue;mmCtx.fillStyle="rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),z.cx*s,z.cy*s);}
 
   // Giant center gold monument.
   mmCtx.fillStyle = "#f2c94c";
   for (const g of goldChunks) {
-    if (!g.pure || !minimapWorldExplored(g.x,g.y)) continue;
+    if (!g.pure) continue;
     const sz = 10;
     mmCtx.fillRect(g.x * s - sz / 2, g.y * s - sz / 2, sz, sz);
   }
@@ -24982,7 +24974,7 @@ function drawMinimap() {
   // Large amber diamonds make these rare roaming encounters easy to hunt down.
   mmCtx.fillStyle = "#ffb347";
   for (const a of animals) {
-    if (a.dead || a.owned || a.stage !== "bigmomma" || !minimapWorldExplored(a.x,a.y)) continue;
+    if (a.dead || a.owned || a.stage !== "bigmomma") continue;
     const mx = a.x * s, my = a.y * s;
     mmCtx.save();
     mmCtx.translate(mx, my);
@@ -24994,13 +24986,13 @@ function drawMinimap() {
   // Ordinary Hostls.
   mmCtx.fillStyle = "#e0563f";
   for (const en of enemies) {
-    if (en.dead || en.moonMarked || !minimapWorldExplored(en.x,en.y)) continue;
+    if (en.dead || en.moonMarked) continue;
     mmCtx.fillRect(en.x * s - 1.5, en.y * s - 1.5, 3, 3);
   }
   // Every biome Moonmark uses one large solid dot in that biome's minimap color.
   // Forest is deep green; future biomes only need to define mapColor above.
   for (const en of enemies) {
-    if (en.dead || !en.moonMarked || !minimapWorldExplored(en.x,en.y)) continue;
+    if (en.dead || !en.moonMarked) continue;
     const profile = MOONMARK_BIOMES[en.moonBiome || CURRENT_BIOME_ID] || MOONMARK_BIOMES.forest;
     mmCtx.fillStyle = profile.mapColor || profile.color || "#0b542f";
     mmCtx.beginPath();
@@ -25011,7 +25003,7 @@ function drawMinimap() {
   // Other online players. Use each cube's color with a bright outline so they are easy to spot.
   if (net.room) {
     for (const v of net.remoteVisuals.values()) {
-      if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.y) || (Number(v.health) || 0) <= 0 || !minimapWorldExplored(v.x,v.y)) continue;
+      if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.y) || (Number(v.health) || 0) <= 0) continue;
       const mx = v.x * s, my = v.y * s;
       mmCtx.fillStyle = "rgba(255,255,255,0.92)";
       mmCtx.fillRect(mx - 2.8, my - 2.8, 5.6, 5.6);
@@ -25027,7 +25019,7 @@ function drawMinimap() {
   // Pets as white dots.
   mmCtx.fillStyle = "#ffffff";
   for (const p of player.pets) {
-    if (p.dead || !minimapWorldExplored(p.x,p.y)) continue;
+    if (p.dead) continue;
     mmCtx.beginPath();
     mmCtx.arc(p.x * s, p.y * s, 1.7, 0, TAU);
     mmCtx.fill();
@@ -26406,13 +26398,20 @@ el("username").addEventListener("change", async () => {
 let playStartInProgress = false;
 function updatePlayAvailability() {
   const btn = el("playBtn");
-  if (!btn || game.started) return;
-  // PLAY MUST ALWAYS BE AVAILABLE. If Online is still connecting, clicking Play
-  // owns that wait and the button itself shows Loading… until the live room is
-  // ready. Never gate the player behind a pre-Play "Connecting world" state.
+  if (!btn) return;
+  if (game.started) {
+    btn.disabled = false;
+    btn.classList.remove("play-loading");
+    btn.textContent = "Play";
+    btn.title = "Play HOSTL";
+    return;
+  }
+  // PLAY MUST ALWAYS BE AVAILABLE. If the shared world is still finishing its
+  // starting wildlife snapshot, the button itself owns the wait and animation.
   btn.disabled = !!playStartInProgress;
-  btn.textContent = playStartInProgress ? "Loading…" : "Play";
-  btn.title = playStartInProgress ? "Joining the selected world…" : "Play HOSTL";
+  btn.classList.toggle("play-loading",!!playStartInProgress);
+  btn.textContent = playStartInProgress ? "Loading" : "Play";
+  btn.title = playStartInProgress ? "Loading the complete world and wildlife…" : "Play HOSTL";
 }
 
 async function ensureMultiplayerReadyForPlay() {
@@ -26511,6 +26510,48 @@ if(el("homeAchievementsBtn")) el("homeAchievementsBtn").addEventListener("click"
 if(el("closeAchievementOverlay")) el("closeAchievementOverlay").addEventListener("click", closeAchievementOverlay);
 if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedown", (e)=>{ if(e.target===el("achievementOverlay")) closeAchievementOverlay(); });
 
+function networkCollectionCount(collection){
+  if(!collection)return 0;
+  if(Number.isFinite(Number(collection.size)))return Number(collection.size)||0;
+  let count=0;try{collection.forEach(()=>count++);}catch(_){}return count;
+}
+async function waitForInitialNetworkAnimals(timeoutMs=8000){
+  if(!net.room)return false;
+  const until=performance.now()+Math.max(0,timeoutMs);
+  while(net.room&&performance.now()<until){
+    const state=net.room.state;
+    const liveRaw=Number(state?.wildlifeCount),initialRaw=Number(state?.initialAnimalCount);
+    const expected=Math.max(0,Math.floor(Number.isFinite(liveRaw)?liveRaw:(Number.isFinite(initialRaw)?initialRaw:0)));
+    const ready=state?.worldReady===true;
+    const received=networkCollectionCount(state?.animals);
+    if(ready&&received>=expected){syncNetworkFullWorld(true);return true;}
+    await new Promise(resolve=>setTimeout(resolve,35));
+  }
+  return false;
+}
+async function prepareAllAnimalsBeforePlay(){
+  // Offline/Home generation is synchronous, but explicitly rebuild if anything
+  // cleared the prepared wildlife template before Play.
+  if(!cleanWorldTemplate||!Array.isArray(cleanWorldTemplate.animals)||cleanWorldTemplate.animals.length===0){
+    cleanWorldTemplate=null;initWorld();
+  }
+  // Give an already-running quiet multiplayer connection a short chance to finish
+  // joining. We never trap Play on a dead server: the complete local world is the fallback.
+  if(net.enabled&&!net.room&&net.connecting){
+    const until=performance.now()+2600;
+    while(net.connecting&&!net.room&&performance.now()<until)await new Promise(resolve=>setTimeout(resolve,35));
+  }
+  if(net.room){
+    const full=await waitForInitialNetworkAnimals(8000);
+    if(full)return true;
+    // Never enter a half-replicated shared wildlife set. Fall back to the complete
+    // deterministic world and let multiplayer reconnect cleanly later.
+    disconnectMultiplayer();
+  }
+  restoreCleanWorldTemplate();
+  return false;
+}
+
 function enterGameplayUi() {
   // Play uses the button itself as the loading indicator. Once the world is ready,
   // switch directly from Home to gameplay in one state change—no second loading page.
@@ -26547,10 +26588,11 @@ el("playBtn").addEventListener("click", async () => {
     try{localStorage.setItem("cubeMobileControls",mobileMode?"on":"off");}catch(_){}
     document.getElementById("mobileControls").classList.toggle("on",mobileMode);syncMobilePrimaryButton();document.body.classList.toggle("mobile-performance",mobileMode);if(!mobileMode)resetMobilePointers();
 
-    // If Home already has a live multiplayer room, enter that exact live world.
-    // Otherwise use the prepared deterministic Home world immediately. There is
-    // no connection wait, timeout, or online-player-ready gate in the Play path.
-    if (net.room) {
+    // Do not reveal gameplay until the entire starting wildlife set is present.
+    // Online uses the server's explicit expected animal count; offline uses the
+    // fully generated Home template. The animated Play button owns this wait.
+    const onlineWorldReady = await prepareAllAnimalsBeforePlay();
+    if (net.room && onlineWorldReady) {
       syncNetworkFullWorld(true);
       resetGame({firstEntry:true,preserveLiveWorld:true,instantLiveEntry:true});
     } else {
@@ -26604,7 +26646,7 @@ el("playBtn").addEventListener("click", async () => {
     }
   } finally {
     playStartInProgress=false;
-    if(!game.started) updatePlayAvailability();
+    updatePlayAvailability();
   }
 });
 

@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "615";
+const CUBE_SHARED_RULES_VERSION = "616";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -713,12 +713,14 @@ class WorldState extends Schema {
     this.towers=new MapSchema(); this.projectiles=new MapSchema();
     this.dayPhase=0; this.phaseTimer=TIME_PHASES[0].duration; this.dayCount=1; this.wave=0; this.worldTime=0;
     this.rulesVersion=CUBE_SHARED_RULES_VERSION; this.worldId="world1";
+    this.worldReady=false; this.initialAnimalCount=0; this.wildlifeCount=0;
   }
 }
 defineTypes(WorldState, {
   players:{map:PlayerState}, resources:{map:ResourceState}, gold:{map:GoldState}, chests:{map:ChestState},
   animals:{map:AnimalState}, pets:{map:PetState}, enemies:{map:EnemyState}, walls:{map:WallState}, towers:{map:TowerState}, projectiles:{map:ProjectileState},
-  dayPhase:"number", phaseTimer:"number", dayCount:"number", wave:"number", worldTime:"number", rulesVersion:"string", worldId:"string"
+  dayPhase:"number", phaseTimer:"number", dayCount:"number", wave:"number", worldTime:"number", rulesVersion:"string", worldId:"string",
+  worldReady:"boolean", initialAnimalCount:"number", wildlifeCount:"number"
 });
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -1200,12 +1202,22 @@ function speciesHomeBiome(type){return (BIOME_PROFILES.rainforest.species||[]).i
 function randomPointInBiome(biomeId,pad=120){const base=biomeBaseId(biomeId)==="rainforest"?"rainforest":"forest",safePad=Math.max(0,Number(pad)||0),maxR=Math.max(180,ISLAND_RADIUS-safePad-70);for(let tries=0;tries<260;tries++){const a=rand(0,TAU),rr=Math.sqrt(Math.random())*maxR,x=ISLAND_CX+Math.cos(a)*rr,y=ISLAND_CY+Math.sin(a)*rr;if(worldBiomeAt(x,y)===base)return{x,y};}const zone=BIOME_ZONES[base];return{x:zone.cx,y:zone.cy};}
 function randomLandPoint(pad=120){ return randomPointInBiome(randomBiomeZoneId(),pad); }
 function isHotDryBiome(id){return String(id||"").startsWith("desert");}
+function pondShapeFactor(r,theta){
+  const seed=Number(r?.rot)||0;
+  const f=1
+    +Math.sin(theta*3+seed*1.73)*.085
+    +Math.sin(theta*5-seed*.91+1.2)*.052
+    +Math.sin(theta*7+seed*2.27-.8)*.026;
+  return clamp(f,.82,1.18);
+}
 function waterNearPoint(r,x,y,extra=78){
   if(!r||(r.type!=="pond"&&r.type!=="river"))return false;
   const ang=-(Number(r.rot)||0),ca=Math.cos(ang),sa=Math.sin(ang),dx=x-r.x,dy=y-r.y;
   const lx=dx*ca-dy*sa,ly=dx*sa+dy*ca,rx=Math.max(1,Number(r.solidR)||90),ry=Math.max(1,Number(r.canopyR)||rx*.72);
   const edgePad=Math.max(0,Number(extra)||0)/Math.max(20,Math.min(rx,ry));
-  return Math.hypot(lx/rx,ly/ry)<=1+edgePad;
+  const nx=lx/rx,ny=ly/ry,n=Math.hypot(nx,ny);
+  if(r.type==="pond")return n<=pondShapeFactor(r,Math.atan2(ny,nx))+edgePad;
+  return n<=1+edgePad;
 }
 function waterPlacementClear(resources,x,y,solidR,canopyR,gap=34){
   const candidateR=Math.max(1,Number(solidR)||90,Number(canopyR)||0);
@@ -1282,6 +1294,12 @@ export class WorldRoom extends Room {
     const originalRandom = Math.random;
     Math.random = makeSeededRandom(hashWorldSeed(`HOSTL:${this.worldId}:resources:v1`));
     try { this.generateWorld(); } finally { Math.random = originalRandom; }
+    // Explicitly publish when the complete starting wildlife set exists. The
+    // browser keeps the Play button loading until it has received this many
+    // animals, so wildlife never visibly pops in after gameplay begins.
+    this.state.initialAnimalCount = this.state.animals.size;
+    this.state.wildlifeCount = this.state.animals.size;
+    this.state.worldReady = true;
     this.rebuildDynamicGrid();
 
     // Keep combat/physics at 20 TPS, but send state patches at 10 Hz. The client
@@ -3963,6 +3981,7 @@ export class WorldRoom extends Room {
     }
     for(const[,c]of this.state.chests)c.pulse=Math.max(0,c.pulse-dt*3);
     this.updateAnimals(dt);this.updatePets(dt);this.resolveAnimalAnimalCollisions();
+    this.state.wildlifeCount=this.state.animals.size;
     this.updateEnemies(dt);this.rebuildDynamicGrid();this.applyPlayerCreaturePushes();
     this.updateWallsTowers(dt);this.updateProjectiles(dt);this.flushNetworkEvents(dt);
   }
