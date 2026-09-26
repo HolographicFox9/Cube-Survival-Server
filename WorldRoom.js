@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "619";
+const CUBE_SHARED_RULES_VERSION = "620";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1250,15 +1250,30 @@ function petKillXpForEnemy(en){if(!en)return 0;if(en.moonMarked)return MOONMARK_
 
 function petFollowRangeFor(p){
   const bodyR=Math.max(10,Number(p?.r)||18),moveSpeed=Math.max(24,Number(p?.speed)||60);
-  const stageFreedom={baby:.56,adult:1,boss:1.28,superboss:1.55,bigmomma:1.82}[p?.stage]||1;
-  const clingPad=(p?.type==="wolf"||p?.type==="boar")?14:6;
-  const stop=clamp(PLAYER_R+bodyR*.70+22*stageFreedom+clingPad,54,170);
-  const roamBand=clamp((22+moveSpeed*.50)*stageFreedom,20,205);
-  const start=stop+roamBand;
-  const run=start+clamp((72+moveSpeed*.48)*Math.sqrt(stageFreedom),84,250);
-  const dash=run+clamp((110+moveSpeed*.64)*Math.sqrt(stageFreedom),125,345);
-  return{stop,start,run,dash,sprint:dash,wanderMax:start};
+  // Personal space is based on physical size. Roaming freedom is based on speed:
+  // fast pets may wander farther, slow pets naturally stay closer.
+  const stop=clamp(PLAYER_R+bodyR*.76+16,48,150);
+  const roamBand=clamp(34+moveSpeed*.72,58,230);
+  const wanderMax=stop+roamBand;
+  const settle=stop+roamBand*.55;
+  const start=wanderMax+22;
+  const run=start+clamp(85+moveSpeed*.42,105,235);
+  const dash=run+clamp(125+moveSpeed*.55,150,320);
+  return{stop,settle,start,run,dash,sprint:dash,wanderMax};
 }
+function wildPlayerAggroRange(a){
+  if(a?.tameFailedAggro)return 330;
+  if(a?.desperateAggro)return 290;
+  if(a?.enraged){
+    if(a.stage==="bigmomma")return 360;
+    if(a.stage==="superboss")return 320;
+    if(a.stage==="boss")return 290;
+    return 260;
+  }
+  if(a&&["boss","superboss","bigmomma"].includes(a.stage))return 220;
+  return a?.type==="bear"?165:180;
+}
+function wildAggroForgetRange(a){return Math.min(430,wildPlayerAggroRange(a)+70);}
 
 
 const ACTIVE_CUBE_PLAYER_KEYS = new Set();
@@ -2931,6 +2946,11 @@ export class WorldRoom extends Room {
       if(ref&&(!target||(ref.kind==="player"?(target.dead||target.health<=0):(target.dead||target.hp<=0)))){
         this.animalAggro.delete(id);a._abilityFightKey="";ref=null;target=null;
       }
+      if(ref&&target&&dist(a.x,a.y,target.x,target.y)>wildAggroForgetRange(a)){
+        const forgotPlayer=ref.kind==="player"||ref.kind==="pet";
+        this.animalAggro.delete(id);a._abilityFightKey="";ref=null;target=null;a.combat=0;
+        if(forgotPlayer){a.tameFailedAggro=false;if(!a.desperateAggro)a.enraged=false;}
+      }
 
       // Same periodic wildlife-vs-wildlife / hostile-cube fight scan as offline.
       a.wildFightScan=(a.wildFightScan||0)-dt;
@@ -2970,7 +2990,7 @@ export class WorldRoom extends Room {
 
         // Boss-tier reset/sleep range matches offline when there is no explicit
         // attacker lock.
-        if(["boss","superboss","bigmomma"].includes(a.stage)&&a.enraged&&dPlayer>(a.stage==="bigmomma"?520:a.stage==="superboss"?420:320)){
+        if(["boss","superboss","bigmomma"].includes(a.stage)&&a.enraged&&dPlayer>wildAggroForgetRange(a)){
           a.enraged=false;a.combat=0;a.sleeping=true;a.hp=Math.min(a.maxHp,a.hp+15);
         }
 
@@ -2996,10 +3016,10 @@ export class WorldRoom extends Room {
             }else{
               const isHostile=a.enraged||(!isFriendly&&!babyAlwaysFlees)||
                 (["boss","superboss","bigmomma"].includes(a.stage)&&!skittishType&&!babyAlwaysFlees&&a.type!=="fox");
-              const aggroRange=a.tameFailedAggro?620:
-                a.desperateAggro?430:
-                a.enraged?(a.stage==="bigmomma"?520:a.stage==="superboss"?420:300):
-                (["boss","superboss","bigmomma"].includes(a.stage)?240:(a.type==="bear"?170:190));
+              const aggroRange=wildPlayerAggroRange(a),forgetRange=wildAggroForgetRange(a);
+              if(playerObj&&dPlayer>forgetRange&&(a.enraged||a.tameFailedAggro)&&!a.desperateAggro){
+                a.enraged=false;a.tameFailedAggro=false;a.combat=0;a._abilityFightKey="";
+              }
 
               const calmWanderRadius=PLAYER_R+Math.max(14,(Number(a.r)||18)*.82)+34;
               if(!isHostile&&playerObj&&dPlayer<calmWanderRadius){
@@ -3030,7 +3050,7 @@ export class WorldRoom extends Room {
                   a.wanderT=rand(.9,2.2);
                 }
                 smoothTurn(a,a.wanderA||0,dt,3.8);this.moveCreatureSwept(a,(a.speed||60)*.55,dt);
-              }else if(isHostile&&(a.tameFailedAggro||a.desperateAggro)&&playerObj){
+              }else if(isHostile&&(a.tameFailedAggro||a.desperateAggro)&&playerObj&&dPlayer<forgetRange){
                 const moveA=angTo(a.x,a.y,playerObj.x,playerObj.y);smoothTurn(a,moveA,dt,4.1);
                 this.moveCreatureSwept(a,(a.speed||60)*(a.tameFailedAggro?.92:.82),dt);
               }else{
@@ -3388,7 +3408,7 @@ export class WorldRoom extends Room {
     const fleeRef=this.animalFleeFrom.get(id),fleeObj=this.targetObject(fleeRef);
     if(a.fleeUntil&&this.state.worldTime<a.fleeUntil&&fleeObj){a._blockingResourceId="";return true;}
     const info=PET_TYPES[a.type]||{},naturalChaser=a.stage!=="baby"&&!info.friendly;
-    const chaseRange=a.tameFailedAggro?620:a.desperateAggro?430:a.enraged?(a.stage==="bigmomma"?520:a.stage==="superboss"?420:300):(["boss","superboss","bigmomma"].includes(a.stage)?240:(a.type==="bear"?170:190));
+    const chaseRange=wildPlayerAggroRange(a);
     if(naturalChaser){const near=this.nearestPlayer(a.x,a.y,chaseRange);if(near){this.animalAggro.set(id,{kind:"player",id:near.id});a.sleeping=false;a.enraged=true;a.combat=Math.max(a.combat||0,5);a._blockingResourceId="";return true;}}
     return false;
   }
@@ -3483,10 +3503,6 @@ export class WorldRoom extends Room {
       const wakeRange=petFollowRangeFor(p);
       if(p.sleeping&&(owner.moving||Math.hypot(owner.moveX||0,owner.moveY||0)>.05||dist(p.x,p.y,owner.x,owner.y)>wakeRange.stop))p.sleeping=false;
 
-      if(owner.ridingPetId!==id&&!p.sleeping){
-        this.moveCreatureSwept(p,Math.max(7,(Number(p.speed)||60)*.10),dt);
-      }
-
       if(owner.ridingPetId===id){
         p._mountedCollision=true;p.x=owner.x;p.y=owner.y;
         const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
@@ -3498,6 +3514,7 @@ export class WorldRoom extends Room {
         continue;
       }
       p._mountedCollision=false;
+      if(p.sleeping){this.resolveStatic(p,(p.r||18)*.72);continue;}
 
       let target=null;
       let targetSource="";
@@ -3637,11 +3654,7 @@ export class WorldRoom extends Room {
           p.targetX=-1;p.targetY=-1;p.orderMode="follow";
         }
       }else{
-        let followX=owner.x,followY=owner.y;
-        if(p.bredChild){
-          const family=[];for(const parentId of this.familyLeaderIds(id,p)){const parent=parentId?this.state.pets.get(parentId):null;if(parent&&!parent.dead)family.push(parent);}
-          if(family.length){followX=family.reduce((v,q)=>v+q.x,0)/family.length;followY=family.reduce((v,q)=>v+q.y,0)/family.length;}
-        }
+        const followX=owner.x,followY=owner.y;
         const ownerDistance=dist(p.x,p.y,followX,followY);
         const followRange=petFollowRangeFor(p);
         const inputMag=clamp(Math.hypot(owner.moveX||0,owner.moveY||0),0,1);
@@ -3651,144 +3664,82 @@ export class WorldRoom extends Room {
           if(mount&&!mount.dead)ownerMoveSpeed=Math.max(24,mount.speed||148)*2.30*inputMag;
         }
         if(owner.heldSpecial==="Wall")ownerMoveSpeed*=.64;
-        const ownerMoving=!!owner.moving||ownerMoveSpeed>2.5;
 
         let fs=this.petFollowState.get(id);
         if(!fs){
           let seed=7;for(const ch of String(id))seed=((seed*31)+ch.charCodeAt(0))|0;
-          fs={returning:false,roamA:Number.isFinite(p.angle)?p.angle:rand(0,TAU),roamT:rand(.35,1.05),stuckT:0,avoidSide:(Math.abs(seed)&1)?1:-1,returnSide:(Math.abs(seed>>1)&1)?1:-1};
+          fs={returning:false,roamT:0,roamX:null,roamY:null,stuckT:0,roamStuckT:0,avoidSide:(Math.abs(seed)&1)?1:-1};
           this.petFollowState.set(id,fs);
         }
 
-        // Follow means follow: while the owner is moving, a pet keeps trailing
-        // instead of dropping into free-roam and appearing to stop randomly.
-        const movingFollowTrigger=Math.max(42,followRange.stop*.78);
-        if(!fs.returning&&(ownerDistance>followRange.start||(ownerMoving&&ownerDistance>movingFollowTrigger))){
-          fs.returning=true;fs.roamT=rand(.30,.75);
+        // Distance alone controls follow. Being in motion does NOT force a nearby
+        // pet to glue itself to the player; it may keep wandering inside its leash.
+        if(!fs.returning&&ownerDistance>followRange.start)fs.returning=true;
+        if(fs.returning&&ownerDistance<=followRange.settle){
+          fs.returning=false;fs.roamT=0;fs.roamX=null;fs.roamY=null;fs.stuckT=0;
         }
-        if(fs.returning&&ownerDistance<=followRange.stop&&(!ownerMoving||ownerDistance<=followRange.stop*.48)){
-          fs.returning=false;
-          fs.roamA=(Number(p.angle)||0)+rand(-.62,.62);
-          fs.roamT=rand(.35,.95);
-        }
-        if(ownerDistance>followRange.dash+1050)fs.farT=(Number(fs.farT)||0)+dt;
-        else fs.farT=Math.max(0,(Number(fs.farT)||0)-dt*2.5);
 
         if(fs.returning){
-          const ml=Math.hypot(owner.moveX||0,owner.moveY||0),ownerHeading=ml>.05?Math.atan2(owner.moveY||0,owner.moveX||0):(owner.angle||0);
-          const returnOffset=followRange.stop+Math.max(12,(p.r||18)*.35),returnA=ownerHeading+Math.PI+(fs.returnSide||1)*.58;
-          const returnPoint=this.safePetFollowPoint(p,followX+Math.cos(returnA)*returnOffset,followY+Math.sin(returnA)*returnOffset);
-          const returnDist=dist(p.x,p.y,returnPoint.x,returnPoint.y),targetAngle=angTo(p.x,p.y,returnPoint.x,returnPoint.y);
-          const turnRate=ownerDistance>=followRange.dash?7.2:ownerDistance>=followRange.run?5.9:4.9;
-          smoothTurn(p,targetAngle,dt,turnRate);
+          // Aim for a point on the safe ring on the pet's current side of the
+          // owner. This prevents the pet from charging through the player's body.
+          let radial=ownerDistance>.001?angTo(followX,followY,p.x,p.y):(owner.angle||0)+Math.PI;
+          if(inputMag>.08&&ownerDistance>followRange.run)radial=Math.atan2(owner.moveY||0,owner.moveX||0)+Math.PI;
+          const targetR=followRange.settle;
+          const returnPoint=this.safePetFollowPoint(p,followX+Math.cos(radial)*targetR,followY+Math.sin(radial)*targetR);
+          const targetAngle=angTo(p.x,p.y,returnPoint.x,returnPoint.y);
+          smoothTurn(p,targetAngle,dt,ownerDistance>=followRange.dash?7.4:ownerDistance>=followRange.run?6.2:5.0);
 
-          let followSpeed=Math.max((Number(p.speed)||60)*1.04,ownerMoveSpeed*.92+8); // walk back
-          if(ownerDistance>=followRange.dash){
-            followSpeed=Math.max((Number(p.speed)||60)*2.85,ownerMoveSpeed*1.80+42); // dash
-          }else if(ownerDistance>=followRange.run){
-            followSpeed=Math.max((Number(p.speed)||60)*1.72,ownerMoveSpeed*1.18+16); // run
-          }else if(!ownerMoving){
-            followSpeed=Math.max(34,(Number(p.speed)||60)*.86);
-          }
+          // Too far = run back. Very far = dash. As the pet reaches the owner,
+          // ease back to a controlled walk before switching to wander mode.
+          let followSpeed=Math.max((Number(p.speed)||60)*1.16,ownerMoveSpeed*1.02+8);
+          if(ownerDistance>=followRange.dash)followSpeed=Math.max((Number(p.speed)||60)*2.75,ownerMoveSpeed*1.72+40);
+          else if(ownerDistance>=followRange.run)followSpeed=Math.max((Number(p.speed)||60)*1.72,ownerMoveSpeed*1.20+16);
+          else if(ownerDistance<followRange.settle+45)followSpeed=Math.max(24,(Number(p.speed)||60)*.72);
 
-          const sx=p.x,sy=p.y;
-          this.moveCreatureSwept(p,followSpeed,dt);
-          const moved=dist(sx,sy,p.x,p.y),expected=followSpeed*dt;
-
-          // Small obstacle slide only after real physical sticking. The target is
-          // still the owner, so this cannot turn into the old wandering formation.
-          if(ownerDistance>followRange.run&&moved<Math.max(.20,expected*.18)){
+          const sx=p.x,sy=p.y;this.moveCreatureSwept(p,followSpeed,dt);
+          const moved=dist(sx,sy,p.x,p.y),expected=Math.max(.001,followSpeed*dt);
+          if(moved<Math.max(.18,expected*.18)){
             fs.stuckT+=dt;
-            if(fs.stuckT>.42)this.petAttackStuckResource(p.ownerId,p);
-            // Keep trying to slide around the obstacle even while biting it. A
-            // resource must never freeze follow movement until it is destroyed.
-            if(fs.stuckT>.12){
-              const direct=angTo(p.x,p.y,returnPoint.x,returnPoint.y);
-              p.angle=direct+fs.avoidSide*.72;
-              const ax=p.x,ay=p.y;
-              this.moveCreatureSwept(p,followSpeed*.88,dt);
-              if(dist(ax,ay,p.x,p.y)<.18)fs.avoidSide*=-1;
+            if(fs.stuckT>.28)this.petAttackStuckResource(p.ownerId,p);
+            if(fs.stuckT>.10){
+              p.angle=targetAngle+fs.avoidSide*.72;
+              const ax=p.x,ay=p.y;this.moveCreatureSwept(p,followSpeed*.88,dt);
+              if(dist(ax,ay,p.x,p.y)<.16)fs.avoidSide*=-1;
             }
-          }else fs.stuckT=Math.max(0,fs.stuckT-dt*3);
+          }else fs.stuckT=Math.max(0,fs.stuckT-dt*3.2);
 
-          // Recovery guard: if a Follow pet somehow remains extremely far away
-          // for two seconds, restore it behind the owner even if collision code
-          // failed to classify the pet as physically stuck.
-          if((ownerDistance>followRange.run+220&&fs.stuckT>.55)||ownerDistance>followRange.dash+700||fs.farT>1.15){
-            const ml=Math.hypot(owner.moveX||0,owner.moveY||0);
-            const backA=ml>.05?Math.atan2(owner.moveY||0,owner.moveX||0):(owner.angle||0);
-            const rescue=this.safePetFollowPoint(p,
-              followX-Math.cos(backA)*(followRange.stop+18),
-              followY-Math.sin(backA)*(followRange.stop+18));
-            p.x=rescue.x;p.y=rescue.y;p.angle=angTo(p.x,p.y,followX,followY);fs.stuckT=0;fs.farT=0;p._blockingResourceId="";
+          if(ownerDistance>followRange.dash+650||fs.stuckT>1.05){
+            const rescueA=inputMag>.08?Math.atan2(owner.moveY||0,owner.moveX||0)+Math.PI:radial;
+            const rescue=this.safePetFollowPoint(p,followX+Math.cos(rescueA)*followRange.settle,followY+Math.sin(rescueA)*followRange.settle);
+            p.x=rescue.x;p.y=rescue.y;p.angle=angTo(p.x,p.y,followX,followY);fs.stuckT=0;p._blockingResourceId="";
           }
         }else{
-          const keepOut=PLAYER_R+Math.max(12,(Number(p.r)||18)*.72)+18;
-          if(ownerDistance<keepOut){
-            const away=angTo(followX,followY,p.x,p.y);
-            const side=Number.isFinite(fs.ownerOrbitSide)?fs.ownerOrbitSide:fs.avoidSide;
-            fs.ownerOrbitSide=side;fs.roamA=away+side*.58;
-            smoothTurn(p,fs.roamA,dt,3.0);
-            this.moveCreatureSwept(p,Math.max(22,(Number(p.speed)||60)*.46),dt);
-            fs.roamT=Math.max(Number(fs.roamT)||0,.28);
-          }else{
-          // Continuous natural roaming. No destination-arrival pause and no
-          // mechanical orbit point: the heading bends every so often while the
-          // owner's distance softly changes the odds of moving out or back in.
-          fs.stuckT=0;
-          if(!Number.isFinite(fs.roamA))fs.roamA=Number.isFinite(p.angle)?p.angle:rand(0,TAU);
-          if(!Number.isFinite(fs.roamT))fs.roamT=rand(.35,1.05);
-          fs.roamT-=dt;
-          const roamRatio=ownerDistance/Math.max(1,followRange.start);
-
-          if(fs.roamT<=0){
-            const toOwnerA=ownerDistance>5?angTo(p.x,p.y,followX,followY):rand(0,TAU);
-            const awayA=toOwnerA+Math.PI;
-            const roll=Math.random();
-            if(roamRatio>.78){
-              fs.roamA=toOwnerA+rand(-.72,.72);
-            }else if(roamRatio<.40&&roll<.46){
-              fs.roamA=awayA+rand(-.92,.92);
-            }else if(roll<.30){
-              fs.roamA=toOwnerA+rand(-1.05,1.05);
-            }else if(roll<.58){
-              fs.roamA=awayA+rand(-1.12,1.12);
-            }else{
-              fs.roamA=(Number(p.angle)||0)+rand(-1.18,1.18);
-            }
-            fs.roamT=rand(.65,1.85);
+          // Close pets continuously wander from point to point around the owner.
+          // Faster pets get a larger wander ring from petFollowRangeFor().
+          const tooClose=ownerDistance<followRange.stop;
+          fs.roamT=(Number(fs.roamT)||0)-dt;
+          const targetBad=!Number.isFinite(fs.roamX)||!Number.isFinite(fs.roamY)||dist(fs.roamX,fs.roamY,followX,followY)>followRange.wanderMax+24;
+          const reached=!targetBad&&dist(p.x,p.y,fs.roamX,fs.roamY)<Math.max(15,(p.r||18)*.65);
+          if(tooClose||targetBad||reached||fs.roamT<=0){
+            let a=rand(0,TAU),r=rand(followRange.stop+16,followRange.wanderMax*.94);
+            if(tooClose){a=angTo(followX,followY,p.x,p.y)+rand(-.55,.55);r=Math.max(followRange.stop+30,followRange.settle*.82);}
+            const pt=this.safePetFollowPoint(p,followX+Math.cos(a)*r,followY+Math.sin(a)*r);
+            fs.roamX=pt.x;fs.roamY=pt.y;fs.roamT=rand(.9,2.2);
           }
-
-          smoothTurn(p,fs.roamA,dt,roamRatio>.78?2.85:2.15);
-          const roamSpeed=Math.max(22,(Number(p.speed)||60)*.46);
-          const rx=p.x,ry=p.y;
-          this.moveCreatureSwept(p,roamSpeed,dt);
-
-          // A blocked close-by pet must never sit there creeping in place.
-          const roamMoved=dist(rx,ry,p.x,p.y);
-          if(roamMoved<Math.max(.16,roamSpeed*dt*.20)){
-            fs.roamStuckT=(Number(fs.roamStuckT)||0)+dt;
-            fs.roamA=(Number(p.angle)||0)+fs.avoidSide*rand(.82,1.30);
-            fs.roamT=rand(.12,.34);
-            fs.avoidSide*=-1;
-            const ax=p.x,ay=p.y;this.moveCreatureSwept(p,roamSpeed*.92,dt);
-            if(fs.roamStuckT>.85&&dist(ax,ay,p.x,p.y)<.12){
-              const rescueA=rand(0,TAU),rescueD=clamp(followRange.stop+rand(18,58),followRange.stop,followRange.start*.86);
-              const rescue=this.safePetFollowPoint(p,followX+Math.cos(rescueA)*rescueD,followY+Math.sin(rescueA)*rescueD);
-              p.x=rescue.x;p.y=rescue.y;fs.roamStuckT=0;
-            }
+          const a=angTo(p.x,p.y,fs.roamX,fs.roamY);smoothTurn(p,a,dt,2.8);
+          const roamSpeed=Math.max(20,(Number(p.speed)||60)*.42);
+          const sx=p.x,sy=p.y;this.moveCreatureSwept(p,roamSpeed,dt);
+          const moved=dist(sx,sy,p.x,p.y);
+          if(moved<Math.max(.14,roamSpeed*dt*.18)){
+            fs.roamStuckT=(Number(fs.roamStuckT)||0)+dt;fs.roamT=0;fs.avoidSide*=-1;
+            p.angle=a+fs.avoidSide*.85;this.moveCreatureSwept(p,roamSpeed*.9,dt);
+            if(fs.roamStuckT>.85){fs.roamT=0;fs.roamStuckT=0;}
           }else fs.roamStuckT=Math.max(0,(Number(fs.roamStuckT)||0)-dt*3);
-          }
         }
       }
-
       p.x=clamp(p.x,20,WORLD_W-20);
       p.y=clamp(p.y,20,WORLD_H-20);
       this.resolveStatic(p,p.r*.72);
-      if(!p.sleeping&&!p.dead&&dist(_petAlwaysX,_petAlwaysY,p.x,p.y)<.10){
-        const ownerD=dist(p.x,p.y,owner.x,owner.y),a=ownerD>petFollowRangeFor(p).stop?angTo(p.x,p.y,owner.x,owner.y):(Number(p.angle)||0)+.92;
-        p.angle=a;this.moveCreatureSwept(p,Math.max(22,(Number(p.speed)||60)*.38),dt);this.resolveStatic(p,p.r*.72);
-      }
     }
 
     for(const[id,left]of this.petDeathTimers){
