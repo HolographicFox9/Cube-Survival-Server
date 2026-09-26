@@ -12,7 +12,7 @@ const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "618";
+const CUBE_SHARED_RULES_VERSION = "619";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1869,11 +1869,25 @@ export class WorldRoom extends Room {
       const footprint=animalSpawnFootprint(type,stage);
       for(let t=0;t<(anchor?110:80);t++){let x,y;if(anchor){const aa=rand(0,TAU),anchorR=animalSpawnFootprint(anchor.type,anchor.stage),minD=Math.max(78,footprint+anchorR+18),maxD=Math.max(minD+28,Math.min(310,minD+170)),dd=rand(minD,maxD);x=anchor.x+Math.cos(aa)*dd;y=anchor.y+Math.sin(aa)*dd;const cp=islandConstrainedPoint(x,y,footprint+45);x=cp.x;y=cp.y;}else{const pos=randomPointInBiome(biomeHint,footprint+60);x=pos.x;y=pos.y;}if(!this.canPlace(x,y,footprint,0))continue;let crowded=false;for(const[,a]of this.state.animals){if(!a||a.hp<=0)continue;const gap=anchor?8:36;if(dist(x,y,a.x,a.y)<footprint+animalSpawnFootprint(a.type,a.stage)+gap){crowded=true;break;}}if(crowded)continue;const id=this.addAnimal(type,stage,x,y);return this.state.animals.get(id)||null;}return null;
     };
-    const spawnWildCluster=(forced=null,typeOverride=null,biomeOverride=null)=>{const biome=biomeOverride?biomeBaseId(biomeOverride):randomBiomeZoneId(),species=(BIOME_PROFILES[biome]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v)),type=typeOverride||randomWildSpecies(species),anchor=spawnWild(forced,type,null,biome);if(!anchor)return 0;let made=1,extras=randi(1,3);for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor,biome))made++;return made;};
-    for(const biome of BIOME_ORDER)for(const type of (BIOME_PROFILES[biome]?.species||[]))spawnWildCluster(null,type,biome);
-    // A little more wildlife, but ALL of it is part of the pre-Play world build.
-    // There is still no hidden runtime population top-up that can pop predators in later.
-    for(let i=0;i<10;i++)spawnWildCluster();for(let i=0;i<4;i++)spawnWildCluster("superboss");for(let i=0;i<3;i++)spawnWildCluster("bigmomma");
+    const STARTING_WILD_PER_SPECIES=7;
+    const STARTING_STAGE_PLAN=["baby","baby","adult","adult","adult","boss","superboss"];
+    let speciesOrdinal=0;
+    for(const biome of BIOME_ORDER){
+      for(const type of (BIOME_PROFILES[biome]?.species||[])){
+        let made=0;
+        for(let slot=0;slot<STARTING_WILD_PER_SPECIES;slot++){
+          // Keep the species counts even while preserving a few rare Big Mommas.
+          const stage=(slot===STARTING_WILD_PER_SPECIES-1&&speciesOrdinal%11===0)?"bigmomma":STARTING_STAGE_PLAN[slot%STARTING_STAGE_PLAN.length];
+          if(spawnWild(stage,type,null,biome))made++;
+        }
+        // Extremely defensive placement retry: stay even if a large animal lost a placement roll.
+        for(let retry=0;made<STARTING_WILD_PER_SPECIES&&retry<STARTING_WILD_PER_SPECIES*3;retry++){
+          const stage=STARTING_STAGE_PLAN[(made+retry)%STARTING_STAGE_PLAN.length];
+          if(spawnWild(stage,type,null,biome))made++;
+        }
+        speciesOrdinal++;
+      }
+    }
     console.log(`Island world generated: ${this.state.resources.size} resources, ${this.state.gold.size} gold, ${this.state.chests.size} chests, ${this.state.animals.size} wildlife`);
   }
 

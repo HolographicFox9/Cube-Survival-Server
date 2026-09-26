@@ -6204,7 +6204,7 @@ resize(true);
 // ---------- constants ----------
 const WORLD_W = 24000, WORLD_H = 24000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "618";
+const CUBE_SHARED_RULES_VERSION = "619";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -9019,6 +9019,7 @@ const ACHIEVEMENT_DEFS = achievementDefs();
 const ACHIEVEMENT_BY_ID = new Map(ACHIEVEMENT_DEFS.map(a=>[a.id,a]));
 let achievementToastQueue=[];
 let achievementToastBusy=false;
+const achievementToastShownKeys=new Set();
 let guestAchievementSession={};
 function achievementAccountBridge(){
   const b = window.__cubeAchievementAccount;
@@ -9032,6 +9033,14 @@ function achievementUnlocked(id){
   return !!guestAchievementSession[id];
 }
 function queueAchievementToast(def,rewardSummary){
+  if(!def)return;
+  // An achievement toast is a one-time event. Account/world reward updates later
+  // in the run (including kill rewards) must never resurrect an old survival popup.
+  const bridge=achievementAccountBridge();
+  const ownerKey=bridge?.userId||"guest";
+  const toastKey=`${ownerKey}:${String(def.id||def.name||"")}`;
+  if(achievementToastShownKeys.has(toastKey))return;
+  achievementToastShownKeys.add(toastKey);
   achievementToastQueue.push({def,rewardSummary});
   if(achievementToastBusy)return;
   const showNext=()=>{
@@ -16470,18 +16479,26 @@ function initWorld() {
   placeChests();
   walls = []; towers = []; projectiles = []; petBlasts = []; particles = []; floaters = []; enemies = []; animals = [];
   abilityFx = [];
-  // Guarantee that every planned biome species actually exists in its proper
-  // biome in every generated world. Random clusters then add variety without
-  // inflating the simulation far beyond the old wildlife budget.
+  // Build an even starting population before Play: every animal species gets the
+  // same number of starting wildlife, spread through its proper biome.
+  const STARTING_WILD_PER_SPECIES = 7;
+  const STARTING_STAGE_PLAN = ["baby","baby","adult","adult","adult","boss","superboss"];
+  let speciesOrdinal = 0;
   for (const biome of BIOME_ORDER) {
     for (const type of (BIOME_PROFILES[biome]?.species || [])) {
-      spawnWildAnimalCluster(false, null, type, biome);
+      let made = 0;
+      for (let slot = 0; slot < STARTING_WILD_PER_SPECIES; slot++) {
+        const stage = (slot === STARTING_WILD_PER_SPECIES - 1 && speciesOrdinal % 11 === 0)
+          ? "bigmomma" : STARTING_STAGE_PLAN[slot % STARTING_STAGE_PLAN.length];
+        if (spawnWildAnimal(false, stage, type, null, biome)) made++;
+      }
+      for (let retry = 0; made < STARTING_WILD_PER_SPECIES && retry < STARTING_WILD_PER_SPECIES * 3; retry++) {
+        const stage = STARTING_STAGE_PLAN[(made + retry) % STARTING_STAGE_PLAN.length];
+        if (spawnWildAnimal(false, stage, type, null, biome)) made++;
+      }
+      speciesOrdinal++;
     }
   }
-  // Slightly fuller wildlife population, all created before Play can finish loading.
-  for (let i = 0; i < 10; i++) spawnWildAnimalCluster(false);
-  for (let i = 0; i < 4; i++) spawnWildAnimalCluster(false, "superboss");
-  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "bigmomma");
   rebuildStaticCollisionGrid();
   rebuildStaticSpawnCandidateCache();
   if (!cleanWorldTemplate) captureCleanWorldTemplate();
@@ -22618,13 +22635,30 @@ function drawBiomeVectorAnimal(a){
   // All newer mammals and birds keep HOSTL's legless body language.
   // Scorpions alone use articulated crawler legs.
   if(a.type==="scorpion"){
-    const tailWave=moving?Math.sin(phase*.82)*r*.08:0;
-    // Three-jointed tail layered on top of the body.
-    const t0={x:-r*.48,y:-r*.05},t1={x:-r*.82,y:-r*(.34+grown*.05)+tailWave},t2={x:-r*.92,y:-r*(.72+grown*.10)+tailWave*.55},t3={x:-r*.55,y:-r*(1.00+grown*.12)};
-    ctx.strokeStyle=outline;ctx.lineWidth=r*.30;ctx.beginPath();ctx.moveTo(t0.x,t0.y);ctx.lineTo(t1.x,t1.y);ctx.lineTo(t2.x,t2.y);ctx.lineTo(t3.x,t3.y);ctx.stroke();
-    ctx.strokeStyle=dark;ctx.lineWidth=r*.19;ctx.beginPath();ctx.moveTo(t0.x,t0.y);ctx.lineTo(t1.x,t1.y);ctx.lineTo(t2.x,t2.y);ctx.lineTo(t3.x,t3.y);ctx.stroke();
-    for(const t of[t1,t2]){ctx.fillStyle=col;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.4,r*.055);ctx.beginPath();ctx.arc(t.x,t.y,r*.14,0,TAU);ctx.fill();ctx.stroke();}
-    ctx.fillStyle=dark;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.4,r*.055);ctx.beginPath();ctx.moveTo(t3.x-r*.13,t3.y-r*.05);ctx.lineTo(t3.x+r*.18,t3.y);ctx.lineTo(t3.x-r*.05,t3.y+r*.18);ctx.closePath();ctx.fill();ctx.stroke();
+    const tailWave=moving?Math.sin(phase*.82)*r*.065:0;
+    const stingAttack=clamp((Number(a.attackAnim)||0)*4.2,0,1);
+    // Armored, raised three-jointed tail. The joints taper as the tail curls
+    // over the body, and an attack snaps the stinger slightly forward.
+    const t0={x:-r*.48,y:-r*.04};
+    const t1={x:-r*.82,y:-r*(.30+grown*.04)+tailWave};
+    const t2={x:-r*.92,y:-r*(.67+grown*.08)+tailWave*.45};
+    const t3={x:-r*.68+r*.14*stingAttack,y:-r*(1.01+grown*.10)};
+    const tip={x:-r*.32+r*.28*stingAttack,y:-r*(1.08+grown*.10)+r*.08*stingAttack};
+    const tailPts=[t0,t1,t2,t3];
+    const tailWidths=[.30,.27,.23];
+    for(let i=0;i<3;i++){
+      const a0=tailPts[i],a1=tailPts[i+1],w=r*tailWidths[i];
+      ctx.strokeStyle=outline;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(a0.x,a0.y);ctx.quadraticCurveTo((a0.x+a1.x)*.5-r*.025,(a0.y+a1.y)*.5-r*.025,a1.x,a1.y);ctx.stroke();
+      ctx.strokeStyle=i===2?light:dark;ctx.lineWidth=w*.62;ctx.beginPath();ctx.moveTo(a0.x,a0.y);ctx.quadraticCurveTo((a0.x+a1.x)*.5-r*.025,(a0.y+a1.y)*.5-r*.025,a1.x,a1.y);ctx.stroke();
+      ctx.fillStyle=i===2?light:col;ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.2,r*.045);ctx.beginPath();ctx.ellipse(a1.x,a1.y,w*.49,w*.39,0,0,TAU);ctx.fill();ctx.stroke();
+    }
+    // Curved stinger mounted at the last joint instead of a flat triangle.
+    ctx.strokeStyle=outline;ctx.lineWidth=r*.16;ctx.beginPath();ctx.moveTo(t3.x,t3.y);ctx.quadraticCurveTo(tip.x-r*.04,tip.y-r*.18,tip.x,tip.y);ctx.stroke();
+    ctx.strokeStyle=dark;ctx.lineWidth=r*.09;ctx.stroke();
+    const stingAng=Math.atan2(tip.y-t3.y,tip.x-t3.x);
+    ctx.save();ctx.translate(tip.x,tip.y);ctx.rotate(stingAng);ctx.fillStyle="#2e241c";ctx.strokeStyle=outline;ctx.lineWidth=Math.max(1.2,r*.045);ctx.beginPath();ctx.moveTo(-r*.03,-r*.14);ctx.quadraticCurveTo(r*.34,-r*.08,r*.42,0);ctx.quadraticCurveTo(r*.26,r*.10,-r*.02,r*.12);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();
+    // Small armor highlight makes the tail read as stacked shell segments.
+    ctx.strokeStyle=light;ctx.globalAlpha=.42;ctx.lineWidth=Math.max(1,r*.03);for(const t of[t1,t2,t3]){ctx.beginPath();ctx.arc(t.x-r*.025,t.y-r*.025,r*.07,Math.PI*.95,Math.PI*1.75);ctx.stroke();}ctx.globalAlpha=1;
     // Two-jointed front arms ending in proper pincers.
     for(const side of[-1,1]){
       const sy=side*r*.34,mx=r*.62,my=side*r*.58,cx=r*.95,cy=side*r*.64;
@@ -25541,9 +25575,12 @@ let renderFrameNowMs = performance.now();
 function runResetSimulationStep(step) {
   if (!game.started) return;
   if (!player.dead && !game.over) {
+    const previousSurvivalTime=game.survivalTime;
     game.survivalTime += step;
-    if(game.survivalTime >= 300) unlockAchievement("survive_5");
-    if(game.survivalTime >= 600) unlockAchievement("survive_10");
+    // Fire survival milestones only on the frame that crosses the threshold.
+    // Do not keep asking to award them forever after five/ten minutes.
+    if(previousSurvivalTime < 300 && game.survivalTime >= 300) unlockAchievement("survive_5");
+    if(previousSurvivalTime < 600 && game.survivalTime >= 600) unlockAchievement("survive_10");
   }
 
   if (net.room) {
