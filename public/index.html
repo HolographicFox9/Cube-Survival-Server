@@ -5975,6 +5975,21 @@ function samePageMultiplayerServerUrl() {
   return "";
 }
 
+function multiplayerUrlIsLocalOnly(value) {
+  try {
+    const u = new URL(normalizeMultiplayerServerUrl(value));
+    const host = String(u.hostname || "").toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+  } catch (_) {
+    return false;
+  }
+}
+
+function pageIsLocalHost() {
+  const host = String(location.hostname || "").toLowerCase();
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+}
+
 function preferredMultiplayerServerUrl() {
   let requested = "";
   try { requested = new URLSearchParams(location.search).get("server") || ""; } catch {}
@@ -5993,8 +6008,27 @@ function preferredMultiplayerServerUrl() {
     }
   }
 
+  const selfUrl = samePageMultiplayerServerUrl();
   const saved = normalizeMultiplayerServerUrl(localStorage.getItem(CUBE_SERVER_STORAGE_KEY) || "");
-  if (saved) return saved;
+
+  // HOSTL's Render service serves both the web game and the Colyseus websocket.
+  // Older builds defaulted to localhost. Once automatic Home multiplayer was
+  // enabled, that stale/default localhost value made Play silently fail on the
+  // public site. On a real hosted page, repair only local-only saved addresses
+  // to this page's websocket host. Explicit remote server addresses are kept.
+  if (saved) {
+    if (selfUrl && !pageIsLocalHost() && multiplayerUrlIsLocalOnly(saved)) {
+      localStorage.setItem(CUBE_SERVER_STORAGE_KEY, selfUrl);
+      return selfUrl;
+    }
+    return saved;
+  }
+
+  if (selfUrl && !pageIsLocalHost()) {
+    localStorage.setItem(CUBE_SERVER_STORAGE_KEY, selfUrl);
+    return selfUrl;
+  }
+  // Local development keeps the dedicated Colyseus port used by this project.
   return "ws://localhost:2567";
 }
 
@@ -26292,8 +26326,8 @@ async function ensureMultiplayerReadyForPlay() {
   if (!net.enabled) return true;
   if (net.room) return true;
 
-  // Online connection is owned by the Play click. Nothing joins or builds the
-  // multiplayer world merely because the page/Home screen was opened.
+  // Home normally owns this connection now. If its quiet auto-connect is still
+  // finishing (or had to recover), Play waits for it and retries if needed.
   if (net.connecting) {
     const until = performance.now() + 45500;
     while (net.connecting && !net.room && performance.now() < until) {
