@@ -1164,10 +1164,10 @@ const MOONMARK_BIOMES={
 };
 // TEMP ISLAND PASS: only Forest + Rain Forest are active for now.
 // Every animal species remains available; their final biome homes can be added back later.
-const ISLAND_CX=WORLD_W*.5,ISLAND_CY=WORLD_H*.5,ISLAND_RADIUS=Math.min(WORLD_W,WORLD_H)*.45,ISLAND_SHORE_WIDTH=230;
+const ISLAND_CX=WORLD_W*.5,ISLAND_CY=WORLD_H*.5,ISLAND_RADIUS=Math.min(WORLD_W,WORLD_H)*.475,ISLAND_SHORE_WIDTH=230;
 const BIOME_ZONES={
-  forest:{id:"forest",cx:WORLD_W*.31,cy:WORLD_H*.50},
-  rainforest:{id:"rainforest",cx:WORLD_W*.69,cy:WORLD_H*.50}
+  forest:{id:"forest",cx:WORLD_W*.34,cy:WORLD_H*.50},
+  rainforest:{id:"rainforest",cx:WORLD_W*.66,cy:WORLD_H*.50}
 };
 const BIOME_ORDER=["forest","rainforest"];
 const BIOME_PROFILES={
@@ -1176,8 +1176,22 @@ const BIOME_PROFILES={
   ocean:{id:"ocean",name:"Ocean",species:[]}
 };
 function islandDistance(x,y){return Math.hypot(x-ISLAND_CX,y-ISLAND_CY);}
-function isInsideIsland(x,y,pad=0){return islandDistance(x,y)<=Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0));}
-function islandConstrainedPoint(x,y,pad=0){const maxR=Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0)),dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy);if(!Number.isFinite(d)||d<=maxR)return{x:clamp(x,0,WORLD_W),y:clamp(y,0,WORLD_H)};const q=d>0?maxR/d:0;return{x:ISLAND_CX+dx*q,y:ISLAND_CY+dy*q};}
+function islandAngleDelta(a,b){let d=(a-b)%TAU;if(d>Math.PI)d-=TAU;else if(d<-Math.PI)d+=TAU;return d;}
+function islandRadiusAtAngle(angle,pad=0){
+  const theta=Number(angle)||0;
+  let scale=1
+    +Math.sin(theta*2.15+.35)*.085
+    +Math.sin(theta*4.7-1.1)*.055
+    +Math.sin(theta*7.9+2.2)*.025;
+  scale+=Math.exp(-Math.pow(islandAngleDelta(theta,.42)/.42,2))*.11;
+  scale+=Math.exp(-Math.pow(islandAngleDelta(theta,-.78)/.48,2))*.07;
+  scale-=Math.exp(-Math.pow(islandAngleDelta(theta,2.35)/.52,2))*.13;
+  scale-=Math.exp(-Math.pow(islandAngleDelta(theta,-2.55)/.34,2))*.06;
+  scale=Math.max(.74,Math.min(1.18,scale));
+  return Math.max(80,ISLAND_RADIUS*scale-(Number(pad)||0));
+}
+function isInsideIsland(x,y,pad=0){const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);return d<=islandRadiusAtAngle(angle,pad);}
+function islandConstrainedPoint(x,y,pad=0){const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),maxR=islandRadiusAtAngle(angle,pad);if(!Number.isFinite(d)||d<=maxR)return{x:clamp(x,0,WORLD_W),y:clamp(y,0,WORLD_H)};const q=d>0?maxR/d:0;return{x:ISLAND_CX+dx*q,y:ISLAND_CY+dy*q};}
 function keepObjectOnIsland(obj,pad=20){if(!obj)return;const p=islandConstrainedPoint(Number(obj.x)||ISLAND_CX,Number(obj.y)||ISLAND_CY,pad);obj.x=p.x;obj.y=p.y;}
 function forestRainBoundaryX(y){const yn=(y-ISLAND_CY)/Math.max(1,ISLAND_RADIUS);return ISLAND_CX+Math.sin(yn*Math.PI*1.25)*WORLD_W*.035+Math.sin(yn*Math.PI*2.8+1.2)*WORLD_W*.012;}
 function worldBiomeAt(x,y){if(!isInsideIsland(x,y,0))return "ocean";return x<=forestRainBoundaryX(y)?"forest":"rainforest";}
@@ -1821,9 +1835,9 @@ export class WorldRoom extends Room {
       const footprint=animalSpawnFootprint(type,stage);
       for(let t=0;t<(anchor?110:80);t++){let x,y;if(anchor){const aa=rand(0,TAU),anchorR=animalSpawnFootprint(anchor.type,anchor.stage),minD=Math.max(78,footprint+anchorR+18),maxD=Math.max(minD+28,Math.min(310,minD+170)),dd=rand(minD,maxD);x=anchor.x+Math.cos(aa)*dd;y=anchor.y+Math.sin(aa)*dd;const cp=islandConstrainedPoint(x,y,footprint+45);x=cp.x;y=cp.y;}else{const pos=randomPointInBiome(biomeHint,footprint+60);x=pos.x;y=pos.y;}if(!this.canPlace(x,y,footprint,0))continue;let crowded=false;for(const[,a]of this.state.animals){if(!a||a.hp<=0)continue;const gap=anchor?8:36;if(dist(x,y,a.x,a.y)<footprint+animalSpawnFootprint(a.type,a.stage)+gap){crowded=true;break;}}if(crowded)continue;const id=this.addAnimal(type,stage,x,y);return this.state.animals.get(id)||null;}return null;
     };
-    const spawnWildCluster=(forced=null,typeOverride=null,biomeOverride=null)=>{const biome=biomeOverride?biomeBaseId(biomeOverride):randomBiomeZoneId(),species=(BIOME_PROFILES[biome]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v)),type=typeOverride||randomWildSpecies(species),anchor=spawnWild(forced,type,null,biome);if(!anchor)return 0;let made=1,extras=randi(3,5);for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor,biome))made++;return made;};
+    const spawnWildCluster=(forced=null,typeOverride=null,biomeOverride=null)=>{const biome=biomeOverride?biomeBaseId(biomeOverride):randomBiomeZoneId(),species=(BIOME_PROFILES[biome]?.species||WILD_SPECIES).filter(v=>WILD_SPECIES.includes(v)),type=typeOverride||randomWildSpecies(species),anchor=spawnWild(forced,type,null,biome);if(!anchor)return 0;let made=1,extras=randi(1,3);for(let i=0;i<extras;i++)if(spawnWild(randomGroupStage(),type,anchor,biome))made++;return made;};
     for(const biome of BIOME_ORDER)for(const type of (BIOME_PROFILES[biome]?.species||[]))spawnWildCluster(null,type,biome);
-    for(let i=0;i<10;i++)spawnWildCluster();for(let i=0;i<5;i++)spawnWildCluster("superboss");for(let i=0;i<3;i++)spawnWildCluster("bigmomma");
+    for(let i=0;i<6;i++)spawnWildCluster();for(let i=0;i<3;i++)spawnWildCluster("superboss");for(let i=0;i<2;i++)spawnWildCluster("bigmomma");
     console.log(`Island world generated: ${this.state.resources.size} resources, ${this.state.gold.size} gold, ${this.state.chests.size} chests, ${this.state.animals.size} wildlife`);
   }
 

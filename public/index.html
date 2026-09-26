@@ -15264,11 +15264,11 @@ const MOONMARK_BIOMES = {
 // TEMP ISLAND PASS: for now the playable world has only Forest + Rain Forest.
 // All animal species stay in the game; their final home biomes can be restored later.
 const ISLAND_CX = WORLD_W * 0.5, ISLAND_CY = WORLD_H * 0.5;
-const ISLAND_RADIUS = Math.min(WORLD_W, WORLD_H) * 0.45;
+const ISLAND_RADIUS = Math.min(WORLD_W, WORLD_H) * 0.475;
 const ISLAND_SHORE_WIDTH = 230;
 const BIOME_ZONES = {
-  forest:{id:"forest",cx:WORLD_W*0.31,cy:WORLD_H*0.50},
-  rainforest:{id:"rainforest",cx:WORLD_W*0.69,cy:WORLD_H*0.50},
+  forest:{id:"forest",cx:WORLD_W*0.34,cy:WORLD_H*0.50},
+  rainforest:{id:"rainforest",cx:WORLD_W*0.66,cy:WORLD_H*0.50},
 };
 const BIOME_PROFILES = {
   forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0)", edge:"rgba(32,58,29,.16)", minimap:"#668a52", species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","saber"] },
@@ -15292,13 +15292,37 @@ const BIOME_ORDER = ["forest","rainforest"];
 function biomeBaseId(id){ return String(id||CURRENT_BIOME_ID).replace(/_edge$/,'') || CURRENT_BIOME_ID; }
 function biomeProfileAt(x,y){ return BIOME_PROFILES[biomeBaseId(worldBiomeAt(x,y))] || BIOME_PROFILES.forest; }
 function islandDistance(x,y){ return Math.hypot(x-ISLAND_CX,y-ISLAND_CY); }
-function isInsideIsland(x,y,pad=0){ return islandDistance(x,y) <= Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0)); }
+function islandAngleDelta(a,b){ let d=(a-b)%TAU; if(d>Math.PI)d-=TAU; else if(d<-Math.PI)d+=TAU; return d; }
+function islandRadiusAtAngle(angle,pad=0){
+  const theta=Number(angle)||0;
+  let scale=1
+    +Math.sin(theta*2.15+.35)*.085
+    +Math.sin(theta*4.7-1.1)*.055
+    +Math.sin(theta*7.9+2.2)*.025;
+  scale+=Math.exp(-Math.pow(islandAngleDelta(theta,.42)/.42,2))*.11;
+  scale+=Math.exp(-Math.pow(islandAngleDelta(theta,-.78)/.48,2))*.07;
+  scale-=Math.exp(-Math.pow(islandAngleDelta(theta,2.35)/.52,2))*.13;
+  scale-=Math.exp(-Math.pow(islandAngleDelta(theta,-2.55)/.34,2))*.06;
+  scale=Math.max(.74,Math.min(1.18,scale));
+  return Math.max(80,ISLAND_RADIUS*scale-(Number(pad)||0));
+}
+function isInsideIsland(x,y,pad=0){ const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx); return d <= islandRadiusAtAngle(angle,pad); }
 function islandConstrainedPoint(x,y,pad=0){
-  const maxR=Math.max(80,ISLAND_RADIUS-Math.max(0,Number(pad)||0)),dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy);
+  const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),maxR=islandRadiusAtAngle(angle,pad);
   if(!Number.isFinite(d)||d<=maxR)return{x:clamp(x,0,WORLD_W),y:clamp(y,0,WORLD_H)};
   const q=d>0?maxR/d:0; return{x:ISLAND_CX+dx*q,y:ISLAND_CY+dy*q};
 }
 function keepObjectOnIsland(obj,pad=20){ if(!obj)return; const p=islandConstrainedPoint(Number(obj.x)||ISLAND_CX,Number(obj.y)||ISLAND_CY,pad); obj.x=p.x;obj.y=p.y; }
+function traceIslandPath(pad=0,samples=180){
+  const pts=[];
+  for(let i=0;i<samples;i++){
+    const a=(i/samples)*TAU,r=islandRadiusAtAngle(a,pad);
+    pts.push([ISLAND_CX+Math.cos(a)*r,ISLAND_CY+Math.sin(a)*r]);
+  }
+  ctx.beginPath();
+  pts.forEach(([x,y],i)=>{ if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  ctx.closePath();
+}
 function forestRainBoundaryX(y){
   const yn=(y-ISLAND_CY)/Math.max(1,ISLAND_RADIUS);
   return ISLAND_CX + Math.sin(yn*Math.PI*1.25)*WORLD_W*.035 + Math.sin(yn*Math.PI*2.8+1.2)*WORLD_W*.012;
@@ -16164,15 +16188,14 @@ function spawnWildAnimal(nearPlayer, forcedStage = null, forcedType = null, grou
 }
 
 function spawnWildAnimalCluster(nearPlayer, forcedStage = null, forcedType = null, forcedBiome = null) {
-  // One visible animal means there should usually be 3-5 more of its species nearby.
-  // Pick the biome first, then pick a species that belongs there. This prevents
-  // wildlife from leaking into an unrelated biome just because it was randomly chosen.
+  // One visible animal means there should usually be a small family nearby,
+  // but keep groups lighter so the island feels natural instead of cluttered.
   const biome = nearPlayer ? biomeBaseId(worldBiomeAt(player.x,player.y)) : (forcedBiome ? biomeBaseId(forcedBiome) : randomBiomeZoneId());
   const type = forcedType || chooseWildType(biome);
   const anchor = spawnWildAnimal(nearPlayer, forcedStage, type, null, biome);
   if (!anchor) return 0;
   let made = 1;
-  const extras = randi(3, 5);
+  const extras = randi(1, 3);
   for (let i = 0; i < extras; i++) {
     const companionStage = randomWildStageForGroup();
     if (spawnWildAnimal(false, companionStage, type, anchor, biome)) made++;
@@ -16403,9 +16426,9 @@ function initWorld() {
       spawnWildAnimalCluster(false, null, type, biome);
     }
   }
-  for (let i = 0; i < 10; i++) spawnWildAnimalCluster(false);
-  for (let i = 0; i < 5; i++) spawnWildAnimalCluster(false, "superboss");
-  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "bigmomma");
+  for (let i = 0; i < 6; i++) spawnWildAnimalCluster(false);
+  for (let i = 0; i < 3; i++) spawnWildAnimalCluster(false, "superboss");
+  for (let i = 0; i < 2; i++) spawnWildAnimalCluster(false, "bigmomma");
   rebuildStaticCollisionGrid();
   rebuildStaticSpawnCandidateCache();
   if (!cleanWorldTemplate) captureCleanWorldTemplate();
@@ -21772,12 +21795,12 @@ function drawBackground() {
 
   // Shallow coastal water + broken foam make the ocean read as water rather
   // than a flat blue world border. The land is painted over the inside half.
-  ctx.strokeStyle="rgba(70,181,202,.34)";ctx.lineWidth=300;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+105,0,TAU);ctx.stroke();
-  ctx.strokeStyle="rgba(169,231,239,.22)";ctx.lineWidth=90;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+42,0,TAU);ctx.stroke();
-  ctx.save();ctx.setLineDash([42,30]);ctx.lineDashOffset=-(game.time*8)%72;ctx.strokeStyle="rgba(238,252,252,.55)";ctx.lineWidth=4;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS+8,0,TAU);ctx.stroke();ctx.restore();
+  ctx.strokeStyle="rgba(70,181,202,.34)";ctx.lineWidth=300;traceIslandPath(-105);ctx.stroke();
+  ctx.strokeStyle="rgba(169,231,239,.22)";ctx.lineWidth=90;traceIslandPath(-42);ctx.stroke();
+  ctx.save();ctx.setLineDash([42,30]);ctx.lineDashOffset=-(game.time*8)%72;ctx.strokeStyle="rgba(238,252,252,.55)";ctx.lineWidth=4;traceIslandPath(-8);ctx.stroke();ctx.restore();
 
-  // Everything from here is clipped to the big circular island.
-  ctx.save();ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS,0,TAU);ctx.clip();
+  // Everything from here is clipped to the natural island silhouette.
+  ctx.save();traceIslandPath(0);ctx.clip();
   const biomeGround={forest:"#668a52",rainforest:"#285f3b"};
   const tile=96,bx0=Math.floor(game.camX/tile)*tile-tile,by0=Math.floor(game.camY/tile)*tile-tile;
   for(let yy=by0;yy<game.camY+H+tile;yy+=tile){
@@ -21794,8 +21817,8 @@ function drawBackground() {
   ctx.restore();
 
   // A broad sandy shelf + damp green inner shelf makes the island edge read like coast, not a black wall.
-  ctx.strokeStyle="#c7b77b";ctx.lineWidth=150;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS-75,0,TAU);ctx.stroke();
-  ctx.strokeStyle="rgba(57,91,52,.46)";ctx.lineWidth=34;ctx.beginPath();ctx.arc(ISLAND_CX,ISLAND_CY,ISLAND_RADIUS-166,0,TAU);ctx.stroke();
+  ctx.strokeStyle="#c7b77b";ctx.lineWidth=150;traceIslandPath(75);ctx.stroke();
+  ctx.strokeStyle="rgba(57,91,52,.46)";ctx.lineWidth=34;traceIslandPath(166);ctx.stroke();
   ctx.restore();
 }
 
