@@ -207,6 +207,8 @@ const MATERIAL_CATALOG = {
   // Drops/chests are intentionally the efficient route; buying is the guaranteed route.
   leather:{name:"Leather",price:150,rarity:"Common"},
   resin:{name:"Hard Resin",price:180,rarity:"Common"},
+  wildHerb:{name:"Wild Herb",price:210,rarity:"Common"},
+  iceCrystal:{name:"Ice Crystal",price:520,rarity:"Rare"},
   swiftFiber:{name:"Swift Fiber",price:300,rarity:"Uncommon"},
   ironBuckle:{name:"Iron Buckle",price:400,rarity:"Uncommon"},
   ironPlate:{name:"Iron Plate",price:650,rarity:"Rare"},
@@ -220,6 +222,8 @@ const MATERIAL_CATALOG = {
 const BUILD_RECIPES = {
   speedyBoots:{chance:.85,ingredients:{leather:4,swiftFiber:4,ironBuckle:2}},
   ironShell:{chance:.60,ingredients:{ironPlate:8,resin:5,leather:3}},
+  herbalWrap:{chance:.82,ingredients:{wildHerb:8,resin:2,leather:2}},
+  frostShell:{chance:.72,ingredients:{iceCrystal:7,ironPlate:3,resin:2}},
   hunterWrap:{chance:.75,ingredients:{leather:5,sharpFang:3,swiftFiber:3}},
   gatherGloves:{chance:.82,ingredients:{leather:4,swiftFiber:4,toolKit:1}},
   saddle:{chance:.92,ingredients:{leather:5,swiftFiber:2,ironBuckle:1}}
