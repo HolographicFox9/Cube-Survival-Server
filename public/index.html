@@ -26418,10 +26418,31 @@ if(el("homeAchievementsBtn")) el("homeAchievementsBtn").addEventListener("click"
 if(el("closeAchievementOverlay")) el("closeAchievementOverlay").addEventListener("click", closeAchievementOverlay);
 if(el("achievementOverlay")) el("achievementOverlay").addEventListener("mousedown", (e)=>{ if(e.target===el("achievementOverlay")) closeAchievementOverlay(); });
 
+function enterGameplayUi() {
+  // Play uses the button itself as the loading indicator. Once the world is ready,
+  // switch directly from Home to gameplay in one state change—no second loading page.
+  game.started = true;
+  game.over = false;
+  document.body.classList.add("hostl-game-active");
+  const home = document.getElementById("home");
+  if (home) {
+    home.style.display = "none";
+    home.style.visibility = "hidden";
+    home.style.pointerEvents = "none";
+  }
+  const hud = document.getElementById("hud");
+  if (hud) hud.style.display = "block";
+  syncHomeWorldThemeState();
+  last = performance.now();
+}
+
 el("playBtn").addEventListener("click", async () => {
   if ((game.started && !game.over) || playStartInProgress) return;
-  playStartInProgress = true; updatePlayAvailability();
-  setLoadingScreen(net.enabled ? "Entering your world…" : "Entering your island…", 10, true);
+  playStartInProgress = true;
+  updatePlayAvailability();
+  // Never reopen the full-screen boot loader for Play. The requested flow is:
+  // Play -> button says Loading... -> Home disappears -> gameplay.
+  hideLoadingScreen();
   await waitOneFrame();
   try {
     closeCardInventory();closeStarterShop();closeChooseStarterPet();closePlayerDesign();closeHomeThemes();
@@ -26432,35 +26453,41 @@ el("playBtn").addEventListener("click", async () => {
     document.getElementById("mobileControls").classList.toggle("on",mobileMode);syncMobilePrimaryButton();document.body.classList.toggle("mobile-performance",mobileMode);if(!mobileMode)resetMobilePointers();
 
     if(net.enabled){
-      setLoadingScreen(`Preparing ${HOSTL_WORLDS[selectedWorldId]?.name||"selected world"}…`,30,true);
       if(!net.room){const connected=await ensureMultiplayerReadyForPlay();if(!connected||!net.room)throw new Error("Could not join selected HOSTL world");}
-      setLoadingScreen("Loading players, animals, and world…",58,true);
-      await waitForOwnOnlinePlayer(4500);
+      const ownReady = await waitForOwnOnlinePlayer(4500);
+      if(!ownReady) throw new Error("Multiplayer player state was not ready");
       syncNetworkFullWorld(true);
       await waitOneFrame();
-      setLoadingScreen("Placing you in the world…",86,false);
       resetGame({firstEntry:true,preserveLiveWorld:true,instantLiveEntry:true});
     }else{
-      setLoadingScreen("Building Forest + Rain Forest island…",26,true);
-      await waitOneFrame();
       // The Home island is already built; resetGame restores that prepared world.
       resetGame({firstEntry:true,preserveLiveWorld:false,instantLiveEntry:false});
-      setLoadingScreen("Placing animals and resources…",82,false);
       await waitOneFrame();
     }
 
-    Promise.resolve(refreshAccountEntitlementsForRun()).catch(()=>{});
-    const home=document.getElementById("home");document.body.classList.add("hostl-game-active");
-    if(home){home.style.display="none";home.style.visibility="hidden";home.style.pointerEvents="none";}
-    syncHomeWorldThemeState();document.getElementById("hud").style.display="block";game.started=true;game.over=false;last=performance.now();
+    // Do this only after resetGame succeeds. From here on, Home is hard-hidden by
+    // both inline state and body.hostl-game-active CSS, so account/theme refreshes
+    // cannot place the Home screen back over an active run.
+    enterGameplayUi();
     if(net.room){try{net.room.send("playerReady",{});}catch(_){}setNetStatus("Online • shared world • PvP","good");setTimeout(ensureNetworkStarterPet,0);}
-    setLoadingScreen("Ready",100,false);await waitOneFrame();hideLoadingScreen();
+    Promise.resolve(refreshAccountEntitlementsForRun()).catch(()=>{});
+    await waitOneFrame();
+    // Reassert after one paint in case a same-frame Home refresh finished late.
+    enterGameplayUi();
   }catch(err){
-    console.warn("HOSTL Play join failed",err);game.started=false;setHomeControlsEnabled(true);
-    const home=document.getElementById("home");if(home){home.style.display="";home.style.visibility="visible";home.style.pointerEvents="";}
-    document.body.classList.remove("hostl-game-active");const hud=document.getElementById("hud");if(hud)hud.style.display="none";
-    hideLoadingScreen();if(net.enabled)setNetStatus("Could not join • press Play to retry","bad");else banner("World could not finish loading. Press Play to retry.",true);
-  }finally{playStartInProgress=false;if(!game.started)updatePlayAvailability();}
+    console.warn("HOSTL Play join failed",err);
+    game.started=false;
+    game.over=false;
+    document.body.classList.remove("hostl-game-active");
+    const home=document.getElementById("home");if(home){home.style.display="flex";home.style.visibility="visible";home.style.pointerEvents="auto";}
+    const hud=document.getElementById("hud");if(hud)hud.style.display="none";
+    setHomeControlsEnabled(true);
+    hideLoadingScreen();
+    if(net.enabled)setNetStatus("Could not join • press Play to retry","bad");else banner("World could not finish loading. Press Play to retry.",true);
+  }finally{
+    playStartInProgress=false;
+    if(!game.started) updatePlayAvailability();
+  }
 });
 
 canvas.addEventListener("mousedown", (e) => {
