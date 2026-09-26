@@ -6,13 +6,13 @@
 import { Room } from "@colyseus/core";
 import { Schema, MapSchema, defineTypes } from "@colyseus/schema";
 
-const WORLD_W = 18000;
-const WORLD_H = 18000;
+const WORLD_W = 24000;
+const WORLD_H = 24000;
 const PLAYER_R = 18;
 const GRID_CELL = 192;
 const TAU = Math.PI * 2;
 const CREATURE_DYNAMIC_KINDS = new Set(["animal","pet"]);
-const CUBE_SHARED_RULES_VERSION = "616";
+const CUBE_SHARED_RULES_VERSION = "617";
 let HOSTL_ACCOUNT_HOOKS = { resolveSession: () => null, refreshAccount: () => null, rewardTesterKill: async () => ({ granted:false }), rewardOwnerKill: async () => ({ granted:false }), rewardGameplayMaterial: async () => ({ granted:false }), grantWorldReward: async () => ({ granted:false }), recordAchievement: async () => ({ granted:false }), onPresenceJoin:()=>{}, onPresenceLeave:()=>{} };
 export function configureHostlAccountHooks(hooks={}) {
   if (typeof hooks.resolveSession === "function") HOSTL_ACCOUNT_HOOKS.resolveSession = hooks.resolveSession;
@@ -1164,19 +1164,29 @@ const MOONMARK_BIOMES={
   mountains:{id:"mountains",name:"Peak Crusher",element:"Stone",color:"#9d9aa6",accent:"#ddd9ef",mapColor:"#4f4f58",xp:320},
   rainforest:{id:"rainforest",name:"Jungle Howl",element:"Vine",color:"#2fb06a",accent:"#ccffd6",mapColor:"#165b34",xp:320}
 };
-// TEMP ISLAND PASS: only Forest + Rain Forest are active for now.
-// Every animal species remains available; their final biome homes can be added back later.
-const ISLAND_CX=WORLD_W*.5,ISLAND_CY=WORLD_H*.5,ISLAND_RADIUS=Math.min(WORLD_W,WORLD_H)*.475,ISLAND_SHORE_WIDTH=230;
+// Expanded main island: Forest + Rain Forest + Arctic.
+// Arctic wildlife now has a real home instead of spawning in the Forest.
+const ISLAND_CX=WORLD_W*.5,ISLAND_CY=WORLD_H*.5,ISLAND_RADIUS=Math.min(WORLD_W,WORLD_H)*.415,ISLAND_SHORE_WIDTH=230;
 const BIOME_ZONES={
-  forest:{id:"forest",cx:WORLD_W*.34,cy:WORLD_H*.50},
-  rainforest:{id:"rainforest",cx:WORLD_W*.66,cy:WORLD_H*.50}
+  forest:{id:"forest",cx:WORLD_W*.34,cy:WORLD_H*.60},
+  rainforest:{id:"rainforest",cx:WORLD_W*.66,cy:WORLD_H*.60},
+  arctic:{id:"arctic",cx:WORLD_W*.50,cy:WORLD_H*.25}
 };
-const BIOME_ORDER=["forest","rainforest"];
+const BIOME_ORDER=["forest","rainforest","arctic"];
 const BIOME_PROFILES={
-  forest:{id:"forest",name:"Forest",species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","saber"]},
+  forest:{id:"forest",name:"Forest",species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","mountaingoat","eagle","cougar","bighorn","marmot","saber"]},
   rainforest:{id:"rainforest",name:"Rain Forest",species:["clouded","jaguar","toucan","tapir","capybara","anaconda","fennec","camel","scorpion","hyena","caracal","snake","dragon"]},
+  arctic:{id:"arctic",name:"Arctic",species:["polarbear","arcticfox","walrus","muskox","snowyowl"]},
   ocean:{id:"ocean",name:"Ocean",species:[]}
 };
+const BIOME_RESOURCE_INFO=Object.freeze({
+  forestHerb:{biome:"forest",material:"wildHerb",name:"Wild Herb",color:"#8dcf68",category:"soft",hp:3},
+  forestResin:{biome:"forest",material:"treeResin",name:"Tree Resin",color:"#d69a45",category:"wood",hp:4},
+  arcticIceCrystal:{biome:"arctic",material:"iceCrystal",name:"Ice Crystal",color:"#8ee7ff",category:"stone",hp:5},
+  arcticFrostBerry:{biome:"arctic",material:"frostBerry",name:"Frost Berry",color:"#b8d8ff",category:"soft",hp:3},
+  rainforestVine:{biome:"rainforest",material:"jungleVine",name:"Jungle Vine",color:"#4f9f56",category:"wood",hp:4},
+  rainforestFruit:{biome:"rainforest",material:"jungleFruit",name:"Jungle Fruit",color:"#f06d55",category:"soft",hp:3}
+});
 function islandDistance(x,y){return Math.hypot(x-ISLAND_CX,y-ISLAND_CY);}
 function islandAngleDelta(a,b){let d=(a-b)%TAU;if(d>Math.PI)d-=TAU;else if(d<-Math.PI)d+=TAU;return d;}
 function islandRadiusAtAngle(angle,pad=0){
@@ -1196,10 +1206,11 @@ function isInsideIsland(x,y,pad=0){const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hy
 function islandConstrainedPoint(x,y,pad=0){const dx=x-ISLAND_CX,dy=y-ISLAND_CY,d=Math.hypot(dx,dy),angle=Math.atan2(dy,dx),maxR=islandRadiusAtAngle(angle,pad);if(!Number.isFinite(d)||d<=maxR)return{x:clamp(x,0,WORLD_W),y:clamp(y,0,WORLD_H)};const q=d>0?maxR/d:0;return{x:ISLAND_CX+dx*q,y:ISLAND_CY+dy*q};}
 function keepObjectOnIsland(obj,pad=20){if(!obj)return;const p=islandConstrainedPoint(Number(obj.x)||ISLAND_CX,Number(obj.y)||ISLAND_CY,pad);obj.x=p.x;obj.y=p.y;}
 function forestRainBoundaryX(y){const yn=(y-ISLAND_CY)/Math.max(1,ISLAND_RADIUS);return ISLAND_CX+Math.sin(yn*Math.PI*1.25)*WORLD_W*.035+Math.sin(yn*Math.PI*2.8+1.2)*WORLD_W*.012;}
-function worldBiomeAt(x,y){if(!isInsideIsland(x,y,0))return "ocean";return x<=forestRainBoundaryX(y)?"forest":"rainforest";}
-function randomBiomeZoneId(){return Math.random()<.5?"forest":"rainforest";}
-function speciesHomeBiome(type){return (BIOME_PROFILES.rainforest.species||[]).includes(type)?"rainforest":"forest";}
-function randomPointInBiome(biomeId,pad=120){const base=biomeBaseId(biomeId)==="rainforest"?"rainforest":"forest",safePad=Math.max(0,Number(pad)||0),maxR=Math.max(180,ISLAND_RADIUS-safePad-70);for(let tries=0;tries<260;tries++){const a=rand(0,TAU),rr=Math.sqrt(Math.random())*maxR,x=ISLAND_CX+Math.cos(a)*rr,y=ISLAND_CY+Math.sin(a)*rr;if(worldBiomeAt(x,y)===base)return{x,y};}const zone=BIOME_ZONES[base];return{x:zone.cx,y:zone.cy};}
+function arcticBoundaryY(x){const xn=(x-ISLAND_CX)/Math.max(1,ISLAND_RADIUS);return ISLAND_CY-ISLAND_RADIUS*.22+Math.sin(xn*Math.PI*1.8+.45)*WORLD_H*.024+Math.sin(xn*Math.PI*4.4-1.1)*WORLD_H*.010;}
+function worldBiomeAt(x,y){if(!isInsideIsland(x,y,0))return "ocean";if(y<=arcticBoundaryY(x))return "arctic";return x<=forestRainBoundaryX(y)?"forest":"rainforest";}
+function randomBiomeZoneId(){return BIOME_ORDER[randi(0,BIOME_ORDER.length-1)]||"forest";}
+function speciesHomeBiome(type){for(const id of BIOME_ORDER)if((BIOME_PROFILES[id]?.species||[]).includes(type))return id;return "forest";}
+function randomPointInBiome(biomeId,pad=120){const wanted=BIOME_ORDER.includes(biomeBaseId(biomeId))?biomeBaseId(biomeId):"forest",safePad=Math.max(0,Number(pad)||0),maxR=Math.max(180,ISLAND_RADIUS-safePad-70);for(let tries=0;tries<360;tries++){const a=rand(0,TAU),rr=Math.sqrt(Math.random())*maxR,x=ISLAND_CX+Math.cos(a)*rr,y=ISLAND_CY+Math.sin(a)*rr;if(worldBiomeAt(x,y)===wanted&&isInsideIsland(x,y,safePad))return{x,y};}const zone=BIOME_ZONES[wanted]||BIOME_ZONES.forest;return{x:zone.cx,y:zone.cy};}
 function randomLandPoint(pad=120){ return randomPointInBiome(randomBiomeZoneId(),pad); }
 function isHotDryBiome(id){return String(id||"").startsWith("desert");}
 function pondShapeFactor(r,theta){
@@ -1827,11 +1838,11 @@ export class WorldRoom extends Room {
   addTower(x,y,ownerId="",tier=0){const t=new TowerState();Object.assign(t,{x,y,cd:.5,ownerId,tier:clamp(Math.floor(Number(tier)||0),0,2)});const id=`t${this.nextTowerId++}`;this.state.towers.set(id,t);return id;}
   addProjectile(data){const p=new ProjectileState();Object.assign(p,data);const id=`q${this.nextProjectileId++}`;this.state.projectiles.set(id,p);return id;}
 
-  scatter(type,count,hp,minCenter){for(let i=0;i<count;i++){for(let tries=0;tries<85;tries++){let scale=1,solid=12,canopy=0;if(type==="tree"){scale=rand(1.2,2.3);solid=8.8*scale;canopy=46*scale;}else if(type==="rock"){scale=rand(1,2.05);solid=26.5*scale;}else if(type==="log"){scale=rand(1,1.6);solid=17.5*scale;}else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}const pos=randomLandPoint(Math.max(120,solid+80)),x=pos.x,y=pos.y,biome=worldBiomeAt(x,y);const chance=type==="tree"?(biome==="rainforest"?1:.88):type==="bush"?(biome==="rainforest"?1:.82):type==="log"?(biome==="rainforest"?.90:.78):(biome==="rainforest"?.56:.68);if(Math.random()>chance)continue;if(!this.canPlace(x,y,solid,minCenter))continue;this.addResource(type,x,y,hp,solid,canopy,scale,type==="log"?rand(0,TAU):0);break;}}}
+  scatter(type,count,hp,minCenter){for(let i=0;i<count;i++){for(let tries=0;tries<85;tries++){let scale=1,solid=12,canopy=0;if(type==="tree"){scale=rand(1.2,2.3);solid=8.8*scale;canopy=46*scale;}else if(type==="rock"){scale=rand(1,2.05);solid=26.5*scale;}else if(type==="log"){scale=rand(1,1.6);solid=17.5*scale;}else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}const pos=randomLandPoint(Math.max(120,solid+80)),x=pos.x,y=pos.y,biome=worldBiomeAt(x,y);const chance=biome==="arctic"?(type==="tree"?.34:type==="bush"?.44:type==="log"?.40:.86):type==="tree"?(biome==="rainforest"?1:.88):type==="bush"?(biome==="rainforest"?1:.82):type==="log"?(biome==="rainforest"?.90:.78):(biome==="rainforest"?.56:.68);if(Math.random()>chance)continue;if(!this.canPlace(x,y,solid,minCenter))continue;this.addResource(type,x,y,hp,solid,canopy,scale,type==="log"?rand(0,TAU):0);break;}}}
   placeBiomeFeatures(){
     for(let i=0;i<72;i++)for(let t=0;t<20;t++){const pos=randomPointInBiome("rainforest",80),scale=rand(1.05,1.65),solid=10.8*scale;if(!this.canPlace(pos.x,pos.y,solid+10,0))continue;this.addResource("bush",pos.x,pos.y,8,solid,24*scale,scale,0);break;}
     const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++)for(let t=0;t<40;t++){const pos=randomPointInBiome(biome,70),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(!this.canPlace(pos.x,pos.y,solid+12,0))continue;this.addResource(type,pos.x,pos.y,info.hp,solid,0,scale,rand(-.35,.35));break;}};
-    placeUnique("forestHerb",24,"forest");placeUnique("forestResin",22,"forest");placeUnique("rainforestVine",26,"rainforest");placeUnique("rainforestFruit",24,"rainforest");
+    placeUnique("forestHerb",24,"forest");placeUnique("forestResin",22,"forest");placeUnique("rainforestVine",26,"rainforest");placeUnique("rainforestFruit",24,"rainforest");placeUnique("arcticIceCrystal",30,"arctic");placeUnique("arcticFrostBerry",26,"arctic");
   }
   generateWorld(){
     this.addGold(WORLD_W/2,WORLD_H/2,"pure",176,999999999,true,true);
@@ -1839,7 +1850,7 @@ export class WorldRoom extends Room {
     // clean sloped shoreline so later resources can never spawn on top of them.
     for(const biome of BIOME_ORDER){for(let i=0;i<16;i++)for(let t=0;t<90;t++){const radius=rand(78,134),pos=randomPointInBiome(biome,radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+72,0)||!waterPlacementClear(this.state.resources,pos.x,pos.y,radius,radius,42))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}}
     for(let i=0;i<12;i++)for(let t=0;t<90;t++){const radius=rand(72,122),pos=randomLandPoint(radius+120);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<520||!this.canPlace(pos.x,pos.y,radius+70,0)||!waterPlacementClear(this.state.resources,pos.x,pos.y,radius,radius,42))continue;this.addResource("pond",pos.x,pos.y,1,radius,radius*rand(.64,.84),1,rand(0,TAU));break;}
-    for(let ri=0;ri<2;ri++){const start=randomPointInBiome(ri===0?"forest":"rainforest",720),baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;for(let seg=0;seg<6;seg++){const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;if(!this.canPlace(cx,cy,ry+38,0)||!waterPlacementClear(this.state.resources,cx,cy,rx,ry,34))continue;this.addResource("river",cx,cy,1,rx,ry,1,ang);}}
+    for(let ri=0;ri<3;ri++){const riverBiome=BIOME_ORDER[ri]||"forest",start=randomPointInBiome(riverBiome,720),baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;for(let seg=0;seg<6;seg++){const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);if(seg){cx+=Math.cos(ang)*rx*.86;cy+=Math.sin(ang)*rx*.86;}const cp=islandConstrainedPoint(cx,cy,rx+180);cx=cp.x;cy=cp.y;if(!this.canPlace(cx,cy,ry+38,0)||!waterPlacementClear(this.state.resources,cx,cy,rx,ry,34))continue;this.addResource("river",cx,cy,1,rx,ry,1,ang);}}
     this.placeBiomeFeatures();
     this.scatter("tree",620,9,240);this.scatter("rock",360,4,240);this.scatter("log",240,2.4,180);this.scatter("bush",410,8,180);
     for(let i=0;i<10;i++)for(let t=0;t<70;t++){const pos=randomLandPoint(500);if(dist(pos.x,pos.y,WORLD_W/2,WORLD_H/2)<500||!this.canPlace(pos.x,pos.y,48,0))continue;this.addGold(pos.x,pos.y,"huge",48,40);break;}

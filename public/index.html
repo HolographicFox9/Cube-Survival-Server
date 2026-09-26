@@ -6202,9 +6202,9 @@ if (window.visualViewport) window.visualViewport.addEventListener("resize", sche
 resize(true);
 
 // ---------- constants ----------
-const WORLD_W = 18000, WORLD_H = 18000;
+const WORLD_W = 24000, WORLD_H = 24000;
 const PLAYER_R = 18;
-const CUBE_SHARED_RULES_VERSION = "616";
+const CUBE_SHARED_RULES_VERSION = "617";
 const TOOL_BASE = {
   Fist:    { dmg: 1.0, gather: 0.06, resourcePower: 0.08, range: 42, swing: 0.20, cadence: 0.50, cost: null, woodWall: 1.0, stoneWall: 0.45 },
   Axe:     { dmg: 5.5, gather: 2.4, resourcePower: 0.95, range: 50, swing: 0.42, cadence: 0.58, cost: { wood: 7 }, gatherFor: "tree", woodWall: 9.0, stoneWall: 2.0 },
@@ -9677,6 +9677,9 @@ const net = {
   // Holds the newest confirmed multiplayer gold balance so an older state patch
   // cannot snap earned gold back to zero.
   goldFloor: 0,
+  // If Play had to fall back to the complete local world, do not swap a late
+  // multiplayer wildlife snapshot into the middle of that run.
+  suppressLateWorldAttach: false,
 };
 
 function setNetStatus(text, cls = "") {
@@ -10857,6 +10860,10 @@ async function connectMultiplayer(options={}) {
     const room = await Promise.race([joinPromise, timeoutPromise]);
     joinAccepted = true;
     if (joinTimeoutId) { clearTimeout(joinTimeoutId); joinTimeoutId = 0; }
+    if (net.suppressLateWorldAttach && game.started && !game.over) {
+      try { room && room.leave && room.leave(); } catch (_) {}
+      return false;
+    }
     net.client = client;
     net.room = room;
     net.sessionId = room.sessionId;
@@ -15278,18 +15285,20 @@ const MOONMARK_BIOMES = {
   mountains:{ id:"mountains", name:"Peak Crusher", element:"Stone", color:"#9d9aa6", accent:"#ddd9ef", mapColor:"#4f4f58", xp:320 },
   rainforest:{ id:"rainforest", name:"Jungle Howl", element:"Vine", color:"#2fb06a", accent:"#ccffd6", mapColor:"#165b34", xp:320 }
 };
-// TEMP ISLAND PASS: for now the playable world has only Forest + Rain Forest.
-// All animal species stay in the game; their final home biomes can be restored later.
+// Expanded main island: Forest + Rain Forest + Arctic.
+// The Clouded Leopard stays in the Rain Forest; Arctic wildlife gets its own home.
 const ISLAND_CX = WORLD_W * 0.5, ISLAND_CY = WORLD_H * 0.5;
-const ISLAND_RADIUS = Math.min(WORLD_W, WORLD_H) * 0.475;
+const ISLAND_RADIUS = Math.min(WORLD_W, WORLD_H) * 0.415;
 const ISLAND_SHORE_WIDTH = 230;
 const BIOME_ZONES = {
-  forest:{id:"forest",cx:WORLD_W*0.34,cy:WORLD_H*0.50},
-  rainforest:{id:"rainforest",cx:WORLD_W*0.66,cy:WORLD_H*0.50},
+  forest:{id:"forest",cx:WORLD_W*0.34,cy:WORLD_H*0.60},
+  rainforest:{id:"rainforest",cx:WORLD_W*0.66,cy:WORLD_H*0.60},
+  arctic:{id:"arctic",cx:WORLD_W*0.50,cy:WORLD_H*0.25},
 };
 const BIOME_PROFILES = {
-  forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0)", edge:"rgba(32,58,29,.16)", minimap:"#668a52", species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","polarbear","arcticfox","walrus","muskox","snowyowl","mountaingoat","eagle","cougar","bighorn","marmot","saber"] },
+  forest:{ id:"forest", name:"Forest", tint:"rgba(53,92,50,0)", edge:"rgba(32,58,29,.16)", minimap:"#668a52", species:["fox","dog","cat","rabbit","deer","boar","owl","wolf","bear","mountaingoat","eagle","cougar","bighorn","marmot","saber"] },
   rainforest:{ id:"rainforest", name:"Rain Forest", tint:"rgba(42,112,70,.20)", edge:"rgba(28,76,47,.22)", minimap:"#285f3b", species:["clouded","jaguar","toucan","tapir","capybara","anaconda","fennec","camel","scorpion","hyena","caracal","snake","dragon"] },
+  arctic:{ id:"arctic", name:"Arctic", tint:"rgba(206,238,247,.20)", edge:"rgba(136,190,209,.24)", minimap:"#d9edf2", species:["polarbear","arcticfox","walrus","muskox","snowyowl"] },
   ocean:{ id:"ocean", name:"Ocean", tint:"rgba(0,0,0,0)", edge:"rgba(0,0,0,0)", minimap:"#2f83a7", species:[] }
 };
 const BIOME_RESOURCE_INFO = Object.freeze({
@@ -15305,7 +15314,7 @@ const BIOME_RESOURCE_INFO = Object.freeze({
   rainforestFruit:{biome:"rainforest",material:"jungleFruit",name:"Jungle Fruit",color:"#f06d55",category:"soft",hp:3}
 });
 const BIOME_MATERIAL_META = Object.fromEntries(Object.values(BIOME_RESOURCE_INFO).map(v=>[v.material,{name:v.name,color:v.color,biome:v.biome}]));
-const BIOME_ORDER = ["forest","rainforest"];
+const BIOME_ORDER = ["forest","rainforest","arctic"];
 function biomeBaseId(id){ return String(id||CURRENT_BIOME_ID).replace(/_edge$/,'') || CURRENT_BIOME_ID; }
 function biomeProfileAt(x,y){ return BIOME_PROFILES[biomeBaseId(worldBiomeAt(x,y))] || BIOME_PROFILES.forest; }
 function islandDistance(x,y){ return Math.hypot(x-ISLAND_CX,y-ISLAND_CY); }
@@ -15344,24 +15353,29 @@ function forestRainBoundaryX(y){
   const yn=(y-ISLAND_CY)/Math.max(1,ISLAND_RADIUS);
   return ISLAND_CX + Math.sin(yn*Math.PI*1.25)*WORLD_W*.035 + Math.sin(yn*Math.PI*2.8+1.2)*WORLD_W*.012;
 }
+function arcticBoundaryY(x){
+  const xn=(x-ISLAND_CX)/Math.max(1,ISLAND_RADIUS);
+  return ISLAND_CY-ISLAND_RADIUS*.22 + Math.sin(xn*Math.PI*1.8+.45)*WORLD_H*.024 + Math.sin(xn*Math.PI*4.4-1.1)*WORLD_H*.010;
+}
 function worldBiomeAt(x,y){
   if(!isInsideIsland(x,y,0))return "ocean";
+  if(y<=arcticBoundaryY(x))return "arctic";
   return x <= forestRainBoundaryX(y) ? "forest" : "rainforest";
 }
-function randomBiomeZoneId(){ return Math.random()<.5?"forest":"rainforest"; }
+function randomBiomeZoneId(){ return BIOME_ORDER[randi(0,BIOME_ORDER.length-1)] || "forest"; }
 function speciesHomeBiome(type){
-  if((BIOME_PROFILES.rainforest.species||[]).includes(type))return "rainforest";
+  for(const id of BIOME_ORDER)if((BIOME_PROFILES[id]?.species||[]).includes(type))return id;
   return "forest";
 }
 function randomPointInBiome(biomeId,pad=120){
-  const base=biomeBaseId(biomeId)==="rainforest"?"rainforest":"forest";
+  const wanted=BIOME_ORDER.includes(biomeBaseId(biomeId))?biomeBaseId(biomeId):"forest";
   const safePad=Math.max(0,Number(pad)||0),maxR=Math.max(180,ISLAND_RADIUS-safePad-70);
-  for(let tries=0;tries<260;tries++){
+  for(let tries=0;tries<360;tries++){
     const a=rand(0,TAU),rr=Math.sqrt(Math.random())*maxR;
     const x=ISLAND_CX+Math.cos(a)*rr,y=ISLAND_CY+Math.sin(a)*rr;
-    if(worldBiomeAt(x,y)===base)return{x,y};
+    if(worldBiomeAt(x,y)===wanted&&isInsideIsland(x,y,safePad))return{x,y};
   }
-  const zone=BIOME_ZONES[base];return{x:zone.cx,y:zone.cy};
+  const zone=BIOME_ZONES[wanted]||BIOME_ZONES.forest;return{x:zone.cx,y:zone.cy};
 }
 function randomLandPoint(pad=120){ return randomPointInBiome(randomBiomeZoneId(),pad); }
 function chooseWildType(biomeId = null) {
@@ -16006,10 +16020,9 @@ function placePonds() {
       break;
     }
   }
-  // Keep only two modest rivers for now so water still feels connected without
-  // making world construction expensive while we test the Forest/Rain Forest island.
-  for(let ri=0;ri<2;ri++){
-    const start=randomPointInBiome(ri===0?"forest":"rainforest",720);
+  // One modest river per active biome keeps the expanded island connected.
+  for(let ri=0;ri<BIOME_ORDER.length;ri++){
+    const start=randomPointInBiome(BIOME_ORDER[ri]||"forest",720);
     const baseAngle=rand(-Math.PI,Math.PI);let cx=start.x,cy=start.y;
     for(let seg=0;seg<6;seg++){
       const ang=baseAngle+Math.sin(seg*.9+ri)*.18,rx=rand(300,390),ry=rand(52,72);
@@ -16030,6 +16043,7 @@ function placeBiomeFeatures() {
   const placeUnique=(type,count,biome)=>{const info=BIOME_RESOURCE_INFO[type];for(let i=0;i<count;i++){for(let t=0;t<40;t++){const pos=randomPointInBiome(biome,70),scale=rand(.9,1.35),solid=(info.category==="stone"?17:12)*scale;if(solidOverlaps(pos.x,pos.y,solid+12))continue;addGeneratedResource({type,x:pos.x,y:pos.y,hp:info.hp,maxHp:info.hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:0,scale,rot:rand(-.35,.35)});break;}}};
   placeUnique("forestHerb",24,"forest"); placeUnique("forestResin",22,"forest");
   placeUnique("rainforestVine",26,"rainforest"); placeUnique("rainforestFruit",24,"rainforest");
+  placeUnique("arcticIceCrystal",30,"arctic"); placeUnique("arcticFrostBerry",26,"arctic");
 }
 
 function scatter(type, count, hp, minDistFromCenter, rSolid) {
@@ -16041,7 +16055,7 @@ function scatter(type, count, hp, minDistFromCenter, rSolid) {
     else if(type==="bush"){scale=rand(1.08,1.7);solid=10.8*scale;canopy=24*scale;}
     for(let tries=0;tries<85;tries++){
       const pos=randomLandPoint(Math.max(120,solid+80)),x=pos.x,y=pos.y,biome=worldBiomeAt(x,y);
-      const chance=type==="tree"?(biome==="rainforest"?1:.88):type==="bush"?(biome==="rainforest"?1:.82):type==="log"?(biome==="rainforest"?.90:.78):(biome==="rainforest"?.56:.68);
+      const chance=biome==="arctic"?(type==="tree"?.34:type==="bush"?.44:type==="log"?.40:.86):type==="tree"?(biome==="rainforest"?1:.88):type==="bush"?(biome==="rainforest"?1:.82):type==="log"?(biome==="rainforest"?.90:.78):(biome==="rainforest"?.56:.68);
       if(Math.random()>chance)continue;
       if(dist(x,y,WORLD_W/2,WORLD_H/2)<minDistFromCenter||solidOverlaps(x,y,solid))continue;
       addGeneratedResource({type,x,y,hp,maxHp:hp,alive:true,respawnAt:0,pulse:0,solidR:solid,canopyR:canopy,scale,rot:type==="log"?rand(0,TAU):0});
@@ -20305,9 +20319,9 @@ function updateAnimals(dt) {
   }
   animals.length = writeAnimal;
 
-  // keep the world full of animals
-  if (wildCount < 300 && Math.random() < 0.016) spawnWildAnimalCluster(true);
-  if (wildCount < 250 && Math.random() < 0.04) spawnWildAnimalCluster(false);
+  // Starting wildlife is created before Play. Do not silently refill the map
+  // during gameplay: surprise predator pop-in is scary and feels artificial.
+  // New wildlife can still appear through real game events such as breeding.
 }
 
 function updateAbilityFx(dt) {
@@ -21829,19 +21843,23 @@ function drawBackground() {
 
   // Everything from here is clipped to the natural island silhouette.
   ctx.save();traceIslandPath(0);ctx.clip();
-  const biomeGround={forest:"#668a52",rainforest:"#285f3b"};
+  const biomeGround={forest:"#668a52",rainforest:"#285f3b",arctic:"#d9edf2"};
   const tile=96,bx0=Math.floor(game.camX/tile)*tile-tile,by0=Math.floor(game.camY/tile)*tile-tile;
   for(let yy=by0;yy<game.camY+H+tile;yy+=tile){
     for(let xx=bx0;xx<game.camX+W+tile;xx+=tile){
       const cx=xx+tile*.5,cy=yy+tile*.5;if(!isInsideIsland(cx,cy,tile*.9))continue;
       const biome=worldBiomeAt(cx,cy),base=biomeGround[biome]||biomeGround.forest;ctx.fillStyle=base;ctx.fillRect(xx,yy,tile+1,tile+1);
       const boundary=forestRainBoundaryX(cy),near=Math.abs(cx-boundary);
-      if(near<tile*1.2){const other=biome==="forest"?biomeGround.rainforest:biomeGround.forest,g=ctx.createLinearGradient(boundary-tile,0,boundary+tile,0);g.addColorStop(0,biomeGround.forest);g.addColorStop(1,biomeGround.rainforest);ctx.fillStyle=g;ctx.fillRect(xx,yy,tile+1,tile+1);}
+      if(biome!=="arctic"&&near<tile*1.2){const g=ctx.createLinearGradient(boundary-tile,0,boundary+tile,0);g.addColorStop(0,biomeGround.forest);g.addColorStop(1,biomeGround.rainforest);ctx.fillStyle=g;ctx.fillRect(xx,yy,tile+1,tile+1);}
     }
   }
-  // Small ground details so Forest and Rain Forest are visibly different.
+  // Small ground details make each biome readable without hard circular zones.
   const startX=Math.floor(game.camX/180)*180,startY=Math.floor(game.camY/180)*180;
-  for(let y=startY;y<game.camY+H+180;y+=180){for(let x=startX;x<game.camX+W+180;x+=180){const px=x+110,py=y+110;if(!isInsideIsland(px,py,160))continue;const rain=worldBiomeAt(px,py)==="rainforest",ox=((x*13+y*7)%37)-18,oy=((x*5+y*11)%29)-14;ctx.fillStyle=rain?"rgba(8,48,26,.33)":"rgba(57,88,49,.13)";ctx.beginPath();ctx.ellipse(px+ox,py+oy,rain?58:45,rain?34:27,.08,0,TAU);ctx.fill();ctx.strokeStyle=rain?"rgba(104,171,92,.34)":"rgba(41,67,36,.27)";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+58,y+72);ctx.lineTo(x+53,y+63);ctx.moveTo(x+58,y+72);ctx.lineTo(x+59,y+60);ctx.moveTo(x+58,y+72);ctx.lineTo(x+65,y+64);ctx.stroke();}}
+  for(let y=startY;y<game.camY+H+180;y+=180){for(let x=startX;x<game.camX+W+180;x+=180){
+    const px=x+110,py=y+110;if(!isInsideIsland(px,py,160))continue;const biome=worldBiomeAt(px,py),ox=((x*13+y*7)%37)-18,oy=((x*5+y*11)%29)-14;
+    if(biome==="arctic"){ctx.fillStyle="rgba(247,253,255,.42)";ctx.beginPath();ctx.ellipse(px+ox,py+oy,54,26,.08,0,TAU);ctx.fill();ctx.strokeStyle="rgba(126,184,205,.34)";ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(px-24,py+18);ctx.lineTo(px-8,py+8);ctx.lineTo(px+9,py+16);ctx.lineTo(px+26,py+5);ctx.stroke();continue;}
+    const rain=biome==="rainforest";ctx.fillStyle=rain?"rgba(8,48,26,.33)":"rgba(57,88,49,.13)";ctx.beginPath();ctx.ellipse(px+ox,py+oy,rain?58:45,rain?34:27,.08,0,TAU);ctx.fill();ctx.strokeStyle=rain?"rgba(104,171,92,.34)":"rgba(41,67,36,.27)";ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(x+58,y+72);ctx.lineTo(x+53,y+63);ctx.moveTo(x+58,y+72);ctx.lineTo(x+59,y+60);ctx.moveTo(x+58,y+72);ctx.lineTo(x+65,y+64);ctx.stroke();
+  }}
   ctx.restore();
 
   // A broad sandy shelf + damp green inner shelf makes the island edge read like coast, not a black wall.
@@ -21901,12 +21919,12 @@ function drawResource(r) {
     ctx.rotate(r.rot||0);
     // Ponds use an irregular shoreline rather than perfect ellipses. Rivers keep
     // their long soft shape so connected segments still read as flowing water.
-    const rain=worldBiomeAt(r.x,r.y)==="rainforest";
-    ctx.fillStyle=rain?"#355c3b":"#6e8053";
+    const waterBiome=worldBiomeAt(r.x,r.y),rain=waterBiome==="rainforest",arctic=waterBiome==="arctic";
+    ctx.fillStyle=arctic?"#b9d5db":(rain?"#355c3b":"#6e8053");
     if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx*1.05,ry*1.34,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1.24,1.28);ctx.fill();
-    ctx.fillStyle=rain?"#426a45":"#788a5b";
+    ctx.fillStyle=arctic?"#cfe5e8":(rain?"#426a45":"#788a5b");
     if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx*1.025,ry*1.17,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1.13,1.14);ctx.fill();
-    ctx.fillStyle=isRiver?"#3d99b7":"#43a2be";
+    ctx.fillStyle=arctic?(isRiver?"#72bfd6":"#83cadc"):(isRiver?"#3d99b7":"#43a2be");
     if(isRiver){ctx.beginPath();ctx.ellipse(0,0,rx,ry,0,0,TAU);}else traceNaturalPondLocal(r,rx,ry,1,1);ctx.fill();
     ctx.globalAlpha=.18;ctx.fillStyle="#e9fbff";ctx.beginPath();ctx.ellipse(-rx*.20,-ry*.20,rx*(isRiver?.33:.34),ry*(isRiver?.24:.14),-.08,0,TAU);ctx.fill();
     ctx.globalAlpha=.10;ctx.fillStyle="#1f7897";ctx.beginPath();ctx.ellipse(rx*.20,ry*.18,rx*(isRiver?.24:.25),ry*(isRiver?.20:.11),.1,0,TAU);ctx.fill();ctx.globalAlpha=1;
@@ -24950,83 +24968,43 @@ function authoritativeResourcesForRender() {
 }
 
 let lastMinimapDrawAt = 0;
+let minimapCamX = ISLAND_CX, minimapCamY = ISLAND_CY;
+const MINIMAP_VIEW_SPAN = 18000;
 function drawMinimap() {
-  const s = 140 / Math.max(WORLD_W, WORLD_H);
-  // Show the actual biome lands on the minimap.
-  const mmGround={forest:"#668a52",rainforest:"#285f3b",ocean:"#2f83a7"};
-  const cells=70,cs=140/cells;
+  const size=140,half=MINIMAP_VIEW_SPAN*.5,edge=MINIMAP_VIEW_SPAN*.09;
+  // The old central island view stays still while the player is inside it. Once
+  // the player reaches an expanded edge, the map inside the square pans to follow.
+  let targetX=ISLAND_CX,targetY=ISLAND_CY;
+  if(player.x<ISLAND_CX-half+edge)targetX=player.x+half-edge;
+  else if(player.x>ISLAND_CX+half-edge)targetX=player.x-half+edge;
+  if(player.y<ISLAND_CY-half+edge)targetY=player.y+half-edge;
+  else if(player.y>ISLAND_CY+half-edge)targetY=player.y-half+edge;
+  targetX=clamp(targetX,half,WORLD_W-half);targetY=clamp(targetY,half,WORLD_H-half);
+  minimapCamX+=(targetX-minimapCamX)*.18;minimapCamY+=(targetY-minimapCamY)*.18;
+  const left=minimapCamX-half,top=minimapCamY-half,scale=size/MINIMAP_VIEW_SPAN;
+  const toMap=(x,y)=>({x:(x-left)*scale,y:(y-top)*scale});
+  const visible=(x,y,pad=5)=>{const m=toMap(x,y);return m.x>=-pad&&m.x<=size+pad&&m.y>=-pad&&m.y<=size+pad;};
+
+  const mmGround={forest:"#668a52",rainforest:"#285f3b",arctic:"#d9edf2",ocean:"#2f83a7"};
+  const cells=70,cs=size/cells;
   for(let gy=0;gy<cells;gy++)for(let gx=0;gx<cells;gx++){
-    const wx=(gx+.5)/cells*WORLD_W,wy=(gy+.5)/cells*WORLD_H,b=biomeBaseId(worldBiomeAt(wx,wy));
-    mmCtx.fillStyle=mmGround[b]||mmGround.forest;mmCtx.fillRect(gx*cs,gy*cs,cs+.5,cs+.5);
+    const wx=left+(gx+.5)/cells*MINIMAP_VIEW_SPAN,wy=top+(gy+.5)/cells*MINIMAP_VIEW_SPAN,b=biomeBaseId(worldBiomeAt(wx,wy));
+    mmCtx.fillStyle=mmGround[b]||mmGround.ocean;mmCtx.fillRect(gx*cs,gy*cs,cs+.5,cs+.5);
   }
   mmCtx.font="bold 7px sans-serif";mmCtx.textAlign="center";mmCtx.textBaseline="middle";
-  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z)continue;mmCtx.fillStyle="rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),z.cx*s,z.cy*s);}
+  for(const id of BIOME_ORDER){const z=BIOME_ZONES[id];if(!z||!visible(z.cx,z.cy,18))continue;const m=toMap(z.cx,z.cy);mmCtx.fillStyle=id==="arctic"?"rgba(42,74,87,.92)":"rgba(255,255,255,.88)";mmCtx.fillText((BIOME_PROFILES[id]?.name||id).toUpperCase(),m.x,m.y);}
 
-  // Giant center gold monument.
-  mmCtx.fillStyle = "#f2c94c";
-  for (const g of goldChunks) {
-    if (!g.pure) continue;
-    const sz = 10;
-    mmCtx.fillRect(g.x * s - sz / 2, g.y * s - sz / 2, sz, sz);
-  }
-
-  // Big Mommas are the only wildlife shown on the minimap.
-  // Large amber diamonds make these rare roaming encounters easy to hunt down.
-  mmCtx.fillStyle = "#ffb347";
-  for (const a of animals) {
-    if (a.dead || a.owned || a.stage !== "bigmomma") continue;
-    const mx = a.x * s, my = a.y * s;
-    mmCtx.save();
-    mmCtx.translate(mx, my);
-    mmCtx.rotate(Math.PI / 4);
-    mmCtx.fillRect(-2.8, -2.8, 5.6, 5.6);
-    mmCtx.restore();
-  }
-
-  // Ordinary Hostls.
-  mmCtx.fillStyle = "#e0563f";
-  for (const en of enemies) {
-    if (en.dead || en.moonMarked) continue;
-    mmCtx.fillRect(en.x * s - 1.5, en.y * s - 1.5, 3, 3);
-  }
-  // Every biome Moonmark uses one large solid dot in that biome's minimap color.
-  // Forest is deep green; future biomes only need to define mapColor above.
-  for (const en of enemies) {
-    if (en.dead || !en.moonMarked) continue;
-    const profile = MOONMARK_BIOMES[en.moonBiome || CURRENT_BIOME_ID] || MOONMARK_BIOMES.forest;
-    mmCtx.fillStyle = profile.mapColor || profile.color || "#0b542f";
-    mmCtx.beginPath();
-    mmCtx.arc(en.x * s, en.y * s, 11.5, 0, TAU);
-    mmCtx.fill();
-  }
-
-  // Other online players. Use each cube's color with a bright outline so they are easy to spot.
-  if (net.room) {
-    for (const v of net.remoteVisuals.values()) {
-      if (!v || !Number.isFinite(v.x) || !Number.isFinite(v.y) || (Number(v.health) || 0) <= 0) continue;
-      const mx = v.x * s, my = v.y * s;
-      mmCtx.fillStyle = "rgba(255,255,255,0.92)";
-      mmCtx.fillRect(mx - 2.8, my - 2.8, 5.6, 5.6);
-      mmCtx.fillStyle = v.color || "#c77dff";
-      mmCtx.fillRect(mx - 1.8, my - 1.8, 3.6, 3.6);
-    }
-  }
-
-  // Player.
-  mmCtx.fillStyle = "#6ec1ff";
-  mmCtx.fillRect(player.x * s - 2, player.y * s - 2, 4, 4);
-
-  // Pets as white dots.
-  mmCtx.fillStyle = "#ffffff";
-  for (const p of player.pets) {
-    if (p.dead) continue;
-    mmCtx.beginPath();
-    mmCtx.arc(p.x * s, p.y * s, 1.7, 0, TAU);
-    mmCtx.fill();
-  }
-
-  mmCtx.strokeStyle = "rgba(240,230,200,0.3)";
-  mmCtx.strokeRect(0.5, 0.5, 139, 139);
+  mmCtx.fillStyle="#f2c94c";
+  for(const g of goldChunks){if(!g.pure||!visible(g.x,g.y,8))continue;const m=toMap(g.x,g.y),sz=10;mmCtx.fillRect(m.x-sz/2,m.y-sz/2,sz,sz);}
+  mmCtx.fillStyle="#ffb347";
+  for(const a of animals){if(a.dead||a.owned||a.stage!=="bigmomma"||!visible(a.x,a.y))continue;const m=toMap(a.x,a.y);mmCtx.save();mmCtx.translate(m.x,m.y);mmCtx.rotate(Math.PI/4);mmCtx.fillRect(-2.8,-2.8,5.6,5.6);mmCtx.restore();}
+  mmCtx.fillStyle="#e0563f";
+  for(const en of enemies){if(en.dead||en.moonMarked||!visible(en.x,en.y))continue;const m=toMap(en.x,en.y);mmCtx.fillRect(m.x-1.5,m.y-1.5,3,3);}
+  for(const en of enemies){if(en.dead||!en.moonMarked||!visible(en.x,en.y,12))continue;const m=toMap(en.x,en.y),profile=MOONMARK_BIOMES[en.moonBiome||CURRENT_BIOME_ID]||MOONMARK_BIOMES.forest;mmCtx.fillStyle=profile.mapColor||profile.color||"#0b542f";mmCtx.beginPath();mmCtx.arc(m.x,m.y,11.5,0,TAU);mmCtx.fill();}
+  if(net.room){for(const v of net.remoteVisuals.values()){if(!v||!Number.isFinite(v.x)||!Number.isFinite(v.y)||(Number(v.health)||0)<=0||!visible(v.x,v.y))continue;const m=toMap(v.x,v.y);mmCtx.fillStyle="rgba(255,255,255,.92)";mmCtx.fillRect(m.x-2.8,m.y-2.8,5.6,5.6);mmCtx.fillStyle=v.color||"#c77dff";mmCtx.fillRect(m.x-1.8,m.y-1.8,3.6,3.6);}}
+  const pm=toMap(player.x,player.y);mmCtx.fillStyle="#6ec1ff";mmCtx.fillRect(pm.x-2,pm.y-2,4,4);
+  mmCtx.fillStyle="#ffffff";for(const p of player.pets){if(p.dead||!visible(p.x,p.y))continue;const m=toMap(p.x,p.y);mmCtx.beginPath();mmCtx.arc(m.x,m.y,1.7,0,TAU);mmCtx.fill();}
+  mmCtx.strokeStyle="rgba(240,230,200,.3)";mmCtx.strokeRect(.5,.5,139,139);
 }
 
 let lastEntityDrawWarnAt = 0;
@@ -26535,18 +26513,21 @@ async function prepareAllAnimalsBeforePlay(){
   if(!cleanWorldTemplate||!Array.isArray(cleanWorldTemplate.animals)||cleanWorldTemplate.animals.length===0){
     cleanWorldTemplate=null;initWorld();
   }
-  // Give an already-running quiet multiplayer connection a short chance to finish
-  // joining. We never trap Play on a dead server: the complete local world is the fallback.
-  if(net.enabled&&!net.room&&net.connecting){
-    const until=performance.now()+2600;
-    while(net.connecting&&!net.room&&performance.now()<until)await new Promise(resolve=>setTimeout(resolve,35));
-  }
-  if(net.room){
-    const full=await waitForInitialNetworkAnimals(8000);
-    if(full)return true;
-    // Never enter a half-replicated shared wildlife set. Fall back to the complete
-    // deterministic world and let multiplayer reconnect cleanly later.
-    disconnectMultiplayer();
+  net.suppressLateWorldAttach=false;
+  if(net.enabled){
+    // Online Play waits for the actual shared room and its complete initial wildlife
+    // snapshot instead of starting locally and swapping predators in afterward.
+    if(!net.room){
+      try{await Promise.race([ensureMultiplayerReadyForPlay(),new Promise(resolve=>setTimeout(()=>resolve(false),12000))]);}catch(_){}
+    }
+    if(net.room){
+      const full=await waitForInitialNetworkAnimals(12000);
+      if(full)return true;
+      disconnectMultiplayer();
+    }
+    // If the server is unavailable, use the complete prepared local world for this
+    // run and do NOT attach a different shared wildlife set halfway through it.
+    net.suppressLateWorldAttach=true;
   }
   restoreCleanWorldTemplate();
   return false;
@@ -26606,11 +26587,9 @@ el("playBtn").addEventListener("click", async () => {
       try { net.room.send("playerReady",{}); } catch (_) {}
       setNetStatus("Online • shared world • PvP","good");
       setTimeout(ensureNetworkStarterPet,0);
-    } else if (net.enabled && !net.connecting) {
-      // Start first; connect second. A slow/offline server can no longer send the
-      // player back to Home after they pressed Play.
+    } else if (net.enabled && !net.connecting && !net.suppressLateWorldAttach) {
       setTimeout(() => {
-        if (game.started && !game.over && net.enabled && !net.room && !net.connecting) {
+        if (game.started && !game.over && net.enabled && !net.room && !net.connecting && !net.suppressLateWorldAttach) {
           connectMultiplayer({silent:true}).catch(()=>{});
         }
       }, 0);
